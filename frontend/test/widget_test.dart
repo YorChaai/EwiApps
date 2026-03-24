@@ -14,8 +14,8 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const ExpenseApp());
 
-    // Verify that the login screen is shown.
-    expect(find.text('Expense Settlement'), findsOneWidget);
+    // Verify that the login screen is shown (title + primary action).
+    expect(find.text('ExspanApp'), findsOneWidget);
     expect(find.text('Masuk'), findsOneWidget);
   });
 }
