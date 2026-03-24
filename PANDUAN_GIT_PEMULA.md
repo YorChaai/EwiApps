@@ -83,10 +83,31 @@ git reset --hard origin/main
 
 ---
 
-## 5. Tanya Jawab (FAQ)
-*   **Q: Bisa tidak saya hapus di laptop tapi di GitHub tetap ada?**
-    *   A: Jangan. Git akan mencatat penghapusan itu sebagai perubahan. Jika di-push, file di GitHub juga akan hilang.
-*   **Q: Apa bedanya `main` dan `master`?**
-    *   A: Itu cuma nama cabang utama. Proyek kamu sekarang pakai nama `main`.
-*   **Q: Apakah data saya aman?**
-    *   A: Ya, selama kamu tidak membagikan token rahasia GitHub kamu. Data database (`.db`) juga sudah disembunyikan agar tidak ter-upload.
+## 6. Perintah Maintenance (Penting!)
+Selain Git, ada perintah untuk "membersihkan" dan "memperbarui" proyek kamu agar tidak error.
+
+### Flutter (Frontend)
+Lakukan ini di dalam folder `frontend`:
+*   **`flutter clean`**: Menghapus folder `build`. Gunakan jika aplikasi terasa berat, error aneh, atau setelah kamu ganti laptop.
+*   **`flutter pub get`**: Mengambil semua "bahan baku" (libraries) yang dibutuhkan aplikasi. Wajib dijalankan setelah `git pull` atau jika ada error "package not found".
+
+### Python (Backend)
+Lakukan ini di dalam folder `backend`:
+*   **`pip install -r requirements.txt`**: Menginstal semua library Python yang dibutuhkan.
+*   **Hapus Cache**: Jika ada error aneh, kamu bisa menghapus folder `__pycache__` (folder ini otomatis dibuat oleh Python, aman dibapus).
+
+### Tabel Ringkasan Maintenance
+
+| Perintah | Fungsi | Kapan Dipakai? |
+| :--- | :--- | :--- |
+| `flutter clean` | Cuci gudang (hapus build) | Aplikasi error/bug aneh |
+| `flutter pub get` | Ambil library Flutter | Selesai `git pull` |
+| `pip install...` | Ambil library Python | Selesai `git pull` |
+| `git pull` | Ambil kode terbaru | Awal mulai kerja |
+
+---
+
+## 7. Tips Akhir
+Jangan takut mencoba! Git akan selalu menjaga agar kode kamu bisa kembali ke versi sebelumnya jika ada yang rusak.
+
+Semangat belajar! Jika ada yang bingung lagi, langsung tanya saja.

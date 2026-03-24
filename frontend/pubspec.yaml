@@ -61,13 +61,13 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/logo_exspan.png"
+  image_path: "assets/images/logo_exspan_launcher.png"
   adaptive_icon_background: "#FFFFFF" # White background for Android
-  adaptive_icon_foreground: "assets/images/logo_exspan.png"
+  adaptive_icon_foreground: "assets/images/logo_exspan_launcher.png"
   # Windows icon (optional)
   windows:
     generate: true
-    image_path: "assets/images/logo_exspan.png"
+    image_path: "assets/images/logo_exspan_launcher.png"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
