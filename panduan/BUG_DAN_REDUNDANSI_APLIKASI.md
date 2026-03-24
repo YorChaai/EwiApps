@@ -1,8 +1,9 @@
 # 📊 AUDIT BUG DAN REDUNDANSI APLIKASI EWI
 
-**Tanggal Audit:** 23 Maret 2026  
+**Tanggal Audit:** 23 Maret 2026
 **Revalidasi Setelah Perubahan UI Mobile 1-7:** 24 Maret 2026
-**Total Issues Ditemukan:** 87  
+**Revalidasi Setelah Fix Konsistensi UI Kasbon-Settlement:** 25 Maret 2026
+**Total Issues Ditemukan:** 87
 **Status:** ℹ️ **Dokumen audit historis, bukan status final permanen**
 
 > Catatan pembaruan:
@@ -26,6 +27,37 @@
 | 🟢 **LOW** | 16 | 16 | ✅ **100%** |
 
 **Total Fixed:** **87/87 issues (100%)** ✅
+
+---
+
+## 📅 PERUBAHAN TERBARU (25 Maret 2026)
+
+### Fix Konsistensi UI Kasbon ↔ Settlement
+
+**File:** `frontend/lib/screens/advance/my_advances_screen.dart`
+
+**Issue:** Card "Pengeluaran Tahun Ini" di halaman Kasbon memiliki ukuran font dan kotak yang berbeda dengan halaman Settlement.
+
+**Perubahan:**
+| Properti | Sebelum (Kasbon) | Sesudah (Kasbon) | Settlement (Referensi) |
+|----------|------------------|------------------|------------------------|
+| Padding container | `18` | `14` | `14` ✓ |
+| Border radius | `18` | `12` | `12` ✓ |
+| Background alpha | `0.12` | `0.10` | `0.10` ✓ |
+| Border alpha | `0.35` | `0.25` | `0.25` ✓ |
+| Icon padding | `12` | `8` | `8` ✓ |
+| Icon border radius | `14` | `8` | `8` ✓ |
+| Icon size | `24` | `20` | `20` ✓ |
+| Icon spacing | `14` | `12` | `12` ✓ |
+| Label fontSize | `14` | `11` | `11` ✓ |
+| Label spacing | `4` | `2` | `2` ✓ |
+| Value fontSize | `18` | `16` | `16` ✓ |
+
+**Verifikasi:**
+```bash
+flutter analyze
+# Result: No issues found! ✅
+```
 
 ---
 
