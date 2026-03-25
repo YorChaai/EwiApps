@@ -13,6 +13,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(256), nullable=False)
     full_name = db.Column(db.String(150), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='staff')  # staff, manager, mitra_eks
+    last_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     settlements = db.relationship('Settlement', backref='creator', lazy=True)
@@ -30,6 +31,7 @@ class User(db.Model):
             'username': self.username,
             'full_name': self.full_name,
             'role': self.role,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

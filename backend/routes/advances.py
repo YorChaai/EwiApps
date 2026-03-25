@@ -279,6 +279,12 @@ def start_revision(advance_id):
     advance.active_revision_no = _next_revision_no(advance)
     advance.status = 'revision_draft'
     db.session.commit()
+
+    # Notify managers about revision
+    from routes.notifications import notify_managers
+    message = f"{advance.requester.full_name} memulai revisi kasbon: {advance.title} (Revisi #{advance.active_revision_no})"
+    notify_managers('start_revision', 'advance', advance.id, message, user_id, f'/advances/{advance.id}')
+
     return jsonify({'advance': advance.to_dict(include_items=True)}), 200
 
 
@@ -699,6 +705,12 @@ def approve_advance_item(item_id):
     item.status = 'approved'
     item.notes = 'Disetujui oleh manager'
     db.session.commit()
+
+    # Notify staff about item approval
+    from routes.notifications import notify_staff
+    message = f"Item kasbon disetujui: {item.description}"
+    notify_staff(advance.user_id, 'approve_item', 'advance_item', item.id, message, user.id, f'/advances/{advance.id}')
+
     return jsonify({'item': item.to_dict()}), 200
 
 
@@ -769,6 +781,12 @@ def reject_advance_item(item_id):
     elif advance.status == 'revision_submitted':
         advance.status = 'revision_draft'
     db.session.commit()
+
+    # Notify staff about item rejection
+    from routes.notifications import notify_staff
+    message = f"Item kasbon ditolak: {item.description}"
+    notify_staff(advance.user_id, 'reject_item', 'advance_item', item.id, message, user.id, f'/advances/{advance.id}')
+
     return jsonify({'item': item.to_dict()}), 200
 
 

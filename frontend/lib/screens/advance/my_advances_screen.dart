@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/context_extensions.dart';
 import 'advance_detail_screen.dart';
 
 class MyAdvancesScreen extends StatefulWidget {
@@ -30,20 +31,20 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
   bool _showScrollToTop = false;
   bool _selectionMode = false;
   final Set<int> _selectedAdvanceIds = {};
-  bool _isDark(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark;
+
+  // Helper methods menggunakan extension context.isDark
   Color _cardColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+      context.isDark ? AppTheme.card : AppTheme.lightCard;
   Color _surfaceColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
+      context.isDark ? AppTheme.surface : AppTheme.lightSurface;
   Color _dividerColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
+      context.isDark ? AppTheme.divider : AppTheme.lightDivider;
   Color _titleColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+      context.isDark ? AppTheme.cream : AppTheme.lightTextPrimary;
   Color _bodyColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+      context.isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _primaryText(BuildContext context) =>
-      _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+      context.isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
 
   void _handleListScroll() {
     if (!_listScrollController.hasClients) return;
@@ -762,8 +763,12 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
   void initState() {
     super.initState();
     _listScrollController.addListener(_handleListScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDefaultReportYearAndReload();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Parallel API calls untuk faster initial load
+      await Future.wait([
+        _loadDefaultReportYearAndReload(),
+        _loadAnnualAdvanceSummary(),
+      ]);
     });
   }
 
@@ -932,7 +937,7 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
                 }
 
                 final prov = context.read<AdvanceProvider>();
-                final advance = await prov.createAdvance(
+                final advance = await prov.createUnsavedAdvance(
                   title,
                   "",
                   advanceType: selectedType,
@@ -1242,7 +1247,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = context.isDark;
     final borderColor = isDark ? AppTheme.divider : AppTheme.lightDivider;
     final textColor = isDark
         ? AppTheme.textSecondary

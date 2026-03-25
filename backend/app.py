@@ -60,6 +60,7 @@ def create_app():
     # create tables & seed data
     with app.app_context():
         db.create_all()
+        ensure_last_login_column(app)
         ensure_advance_type_column(app)
         ensure_advance_revision_schema(app)
         ensure_expense_advance_link_schema(app)
@@ -86,6 +87,27 @@ def _looks_hashed(password_hash: str) -> bool:
         return False
     # hash werkzeug biasanya pbkdf2/scrypt
     return password_hash.startswith('pbkdf2:') or password_hash.startswith('scrypt:')
+
+
+def ensure_last_login_column(app: Flask) -> None:
+    # Tambah kolom last_login ke tabel users jika belum ada
+    target_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    target_db = _extract_sqlite_path(target_uri)
+    if not target_db or not os.path.exists(target_db):
+        return
+
+    conn = sqlite3.connect(target_db)
+    try:
+        cols = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if 'last_login' not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_login DATETIME")
+            conn.commit()
+            print("✅ Kolom last_login ditambahkan ke tabel users")
+    finally:
+        conn.close()
 
 
 def ensure_advance_type_column(app: Flask) -> None:

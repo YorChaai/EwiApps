@@ -273,7 +273,9 @@ def approve_expense(expense_id):
         return jsonify({'error': 'Akses ditolak'}), 403
 
     expense = Expense.query.get_or_404(expense_id)
-    if expense.settlement.status != 'submitted':
+    settlement = expense.settlement
+
+    if settlement.status != 'submitted':
         return jsonify({'error': 'Settlement belum disubmit'}), 400
 
     # Cek apakah kategori sudah diapprove
@@ -295,6 +297,12 @@ def approve_expense(expense_id):
     expense.status = 'approved'
     expense.notes = 'Disetujui oleh manager.'
     db.session.commit()
+
+    # Notify staff about expense approval
+    from routes.notifications import notify_staff
+    message = f"Expense disetujui: {expense.description}"
+    notify_staff(settlement.user_id, 'approve_expense', 'expense', expense.id, message, user.id, f'/settlements/{settlement.id}')
+
     return jsonify({'expense': expense.to_dict()}), 200
 
 
@@ -349,7 +357,9 @@ def reject_expense(expense_id):
         return jsonify({'error': 'Akses ditolak'}), 403
 
     expense = Expense.query.get_or_404(expense_id)
-    if expense.settlement.status != 'submitted':
+    settlement = expense.settlement
+
+    if settlement.status != 'submitted':
         return jsonify({'error': 'Settlement belum disubmit'}), 400
 
     data = request.get_json() or {}
@@ -362,6 +372,12 @@ def reject_expense(expense_id):
     expense.notes = _merge_rejection_notes(expense.notes or '', notes)
     expense.settlement.status = 'draft'
     db.session.commit()
+
+    # Notify staff about expense rejection
+    from routes.notifications import notify_staff
+    message = f"Expense ditolak: {expense.description}"
+    notify_staff(settlement.user_id, 'reject_expense', 'expense', expense.id, message, user.id, f'/settlements/{settlement.id}')
+
     return jsonify({'expense': expense.to_dict()}), 200
 
 
