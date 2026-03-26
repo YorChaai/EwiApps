@@ -44,6 +44,7 @@ class Category(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
     status = db.Column(db.String(20), default='approved')  # approved, pending
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    sort_order = db.Column(db.Integer, default=0)  # For manual category ordering
 
     children = db.relationship('Category', backref=db.backref('parent', remote_side=[id]), lazy=True)
     expenses = db.relationship('Expense', backref='category', lazy=True)
@@ -62,7 +63,8 @@ class Category(db.Model):
             'code': self.code,
             'parent_id': self.parent_id,
             'status': self.status,
-            'created_by': self.created_by
+            'created_by': self.created_by,
+            'sort_order': self.sort_order
         }
         if include_children:
             data['children'] = [c.to_dict() for c in self.children]
@@ -161,6 +163,8 @@ class Advance(db.Model):
             'advance_type': self.advance_type or 'single',
             'user_id': self.user_id,
             'requester_name': self.requester.full_name if self.requester else None,
+            'requester_role': self.requester.role if self.requester else None,
+            'requester_id': self.requester.id if self.requester else None,
             'status': self.status,
             'notes': self.notes,
             'total_amount': self.total_amount,
@@ -181,6 +185,10 @@ class Advance(db.Model):
             'policy_warnings': policy_warnings,
             'revision_summaries': revision_summaries,
         }
+        # Handle case requester is None (user deleted)
+        if not self.requester:
+            data['requester_name'] = 'User dihapus'
+            data['requester_role'] = 'unknown'
         if include_items:
             data['items'] = [i.to_dict() for i in self.items]
         return data
@@ -284,6 +292,8 @@ class Settlement(db.Model):
             'first_expense_description': first_exp.description if first_exp else None,
             'user_id': self.user_id,
             'creator_name': self.creator.full_name if self.creator else None,
+            'creator_role': self.creator.role if self.creator else None,
+            'creator_id': self.creator.id if self.creator else None,
             'settlement_type': self.settlement_type,
             'status': self.status,
             'total_amount': self.total_amount,
@@ -297,6 +307,10 @@ class Settlement(db.Model):
             'variance_amount': variance_amount,
             'policy_warnings': policy_warnings,
         }
+        # Handle case creator is None (user deleted)
+        if not self.creator:
+            data['creator_name'] = 'User dihapus'
+            data['creator_role'] = 'unknown'
         if advance:
             data['advance_summary'] = {
                 'advance_id': advance.id,

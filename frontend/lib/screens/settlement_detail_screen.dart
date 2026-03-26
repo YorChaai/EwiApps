@@ -42,6 +42,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
   bool _isAndroid(BuildContext context) => Theme.of(context).platform == TargetPlatform.android;
   bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
   Color _surfaceColor(BuildContext context) => _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
+  Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+  Color _creamColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
 
   @override
   void initState() {
@@ -403,7 +405,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: AppTheme.card,
+              backgroundColor: _cardColor(ctx),
               title: const Text(
                 'Hapus Settlement Kosong?',
                 style: TextStyle(color: AppTheme.cream),
@@ -836,15 +838,15 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                             scrollDirection: Axis.horizontal,
                             child: DataTable(
                                 headingRowColor: WidgetStateProperty.all(
-                                  AppTheme.surface,
+                                  _surfaceColor(context),
                                 ),
                                 dataRowColor: WidgetStateProperty.resolveWith((
                                   states,
                                 ) {
                                   if (states.contains(WidgetState.hovered)) {
-                                    return AppTheme.cardHover;
+                                    return _isDark(context) ? AppTheme.cardHover : AppTheme.lightCardHover;
                                   }
-                                  return AppTheme.card;
+                                  return _cardColor(context);
                                 }),
                                 showCheckboxColumn: true,
                                 columns: [
@@ -1174,7 +1176,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   : null;
 
           return AlertDialog(
-          backgroundColor: AppTheme.card,
+          backgroundColor: _cardColor(ctx),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -1671,11 +1673,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           filename ?? 'Evidence',
-          style: TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(ctx)),
         ),
         content: SizedBox(
           width: 600,
@@ -1772,7 +1774,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         builder: (ctx) => StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              backgroundColor: AppTheme.card,
+              backgroundColor: _cardColor(ctx),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Text('Tolak Item', style: TextStyle(color: AppTheme.cream)),
               content: SizedBox(
@@ -1968,7 +1970,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       builder: (context) => Scaffold(
                         appBar: AppBar(
                           title: const Text('Approve Kategori'),
-                          backgroundColor: AppTheme.surface,
+                          backgroundColor: _surfaceColor(context),
                         ),
                         body: const CategoryManagementView(),
                       ),
@@ -2017,7 +2019,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         title: const Text('Kembalikan ke Draft?', style: TextStyle(color: AppTheme.cream)),
         content: const Text(
           'Apakah Anda yakin ingin menarik kembali pengeluaran ini ke status Draft untuk melakukan perbaikan?',
@@ -2052,7 +2054,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         title: Text('Hapus $count Item', style: const TextStyle(color: AppTheme.cream)),
         content: Text('Hapus $count pengeluaran yang dipilih? Tindakan ini tidak bisa dibatalkan.'),
         actions: [
@@ -2180,7 +2182,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('Tolak Settlement', style: TextStyle(color: AppTheme.cream)),
         content: SizedBox(
@@ -2310,7 +2312,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text(
           'Edit Settlement',
@@ -2427,7 +2429,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           final allCats = prov.categories;
 
           return AlertDialog(
-            backgroundColor: AppTheme.card,
+            backgroundColor: _cardColor(ctx),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
@@ -2845,11 +2847,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     showDialog(
       context: ctx,
       builder: (innerCtx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(innerCtx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           parentId != null ? 'Tambah Sub Kategori' : 'Tambah Kategori Utama',
-          style: TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(innerCtx)),
         ),
         content: SizedBox(
           width: 350,
@@ -2935,10 +2937,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return AlertDialog(
-            backgroundColor: AppTheme.surface,
+            backgroundColor: _cardColor(ctx),
             title: Text(
               'Rejection Checklist${!canEdit ? ' (Lihat saja)' : ''}',
-              style: const TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
               width: 400,

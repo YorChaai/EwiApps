@@ -179,6 +179,29 @@ def me():
     return jsonify({'user': user.to_dict()}), 200
 
 
+@auth_bp.route('/profile', methods=['PUT'])
+@jwt_required()
+def update_profile():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User tidak ditemukan'}), 404
+
+    data = request.get_json()
+    full_name = data.get('full_name', '').strip() if data else ''
+
+    if not full_name:
+        return jsonify({'error': 'Nama lengkap harus diisi'}), 400
+
+    user.full_name = full_name
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'user': user.to_dict()
+    }), 200
+
+
 @auth_bp.route('/users', methods=['GET'])
 @jwt_required()
 def list_users():

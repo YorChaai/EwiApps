@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/context_extensions.dart';
+import '../../widgets/user_info_dialog.dart';
 import 'advance_detail_screen.dart';
 
 class MyAdvancesScreen extends StatefulWidget {
@@ -1360,6 +1361,21 @@ class _AdvanceCardState extends State<_AdvanceCard> {
     }
   }
 
+  String _getRoleName(String? role) {
+    switch (role) {
+      case 'manager':
+        return 'Manager';
+      case 'staff':
+        return 'Staff';
+      case 'mitra_eks':
+        return 'Mitra';
+      case 'unknown':
+        return 'User dihapus';
+      default:
+        return role ?? '-';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final a = widget.advance;
@@ -1448,7 +1464,7 @@ class _AdvanceCardState extends State<_AdvanceCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                '${widget.isManager ? (a['requester_name'] ?? '-') : 'Saya'} - ${a['item_count'] ?? 0} item',
+                                '${_getRoleName(a['requester_role'])} · ${a['item_count'] ?? 0} item',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: _bodyColor(context),
@@ -1460,6 +1476,35 @@ class _AdvanceCardState extends State<_AdvanceCard> {
                             _StatusBadge(
                               status: status,
                               color: statusColor,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                final requesterId = a['requester_id'];
+                                if (requesterId != null) {
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => UserInfoDialog(
+                                      userId: requesterId,
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Text(
+                                widget.isManager ? (a['requester_name'] ?? '-') : 'Saya',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: AppTheme.primary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),

@@ -47,9 +47,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       Theme.of(context).brightness == Brightness.dark;
   Color _surfaceColor(BuildContext context) =>
       _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
+  Color _cardColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.card : AppTheme.lightCard;
   Color _bodyColor(BuildContext context) =>
       _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _titleColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _creamColor(BuildContext context) =>
       _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
 
   void _handleMobilePageSelection(int index) {
@@ -667,10 +671,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
-        title: const Text(
+        backgroundColor: _cardColor(ctx),
+        title: Text(
           'Edit Kasbon',
-          style: TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(ctx)),
         ),
         content: advance['advance_type'] == 'batch'
             ? Column(
@@ -803,13 +807,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               : null;
 
           return AlertDialog(
-            backgroundColor: AppTheme.card,
+            backgroundColor: _cardColor(ctx),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             title: Text(
               isEditing ? 'Edit Item Kasbon' : 'Tambah Item Kasbon',
-              style: const TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
               width: 500,
@@ -1352,7 +1356,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              backgroundColor: AppTheme.card,
+              backgroundColor: _cardColor(ctx),
               title: const Text(
                 'Hapus Kasbon Kosong?',
                 style: TextStyle(color: AppTheme.cream),
@@ -1891,12 +1895,12 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                 controller: _itemTableHorizontalCtrl,
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(AppTheme.surface),
+                  headingRowColor: WidgetStateProperty.all(_surfaceColor(context)),
                   dataRowColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.hovered)) {
-                      return AppTheme.cardHover;
+                      return _isDark(context) ? AppTheme.cardHover : AppTheme.lightCardHover;
                     }
-                    return AppTheme.card;
+                    return _cardColor(context);
                   }),
                   columns: [
                     DataColumn(
@@ -2225,7 +2229,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         title: const Text(
           'Kembalikan ke Draft?',
           style: TextStyle(color: AppTheme.cream),
@@ -2284,7 +2288,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            backgroundColor: AppTheme.card,
+            backgroundColor: _cardColor(ctx),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
@@ -2450,11 +2454,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           filename,
-          style: const TextStyle(color: AppTheme.cream, fontSize: 16),
+          style: TextStyle(color: _creamColor(ctx), fontSize: 16),
         ),
         content: SizedBox(
           width: 600,
@@ -2545,7 +2549,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(ctx),
         title: Text(
           'Hapus $count Item',
           style: const TextStyle(color: AppTheme.cream),
@@ -2652,11 +2656,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     showDialog(
       context: ctx,
       builder: (innerCtx) => AlertDialog(
-        backgroundColor: AppTheme.card,
+        backgroundColor: _cardColor(innerCtx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           parentId != null ? 'Tambah Sub Kategori' : 'Tambah Kategori Utama',
-          style: const TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(innerCtx)),
         ),
         content: SizedBox(
           width: 350,
@@ -2751,10 +2755,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) {
           return AlertDialog(
-            backgroundColor: AppTheme.surface,
+            backgroundColor: _cardColor(ctx),
             title: Text(
               'Rejection Checklist${!canEdit ? ' (Lihat saja)' : ''}',
-              style: const TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
               width: 400,

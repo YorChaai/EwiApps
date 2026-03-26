@@ -14,14 +14,59 @@ def list_categories():
 
     # Staff can see pending categories they (or others) created to use them, but they still need manager approval for final settlement.
     if user.role == 'manager':
-        cats = Category.query.filter_by(parent_id=None).all()
+        # Manager: get all parent categories, ordered by sort_order
+        cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     else:
         # Allow staff to see pending categories so they can select them in expenses
-        cats = Category.query.filter_by(parent_id=None).all()
+        # Staff: only approved categories, ordered by sort_order
+        cats = Category.query.filter_by(parent_id=None, status='approved').order_by(Category.sort_order).all()
 
     return jsonify({
         'categories': [c.to_dict(include_children=True) for c in cats]
     }), 200
+
+
+@categories_bp.route('/reorder', methods=['PUT'])
+@jwt_required()
+def reorder_categories():
+    """
+    Reorder categories (manager only).
+    Expects: {'categories': [{'id': 1, 'sort_order': 1}, {'id': 2, 'sort_order': 2}, ...]}
+    """
+    user = User.query.get(int(get_jwt_identity()))
+    if user.role != 'manager':
+        return jsonify({'error': 'Akses ditolak. Hanya manager yang bisa mengubah urutan kategori'}), 403
+
+    data = request.get_json()
+    if not data or 'categories' not in data:
+        return jsonify({'error': 'Data kategori tidak ditemukan'}), 400
+
+    categories_data = data['categories']
+
+    try:
+        for cat_data in categories_data:
+            cat_id = cat_data.get('id')
+            sort_order = cat_data.get('sort_order')
+
+            if cat_id is None or sort_order is None:
+                continue
+
+            category = Category.query.get(cat_id)
+            if category:
+                category.sort_order = sort_order
+
+        db.session.commit()
+
+        # Return updated categories
+        updated_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+        return jsonify({
+            'message': 'Urutan kategori berhasil disimpan',
+            'categories': [c.to_dict() for c in updated_cats]
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Gagal menyimpan urutan: {str(e)}'}), 500
 
 
 @categories_bp.route('/pending', methods=['GET'])
@@ -99,7 +144,7 @@ def create_category():
         db.session.add(sub_cat)
 
     db.session.commit()
-    
+
     # Notify managers about new category creation
     message = f"{user.full_name} membuat kategori baru: {name}"
     notify_managers('create', 'category', cat.id, message, user.id, f'/categories')
@@ -184,7 +229,7 @@ def approve_category(cat_id):
             return jsonify({'error': 'Action harus approve atau reject'}), 400
 
         db.session.commit()
-        
+
         # Notify staff who created the category
         created_by_user = User.query.get(cat.created_by) if cat.created_by else None
         if created_by_user and action == 'approve':
@@ -193,7 +238,7 @@ def approve_category(cat_id):
         elif created_by_user and action == 'reject':
             message = f"Kategori '{cat.name}' Anda telah ditolak"
             notify_staff(created_by_user.id, 'reject', 'category', cat.id, message, user.id, f'/categories')
-        
+
         return jsonify({
             'message': f'Kategori {action}d',
             'status': 'success'

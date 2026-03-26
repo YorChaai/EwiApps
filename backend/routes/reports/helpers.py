@@ -126,7 +126,7 @@ def _map_expense_category_index(expense, cat_names):
     curr = expense.category
     while curr.parent:
         curr = curr.parent
-    
+
     root_name = curr.name
     if root_name in cat_names:
         return cat_names.index(root_name)
@@ -155,7 +155,7 @@ def _write_expense_line(ws, row_num, seq_num, expense, cat_names):
     ws.cell(row=row_num, column=6).value = expense.amount
     ws.cell(row=row_num, column=7).value = 'IDR'
     ws.cell(row=row_num, column=8).value = 1
- 
+
     fallback_col = 9 + _map_expense_category_index(expense, cat_names)
     target_col = _pick_template_formula_col(ws, row_num) or fallback_col
     ws.cell(row=row_num, column=target_col).value = f'=$F{row_num}*$H{row_num}'
@@ -280,6 +280,14 @@ def _group_annual_expenses(expenses, year):
     def _date_key(item):
         return _parse_iso_date(item.get('date')) or datetime(year, 1, 1).date()
 
+    def _expense_subcategory_label(expense):
+        """Extract subcategory from description [SubCategory] Description"""
+        desc = _safe_text(expense.get('description'))
+        match = re.match(r'^\[(.*?)\]\s*', desc.strip())
+        if match:
+            return match.group(1).strip()
+        return _safe_text(expense.get('subcategory_name'))
+
     def _group_sort_key(items):
         first = items[0] if items else {}
         subcat_name = (first.get('subcategory_name') or '').strip().lower()
@@ -290,7 +298,7 @@ def _group_annual_expenses(expenses, year):
         settlement_id = int(first.get('settlement_id') or 0)
         batch_no = _extract_batch_number(first.get('settlement_title')) if is_batch else 0
         min_date = min((_date_key(x) for x in items), default=datetime(year, 1, 1).date())
-        
+
         # Primary sort by subcategory name alphabetically (A-Z)
         if is_batch:
             if batch_no < 10**9:
@@ -300,6 +308,11 @@ def _group_annual_expenses(expenses, year):
 
     groups = list(grouped.values())
     for items in groups:
-        items.sort(key=lambda x: (_date_key(x), int(x.get('id') or 0)))
+        # Sort items within each group by subcategory A-Z, then date, then id
+        items.sort(key=lambda x: (
+            (_expense_subcategory_label(x) or '').lower(),
+            _date_key(x),
+            int(x.get('id') or 0)
+        ))
     groups.sort(key=_group_sort_key)
     return groups
