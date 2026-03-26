@@ -411,6 +411,11 @@ Mau saya mulai dari mana? 🚀
 
 
 sekarang saya ingin kamu cek lagi apakah disini sudah sesuai atau belum plan kita ini coba cek lagi bisa saja sudha benar tetapi ada kesalahan logic atau ada file lain juga berdampak karena perubahan kita lakuin di md ini coba di cek lagi ulang dan diverifikasi kan lagi 
+
+coba cari disini bug atau redudant dan cek juga apakkah ada yang bikin apliaksi kita berart karena banyak file yang redudant gitu banyak fitur di satu file sebanrya bisa di jadikna 1 untu ksemua file gitu apakah ada
+
+setau saya disini ada catata saya cmn kan karena bisa ajh beda jadi say ingi kamu cari untu kredudant dan bug cari crit high med low, dan untuk perfoma juga sama
+
 "
 "D:\2. Organize\1. Projects\MiniProjectKPI_EWI\panduan\setting baru.md"
 "
@@ -427,3 +432,4 @@ performa
 "
 "D:\2. Organize\1. Projects\MiniProjectKPI_EWI\panduan\perfoma step.md"
 "
+1
