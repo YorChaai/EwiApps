@@ -286,11 +286,15 @@ def _group_annual_expenses(expenses, year):
         match = re.match(r'^\[(.*?)\]\s*', desc.strip())
         if match:
             return match.group(1).strip()
+        notes = _safe_text(expense.get('notes'))
+        note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
+        if note_match:
+            return _safe_text(note_match.group(1)).strip()
         return _safe_text(expense.get('subcategory_name'))
 
     def _group_sort_key(items):
         first = items[0] if items else {}
-        subcat_name = (first.get('subcategory_name') or '').strip().lower()
+        subcat_name = _expense_subcategory_label(first).strip().lower()
         is_batch = _is_batch_settlement(
             first.get('settlement_type'),
             first.get('settlement_title'),

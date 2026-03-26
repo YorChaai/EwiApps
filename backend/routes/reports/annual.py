@@ -65,6 +65,35 @@ def _root_category_info(category_id, category_by_id):
     return cat.name or '-', subcategory_name or '-'
 
 
+def _subcategory_sort_key(label):
+    text = _safe_text(label).strip()
+    if not text or text == '-':
+        return (1, '')
+    return (0, text.lower())
+
+
+def _write_dynamic_category_headers(ws, root_cats, header_row=40, start_col=9, template_end_col=17):
+    last_used_col = max(template_end_col, start_col + len(root_cats) - 1)
+    for col in range(start_col, last_used_col + 1):
+        cell = ws.cell(row=header_row, column=col)
+        if isinstance(cell, MergedCell):
+            continue
+        if col >= start_col + len(root_cats):
+            cell.value = None
+
+    for offset, category in enumerate(root_cats):
+        col = start_col + offset
+        cell = ws.cell(row=header_row, column=col)
+        if isinstance(cell, MergedCell):
+            continue
+        cell.value = category.name
+        alignment = copy(cell.alignment)
+        alignment.wrap_text = True
+        alignment.horizontal = 'center'
+        alignment.vertical = 'center'
+        cell.alignment = alignment
+
+
 def _clone_row_format(ws, source_row, target_row, start_col=1, end_col=17):
     ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
     for col in range(start_col, end_col + 1):
@@ -509,6 +538,13 @@ def _expense_subcategory_label(expense):
         if prefix:
             return prefix
 
+    notes = _safe_text(expense.get('notes')).strip()
+    note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
+    if note_match:
+        note_subcategory = _safe_text(note_match.group(1)).strip()
+        if note_subcategory:
+            return note_subcategory
+
     desc = raw_desc.lower()
     if 'rental tool' in desc:
         return 'Rental Tool'
@@ -545,6 +581,115 @@ def _expense_subcategory_label(expense):
     if subcategory_name:
         return subcategory_name
     return ''
+
+
+def _fill_annual_expense_row(ws, row_num, expense, seq_num, cat_names, category_by_id_map):
+    clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
+    _clear_range(ws, row_num, row_num, 2, 17)
+    _safe_set_cell(ws, row_num, 2, _parse_iso_date(expense.get('date')))
+    _safe_set_cell(ws, row_num, 3, seq_num)
+    _safe_set_cell(ws, row_num, 4, clean_desc or '-')
+    _safe_set_number(ws, row_num, 6, _expense_amount_for_display(expense))
+    _safe_set_cell(ws, row_num, 7, expense.get('currency') or 'IDR')
+    _safe_set_number(
+        ws,
+        row_num,
+        8,
+        _to_float(expense.get('currency_exchange'), default=1) or 1,
+        number_format='0.########',
+    )
+    root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
+    fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
+    _safe_set_number(ws, row_num, fallback_col, _expense_amount_for_display(expense))
+
+
+def _render_batch_expense_block(
+    ws,
+    start_row,
+    end_row,
+    block_items,
+    cat_names,
+    category_by_id_map,
+):
+    detail_data_rows = [r for r in range(start_row, end_row + 1) if _is_template_detail_data_row(ws, r)]
+    subcategory_rows = [
+        r for r in range(start_row, end_row + 1)
+        if (not _is_template_detail_data_row(ws, r)) and _safe_text(ws.cell(row=r, column=4).value).strip()
+    ]
+    if not detail_data_rows:
+        return
+
+    all_available_rows = sorted(set(detail_data_rows + subcategory_rows))
+    header_template_row = subcategory_rows[0] if subcategory_rows else None
+    detail_template_row = detail_data_rows[0] if detail_data_rows else None
+
+    for row_num in all_available_rows:
+        _clear_range(ws, row_num, row_num, 2, 17)
+        _set_rows_hidden(ws, row_num, row_num, False)
+
+    grouped_items = OrderedDict()
+    for expense in sorted(
+        block_items,
+        key=lambda e: (
+            _subcategory_sort_key(_expense_subcategory_label(e) or '-'),
+            _extract_imported_row(e.get('notes')) is None,
+            _extract_imported_row(e.get('notes')) or 10**9,
+            int(e.get('id') or 0),
+        ),
+    ):
+        label = (_expense_subcategory_label(expense) or '-').strip() or '-'
+        key = label.lower()
+        if key not in grouped_items:
+            grouped_items[key] = {'label': label, 'items': []}
+        grouped_items[key]['items'].append(expense)
+
+    ordered_groups = sorted(
+        grouped_items.values(),
+        key=lambda entry: _subcategory_sort_key(entry['label']),
+    )
+
+    row_cursor = 0
+    used_rows = set()
+    fallback_seq = 1
+
+    for group in ordered_groups:
+        if row_cursor >= len(all_available_rows):
+            break
+
+        header_row = all_available_rows[row_cursor]
+        if header_template_row is not None and header_row != header_template_row:
+            _clone_row_format(ws, header_template_row, header_row)
+        _clear_range(ws, header_row, header_row, 2, 17)
+        _safe_set_cell(ws, header_row, 4, group['label'])
+        ws.cell(row=header_row, column=4).font = Font(bold=True)
+        _set_rows_hidden(ws, header_row, header_row, False)
+        used_rows.add(header_row)
+        row_cursor += 1
+
+        for expense in group['items']:
+            if row_cursor >= len(all_available_rows):
+                break
+            detail_row = all_available_rows[row_cursor]
+            if detail_template_row is not None and detail_row != detail_template_row:
+                _clone_row_format(ws, detail_template_row, detail_row)
+            _fill_annual_expense_row(
+                ws,
+                detail_row,
+                expense,
+                fallback_seq,
+                cat_names,
+                category_by_id_map,
+            )
+            _set_rows_hidden(ws, detail_row, detail_row, False)
+            used_rows.add(detail_row)
+            row_cursor += 1
+            fallback_seq += 1
+
+    for row_num in all_available_rows:
+        if row_num in used_rows:
+            continue
+        _clear_range(ws, row_num, row_num, 2, 17)
+        _set_rows_hidden(ws, row_num, row_num, True)
 
 
 def _manual_combine_groups_by_table(table_name, year):
@@ -1024,10 +1169,11 @@ def get_annual_report_excel():
     _safe_set_cell(ws, 37, 13, 'PPh'); _safe_set_cell(ws, 37, 14, sum_tax3)
     _safe_set_cell(ws, 37, 15, 'PPh'); _safe_set_cell(ws, 37, 16, sum_tax4)
     _safe_set_cell(ws, 37, 17, '-')
-    # Fetch root categories dynamically from DB
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.id).all()
+    # Fetch root categories dynamically from DB - ORDER BY sort_order (from Kategori Tabular)
+    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns # for mapping
+    _write_dynamic_category_headers(ws, root_cats)
 
     # Table 3: PENGELUARAN & OPERATION COST (summary)
     base_summary_start = 41
@@ -1182,32 +1328,62 @@ def get_annual_report_excel():
         settlement_name = _clean_settlement_title(block_items[0].get('settlement_title') or 'Tanpa Settlement')
         _safe_set_cell(ws, header_row, 4, settlement_name)
         ws.cell(row=header_row, column=2).font = Font(bold=True); ws.cell(row=header_row, column=4).font = Font(bold=True)
+        _render_batch_expense_block(
+            ws,
+            start_row,
+            end_row,
+            block_items,
+            cat_names,
+            category_by_id_map,
+        )
+        continue
 
         # Kumpulkan subcategory headers dan ranges-nya
-        section_headers = []
-        section_ranges = []
+        section_headers_unsorted = []
+        section_ranges_unsorted = []
         current_header = None
         current_rows = []
         for r in range(start_row, end_row + 1):
             if r in subcategory_rows:
                 if current_header is not None:
-                    section_ranges.append((current_header, list(current_rows)))
+                    section_ranges_unsorted.append((current_header, list(current_rows)))
                 current_header = r
                 current_rows = []
                 subtitle = _safe_text(ws.cell(row=r, column=4).value).strip()
                 if subtitle:
                     ws.cell(row=r, column=4).font = Font(bold=True)
-                    section_headers.append((r, subtitle))
+                    section_headers_unsorted.append((r, subtitle))
             elif r in detail_data_rows and current_header is not None:
                 current_rows.append(r)
         if current_header is not None:
-            section_ranges.append((current_header, list(current_rows)))
+            section_ranges_unsorted.append((current_header, list(current_rows)))
         if not detail_data_rows: continue
+
+        # SORT section headers alphabetically (A-Z)
+        section_headers_sorted = sorted(section_headers_unsorted, key=lambda item: item[1].lower())
+
+        # Rebuild section_ranges based on sorted headers
+        section_ranges_sorted = []
+        for header_row_num, subtitle in section_headers_sorted:
+            for orig_header, orig_rows in section_ranges_unsorted:
+                if orig_header == header_row_num:
+                    section_ranges_sorted.append((orig_header, orig_rows))
+                    break
 
         placement_rows2 = {}
         used_rows2 = set()
 
         # Urutkan item berdasarkan sub-kategori A-Z (sama seperti single)
+        # Group items by subcategory first
+        items_grouped_by_subcategory = OrderedDict()
+        for e in block_items:
+            subcategory = (_expense_subcategory_label(e) or '').strip()
+            if subcategory:
+                items_grouped_by_subcategory.setdefault(subcategory, []).append(e)
+
+        # Sort subcategories alphabetically (A-Z)
+        sorted_subcategories = sorted(items_grouped_by_subcategory.keys(), key=lambda x: x.lower())
+
         ordered_items = sorted(
             block_items,
             key=lambda e: (
@@ -1219,13 +1395,13 @@ def get_annual_report_excel():
         )
 
         header_lookup = OrderedDict()
-        for row_num, subtitle in section_headers:
+        for row_num, subtitle in section_headers_sorted:
             key = _safe_text(subtitle).strip().lower()
             header_lookup.setdefault(key, []).append(row_num)
 
         section_rows_lookup = {
             header_row_num: rows
-            for header_row_num, rows in section_ranges
+            for header_row_num, rows in section_ranges_sorted
         }
 
         items_by_subcategory = OrderedDict()
@@ -1264,7 +1440,7 @@ def get_annual_report_excel():
             used_rows2.add(row_num)
             hidden_detail_rows.discard(row_num)
 
-        for header_row_num, rows in section_ranges:
+        for header_row_num, rows in section_ranges_sorted:
             if any(r in placement_rows2 for r in rows):
                 hidden_headers.discard(header_row_num)
                 for r in rows:
@@ -1272,9 +1448,26 @@ def get_annual_report_excel():
                         hidden_detail_rows.discard(r)
 
         header_rows_by_title = OrderedDict()
-        for row_num, subtitle in section_headers:
+        for row_num, subtitle in section_headers_sorted:
             key = _safe_text(subtitle).strip().lower()
             header_rows_by_title.setdefault(key, []).append(row_num)
+
+        # MOVE header text to sorted positions ← FIX!
+        # Get sorted header titles
+        sorted_titles = [subtitle for row_num, subtitle in section_headers_sorted]
+
+        # Get header rows in order (from sorted ranges)
+        header_rows_in_order = [row_num for row_num, rows in section_ranges_sorted]
+
+        # Clear all original headers
+        for orig_row_num, orig_subtitle in section_headers_unsorted:
+            ws.cell(row=orig_row_num, column=4).value = None
+
+        # Write sorted headers to header rows
+        for idx, header_row in enumerate(header_rows_in_order):
+            if idx < len(sorted_titles):
+                ws.cell(row=header_row, column=4).value = sorted_titles[idx]
+                ws.cell(row=header_row, column=4).font = Font(bold=True)
 
         for title_key, header_rows in header_rows_by_title.items():
             if not title_key:

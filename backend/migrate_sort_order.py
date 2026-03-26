@@ -11,12 +11,14 @@ import os
 # Add parent directory to path to import models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models import db, Category, app
+from models import db, Category
+from app import create_app
 from sqlalchemy import text
 
 def migrate():
     """Add sort_order column and populate with default values"""
 
+    app = create_app()
     with app.app_context():
         print("🔧 Starting migration: Adding sort_order column to categories table...")
 

@@ -52,7 +52,7 @@ def format_last_login(last_login):
 
 
 def is_user_online(last_login):
-    """Check if user is online (last login < 1 minute ago)"""
+    """Check if user is online based on recent activity window."""
     if last_login is None:
         return False
 
@@ -70,8 +70,9 @@ def is_user_online(last_login):
         now = datetime.now(timezone.utc)
         diff = now - last
 
-        # Online jika < 1 menit (60 detik)
-        return diff.total_seconds() < 60
+        # Online jika masih ada aktivitas dalam 2 menit terakhir.
+        # Heartbeat akan diperbarui oleh request JWT user yang memang masih aktif.
+        return diff.total_seconds() < (2 * 60)
 
     except Exception as e:
         print(f"Error checking online status: {e}")

@@ -105,3 +105,9 @@ git add -A && git commit -m "fix: bug fixes" && git push
 ```
 
 **Done!** 🎉
+
+
+cd "D:\2. Organize\1. Projects\MiniProjectKPI_EWI"
+git add -A
+git commit -m "docs: update panduan performa step"
+git push

@@ -1,9 +1,9 @@
 import os
 import sqlite3
-from datetime import timedelta
-from flask import Flask, send_from_directory
+from datetime import timedelta, datetime, timezone
+from flask import Flask, send_from_directory, request
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
+from flask_jwt_extended import JWTManager, verify_jwt_in_request, get_jwt_identity
 from flask_migrate import Migrate
 from config import Config
 from models import db, User, Category, Revenue, Tax, Dividend, DividendSetting, Notification
@@ -52,6 +52,36 @@ def create_app():
     app.register_blueprint(dividends_bp)
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(notifications_bp)
+
+    @app.before_request
+    def touch_authenticated_user_activity():
+        if request.method == 'OPTIONS' or not request.path.startswith('/api/'):
+            return
+        if request.path in ('/api/auth/login', '/api/auth/register'):
+            return
+
+        try:
+            verify_jwt_in_request(optional=True)
+            identity = get_jwt_identity()
+            if not identity:
+                return
+
+            user = User.query.get(int(identity))
+            if not user:
+                return
+
+            now = datetime.now(timezone.utc)
+            last_login = user.last_login
+            if last_login and last_login.tzinfo is None:
+                last_login = last_login.replace(tzinfo=timezone.utc)
+
+            # Simpan heartbeat maksimal tiap 30 detik agar status online tetap akurat
+            # tanpa menulis database di setiap request kecil.
+            if last_login is None or (now - last_login).total_seconds() >= 30:
+                user.last_login = now
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     @app.route('/api/uploads/<path:filename>')
     def serve_upload(filename):
