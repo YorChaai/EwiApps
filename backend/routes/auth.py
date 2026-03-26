@@ -19,6 +19,10 @@ def format_last_login(last_login):
         else:
             last = last_login
 
+        # Make timezone-aware if naive (SQLite stores naive datetimes)
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+
         now = datetime.now(timezone.utc)
         diff = now - last
         total_seconds = int(diff.total_seconds())
@@ -58,6 +62,10 @@ def is_user_online(last_login):
             last = datetime.fromisoformat(last_login.replace('Z', '+00:00'))
         else:
             last = last_login
+
+        # Make timezone-aware if naive
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
 
         now = datetime.now(timezone.utc)
         diff = now - last
