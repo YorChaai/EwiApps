@@ -184,3 +184,9 @@ backend/uploads/
 braces.txt
 analyze_output.txt
 frontend/analyze_output.txt
+
+# Excel temporary files
+~$*.xlsx
+~$*.xls
+**/~$*.xlsx
+**/~$*.xls

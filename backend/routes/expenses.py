@@ -390,8 +390,8 @@ def serve_evidence(filename):
 @expenses_bp.route('/categories', methods=['GET'])
 @jwt_required()
 def list_categories():
-    # Allow all statuses for selection
-    categories = Category.query.filter_by(parent_id=None).all()
+    # Allow all statuses for selection, ordered by manual sort_order
+    categories = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     return jsonify({
         'categories': [c.to_dict(include_children=True) for c in categories]
     }), 200

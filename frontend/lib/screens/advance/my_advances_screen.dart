@@ -24,7 +24,6 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
   String? _statusFilter;
   DateTime? _startDate;
   DateTime? _endDate;
-  int _selectedReportYear = 2024;
   String _searchQuery = '';
   double? _annualAdvanceTotal;
   final ScrollController _listScrollController = ScrollController();
@@ -175,8 +174,9 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
   Future<void> _loadAnnualAdvanceSummary() async {
     try {
       final api = context.read<AuthProvider>().api;
+      final prov = context.read<AdvanceProvider>();
       // Gunakan tahun yang dipilih di filter, bukan tahun saat ini
-      final yearToUse = _selectedReportYear == 0 ? DateTime.now().year : _selectedReportYear;
+      final yearToUse = prov.reportYear == 0 ? DateTime.now().year : prov.reportYear;
       final res = await api.getAdvances(reportYear: yearToUse);
       final advances = List<Map<String, dynamic>>.from(res['advances'] ?? []);
       final total = advances.fold<double>(0, (sum, advance) {
@@ -474,7 +474,7 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<int>(
-                          value: _selectedReportYear,
+                          value: prov.reportYear,
                           dropdownColor: _cardColor(context),
                           style: TextStyle(color: _primaryText(context)),
                           items: [
@@ -482,17 +482,17 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
                               value: 0,
                               child: Text('Semua Tahun'),
                             ),
-                            ...List.generate(10, (index) => 2020 + index).map(
-                              (y) => DropdownMenuItem(
-                                value: y,
-                                child: Text('Laporan $y'),
-                              ),
-                            ),
+                            ...{
+                              ...List.generate(21, (index) => 2020 + index),
+                              prov.reportYear
+                            }.where((y) => y != 0).map((y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Text('Laporan $y'),
+                                )),
                           ],
                           onChanged: (value) {
                             if (value == null) return;
-                            setState(() => _selectedReportYear = value);
-                            _reloadAdvances();
+                            prov.setReportYear(value, reload: true);
                           },
                         ),
                       ),
@@ -664,25 +664,15 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
       endDate: _endDate != null
           ? DateFormat('yyyy-MM-dd').format(_endDate!)
           : null,
-      reportYear: _selectedReportYear,
+      reportYear: prov.reportYear == 0 ? null : prov.reportYear,
       search: _searchQuery.isEmpty ? null : _searchQuery,
     );
     _loadAnnualAdvanceSummary();
   }
 
   Future<void> _loadDefaultReportYearAndReload() async {
-    try {
-      final api = context.read<AuthProvider>().api;
-      final settings = await api.getReportYearSettings();
-      final year = int.tryParse(
-        (settings['default_report_year'] ?? 2024).toString(),
-      );
-      if (mounted && year != null) {
-        setState(() => _selectedReportYear = year);
-      }
-    } catch (_) {
-      // fallback ke default lokal
-    }
+    final prov = context.read<AdvanceProvider>();
+    await prov.syncReportYear();
     _reloadAdvances();
   }
 
