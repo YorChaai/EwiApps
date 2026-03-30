@@ -332,23 +332,22 @@ def _group_annual_expenses(expenses, year):
 
     def _expense_subcategory_label(expense):
         """
-        Extract subcategory from expense - SAME LOGIC AS FLUTTER APP!
-        Priority:
+        Extract subcategory from expense with priority:
         1. [SubCategory] prefix in description
         2. 'Subcategory: X' in notes
-        3. Keyword matching from description (like Flutter)
-        4. subcategory_name field from database (fallback)
+        3. subcategory_name field from database
+        4. Keyword matching (last resort)
         """
         raw_desc = _safe_text(expense.get('description')).strip()
 
-        # ✅ PRIORITY 1: Check [SubCategory] prefix in description (same as Flutter)
+        # ✅ PRIORITY 1: Check [SubCategory] prefix in description
         prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
         if prefixed:
             prefix = _safe_text(prefixed.group(1)).strip()
             if prefix:
                 return prefix
 
-        # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern (same as Flutter)
+        # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern
         notes = _safe_text(expense.get('notes')).strip()
         note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
         if note_match:
@@ -356,45 +355,57 @@ def _group_annual_expenses(expenses, year):
             if note_subcategory:
                 return note_subcategory
 
-        # ✅ PRIORITY 3: Keyword matching from description (EXACTLY LIKE FLUTTER)
-        desc = raw_desc.lower()
-
-        # Match Flutter's keyword order exactly
-        if 'rental tool' in desc:
-            return 'Rental Tool'
-        if 'sales' in desc:
-            return 'Sales'
-        if 'gaji' in desc or 'bonus' in desc:
-            return 'Gaji'
-        if 'pembuatan alat' in desc or 'mesin retort' in desc:
-            return 'Pembuatan Alat'
-        if 'thr' in desc or 'allowance' in desc:
-            return 'Allowance'
-        if 'data processing' in desc:
-            return 'Data Processing'
-        if 'moving slickline' in desc or 'project lampu' in desc:
-            return 'Project Operation'
-        if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc:
-            return 'Sparepart'
-        if 'repair esor' in desc:
-            return 'Maintenance'
-        if 'licence' in desc or 'license' in desc:
-            return 'Software License'
-        if 'handphone operational' in desc:
-            return 'Operation'
-        if 'sewa ruangan' in desc or 'virtual office' in desc:
-            return 'Sewa Ruangan'
-        if 'modal kerja' in desc:
-            return 'Modal Kerja'
-        if 'team building' in desc:
-            return 'Team Building'
-        if 'biaya transaksi bank' in desc:
-            return 'Biaya Bank'
-
-        # ✅ PRIORITY 4: Fallback to subcategory_name field (last resort, like Flutter)
+        # ✅ PRIORITY 3: Use subcategory_name field from database (most reliable)
         subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
         if subcategory_name:
             return subcategory_name
+
+        # ✅ PRIORITY 4: Keyword matching (only for legacy data without proper subcategory)
+        # Use MORE SPECIFIC phrases to avoid false matches
+        desc = raw_desc.lower()
+
+        # Specific multi-word phrases first (more specific = higher priority)
+        if 'biaya transaksi bank' in desc or 'bank charge' in desc:
+            return 'Biaya Bank'
+        if 'pembuatan alat' in desc or 'mesin retort' in desc:
+            return 'Pembuatan Alat'
+        if 'moving slickline' in desc or 'project lampu' in desc:
+            return 'Project Operation'
+        if 'data processing' in desc:
+            return 'Data Processing'
+        if 'sewa ruangan' in desc or 'virtual office' in desc:
+            return 'Sewa Ruangan'
+        if 'handphone operational' in desc:
+            return 'Operation'
+        if 'repair esor' in desc:
+            return 'Maintenance'
+        if 'sampling tool' in desc:
+            return 'Sparepart'
+        if 'sparepart' in desc:
+            return 'Sparepart'
+        if 'ups biaya import' in desc:
+            return 'Sparepart'
+        if 'software license' in desc or 'licence' in desc or 'license' in desc:
+            return 'Software License'
+        if 'team building' in desc:
+            return 'Team Building'
+        if 'modal kerja' in desc:
+            return 'Modal Kerja'
+
+        # Single words - be very careful, only match exact context
+        if 'gaji' in desc:
+            return 'Gaji'
+        if 'bonus' in desc and 'field bonus' not in desc:  # 'Field Bonus' is a description, not category
+            return 'Gaji'
+        if 'thr' in desc:
+            return 'Allowance'
+        # Only match 'allowance' if it's clearly about allowance, not part of other phrases
+        if 'allowance' in desc and 'crew allowance' not in desc and 'meal allowance' not in desc:
+            return 'Allowance'
+        if 'rental tool' in desc or 'rental mobil' in desc:
+            return 'Rental Tool'
+        if 'sales' in desc and 'sales service' in desc:
+            return 'Sales'
 
         return ''  # Return empty if no subcategory found
 

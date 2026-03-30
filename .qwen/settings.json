@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(findstr *)",
+      "Bash(sort)",
+      "Bash(fc *)",
+      "Bash(git show *)",
+      "Bash(git diff *)",
+      "Bash(type *)",
+      "Bash(..\\venv\\scripts\\python.exe *)",
+      "Bash(dir *)",
+      "Bash(pip install *)",
+      "Bash(select-object *)"
+    ]
+  },
+  "$version": 3
+}

@@ -1,0 +1,134 @@
+Di Python ada beberapa cara untuk cek error seperti Flutter Analyzer:
+
+## ️ **Python Static Analysis Tools**
+
+### **1. Pylint** (Paling Populer)
+Cek syntax error, style, bugs:
+```bash
+# Install
+pip install pylint
+
+# Usage
+pylint backend/routes/reports/annual.py
+
+# Atau cek semua file Python
+pylint backend/**/*.py
+```
+
+**Output:**
+```
+E: Line 1803: AttributeError: 'MergedCell' object attribute 'value' is read-only
+W: Line 1798: Unused variable 'last_category_col'
+C: Line 100: Line too long (120/100 characters)
+```
+
+---
+
+### **2. Pyright / Pylance** (VS Code Built-in)
+**Install VS Code Extension:**
+- **Pylance** (ms-python.vscode-pylance)
+- **Python** (ms-python.python)
+
+**Settings (`.vscode/settings.json`):**
+```json
+{
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.linting.pylintEnabled": true,
+  "python.linting.enabled": true
+}
+```
+
+**Keuntungan:**
+- ✅ Real-time error detection (seperti Flutter Analyzer)
+- ✅ Type checking
+- ✅ Auto-complete yang lebih pintar
+- ✅ Red squiggly lines di VS Code
+
+---
+
+### **3. mypy** (Type Checking)
+Cek type errors:
+```bash
+# Install
+pip install mypy
+
+# Usage
+mypy backend/routes/reports/annual.py
+
+# Strict mode
+mypy --strict backend/routes/reports/annual.py
+```
+
+---
+
+### **4. Black** (Auto Formatter)
+Format code otomatis:
+```bash
+pip install black
+black backend/routes/reports/annual.py
+```
+
+---
+
+### **5. Flake8** (Style & Errors)
+```bash
+pip install flake8
+flake8 backend/routes/reports/annual.py
+```
+
+---
+
+## 🚀 **Rekomendasi Saya: Setup VS Code**
+
+**Install Extensions:**
+1. ✅ **Pylance** (real-time analysis)
+2. ✅ **Python** (IntelliSense, linting)
+3. ✅ **Black Formatter** (auto format)
+
+**Settings (`.vscode/settings.json`):**
+```json
+{
+  "python.defaultInterpreterPath": "backend/venv/Scripts/python.exe",
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.diagnosticMode": "workspace",
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": true,
+  "python.formatting.provider": "black",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true
+  }
+}
+```
+
+---
+
+## 🔍 **Quick Check Sebelum Commit**
+
+Buat script `check_errors.bat`:
+```batch
+@echo off
+echo Running Pylint...
+pylint backend/routes/reports/annual.py
+
+echo Running mypy...
+mypy backend/routes/reports/annual.py
+
+echo Running Black (check only)...
+black --check backend/routes/reports/annual.py
+
+echo Done!
+```
+
+---
+
+## 💡 **Untuk Project Ini**
+
+Saya akan setup **Pylance di VS Code** dan **selalu cek**:
+1. ✅ Variable defined sebelum dipakai
+2. ✅ Type errors (MergedCell, None, dll)
+3. ✅ Import statements
+4. ✅ Syntax errors
+
+**Mau saya setup file konfigurasi VS Code untuk project ini?** ️

@@ -66,7 +66,8 @@ def create_app():
             if not identity:
                 return
 
-            user = User.query.get(int(identity))
+            # ✅ FIX: Use db.session.get() instead of deprecated User.query.get()
+            user = db.session.get(User, int(identity))
             if not user:
                 return
 

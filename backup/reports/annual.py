@@ -588,23 +588,22 @@ def _expense_amount_for_display(expense):
 
 def _expense_subcategory_label(expense):
     """
-    Extract subcategory from expense - SAME LOGIC AS FLUTTER APP!
-    Priority:
+    Extract subcategory from expense with priority:
     1. [SubCategory] prefix in description
     2. 'Subcategory: X' in notes
-    3. Keyword matching from description (like Flutter)
-    4. subcategory_name field from database (fallback)
+    3. subcategory_name field from database
+    4. Keyword matching (last resort)
     """
     raw_desc = _safe_text(expense.get('description')).strip()
 
-    # ✅ PRIORITY 1: Check [SubCategory] prefix in description (same as Flutter)
+    # ✅ PRIORITY 1: Check [SubCategory] prefix in description
     prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
     if prefixed:
         prefix = _safe_text(prefixed.group(1)).strip()
         if prefix:
             return prefix
 
-    # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern (same as Flutter)
+    # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern
     notes = _safe_text(expense.get('notes')).strip()
     note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
     if note_match:
@@ -612,405 +611,256 @@ def _expense_subcategory_label(expense):
         if note_subcategory:
             return note_subcategory
 
-    # ✅ PRIORITY 3: Keyword matching from description (EXACTLY LIKE FLUTTER)
-    desc = raw_desc.lower()
-
-    # Match Flutter's keyword order exactly
-    if 'rental tool' in desc:
-        return 'Rental Tool'
-    if 'sales' in desc:
-        return 'Sales'
-    if 'gaji' in desc or 'bonus' in desc:
-        return 'Gaji'
-    if 'pembuatan alat' in desc or 'mesin retort' in desc:
-        return 'Pembuatan Alat'
-    if 'thr' in desc or 'allowance' in desc:
-        return 'Allowance'
-    if 'data processing' in desc:
-        return 'Data Processing'
-    if 'moving slickline' in desc or 'project lampu' in desc:
-        return 'Project Operation'
-    if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc:
-        return 'Sparepart'
-    if 'repair esor' in desc:
-        return 'Maintenance'
-    if 'licence' in desc or 'license' in desc:
-        return 'Software License'
-    if 'handphone operational' in desc:
-        return 'Operation'
-    if 'sewa ruangan' in desc or 'virtual office' in desc:
-        return 'Sewa Ruangan'
-    if 'modal kerja' in desc:
-        return 'Modal Kerja'
-    if 'team building' in desc:
-        return 'Team Building'
-    if 'biaya transaksi bank' in desc:
-        return 'Biaya Bank'
-
-    # ✅ PRIORITY 4: Fallback to subcategory_name field (last resort, like Flutter)
+    # ✅ PRIORITY 3: Use subcategory_name field from database (most reliable)
     subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
     if subcategory_name:
         return subcategory_name
 
+    # ✅ PRIORITY 4: Keyword matching (only for legacy data without proper subcategory)
+    # Use MORE SPECIFIC phrases to avoid false matches
+    desc = raw_desc.lower()
+
+    # Specific multi-word phrases first (more specific = higher priority)
+    if 'biaya transaksi bank' in desc or 'bank charge' in desc:
+        return 'Biaya Bank'
+    if 'pembuatan alat' in desc or 'mesin retort' in desc:
+        return 'Pembuatan Alat'
+    if 'moving slickline' in desc or 'project lampu' in desc:
+        return 'Project Operation'
+    if 'data processing' in desc:
+        return 'Data Processing'
+    if 'sewa ruangan' in desc or 'virtual office' in desc:
+        return 'Sewa Ruangan'
+    if 'handphone operational' in desc:
+        return 'Operation'
+    if 'repair esor' in desc:
+        return 'Maintenance'
+    if 'sampling tool' in desc:
+        return 'Sparepart'
+    if 'sparepart' in desc:
+        return 'Sparepart'
+    if 'ups biaya import' in desc:
+        return 'Sparepart'
+    if 'software license' in desc or 'licence' in desc or 'license' in desc:
+        return 'Software License'
+    if 'team building' in desc:
+        return 'Team Building'
+    if 'modal kerja' in desc:
+        return 'Modal Kerja'
+
+    # Single words - be very careful, only match exact context
+    if 'gaji' in desc:
+        return 'Gaji'
+    if 'bonus' in desc and 'field bonus' not in desc:  # 'Field Bonus' is a description, not category
+        return 'Gaji'
+    if 'thr' in desc:
+        return 'Allowance'
+    # Only match 'allowance' if it's clearly about allowance, not part of other phrases
+    if 'allowance' in desc and 'crew allowance' not in desc and 'meal allowance' not in desc:
+        return 'Allowance'
+    if 'rental tool' in desc or 'rental mobil' in desc:
+        return 'Rental Tool'
+    if 'sales' in desc and 'sales service' in desc:
+        return 'Sales'
+
     return ''
 
 
-def _group_expenses_by_subcategory(expenses):
-    """
-    Group expenses by subcategory, same as frontend Flutter logic.
-    Returns dict with sorted subcategories (A-Z) and uncategorized list.
-    """
-    groups = {}
-    uncategorized = []
+def _fill_annual_expense_row(ws, row_num, expense, seq_num, cat_names, category_by_id_map, last_category_col=None):
+    # Calculate last_category_col dynamically if not provided
+    if last_category_col is None:
+        last_category_col = 9 + len(cat_names) - 1  # start_col=9, then add category count
 
-    for e in expenses:
-        subcat = _expense_subcategory_label(e).strip()
-        if not subcat:
-            uncategorized.append(e)
-        else:
-            if subcat not in groups:
-                groups[subcat] = []
-            groups[subcat].append(e)
-
-    # Sort subcategories A-Z (case-insensitive)
-    sorted_subcats = sorted(groups.keys(), key=lambda x: x.lower())
-
-    return {
-        'groups': {subcat: groups[subcat] for subcat in sorted_subcats},
-        'uncategorized': uncategorized,
-    }
+    clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
+    _clear_range(ws, row_num, row_num, 2, last_category_col)
+    _safe_set_cell(ws, row_num, 2, _parse_iso_date(expense.get('date')))
+    _safe_set_cell(ws, row_num, 3, seq_num)
+    _safe_set_cell(ws, row_num, 4, clean_desc or '-')
+    _safe_set_number(ws, row_num, 6, _expense_amount_for_display(expense))
+    _safe_set_cell(ws, row_num, 7, expense.get('currency') or 'IDR')
+    _safe_set_number(
+        ws,
+        row_num,
+        8,
+        _to_float(expense.get('currency_exchange'), default=1) or 1,
+        number_format='0.########',
+    )
+    root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
+    fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
+    _safe_set_number(ws, row_num, fallback_col, _expense_amount_for_display(expense))
 
 
-def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year):
-    """
-    ✅ NEW DATA-DRIVEN APPROACH: Render expense section from scratch.
-    Same logic as frontend Flutter app.
+def _render_batch_expense_block(
+    ws,
+    start_row,
+    end_row,
+    block_items,
+    cat_names,
+    category_by_id_map,
+    last_category_col=None,
+):
+    # Calculate last_category_col dynamically if not provided
+    if last_category_col is None:
+        last_category_col = 9 + len(cat_names) - 1  # start_col=9, then add category count
 
-    Structure:
-    - Single expenses grouped by subcategory (A-Z)
-    - Batch expenses grouped by settlement, then subcategory (A-Z)
-    - Total row with category totals
-
-    Args:
-        ws: Excel worksheet
-        expenses: List of expense dicts from API
-        cat_names: List of category names from DB
-        category_by_id_map: Dict mapping category_id to category object
-        year: Report year
-    """
-    print(f'[EXPENSE_RENDER] Starting data-driven expense rendering...')
-    print(f'[EXPENSE_RENDER] Total expenses: {len(expenses)}')
-    print(f'[EXPENSE_RENDER] Categories: {cat_names}')
-
-    last_category_col = 9 + len(cat_names) - 1
-    white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
-    green_fill = GREEN_FILL  # Separator between single and batch
-    blue_fill = BLUE_FILL    # Batch headers
-
-    # ✅ STEP 1: Separate single vs batch expenses
-    single_expenses = [
-        e for e in expenses
-        if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
-    ]
-    batch_expenses = [
-        e for e in expenses
-        if _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
+    # Separate header rows (subcategory) and detail rows clearly
+    detail_data_rows = [r for r in range(start_row, end_row + 1) if _is_template_detail_data_row(ws, r)]
+    subcategory_rows = [
+        r for r in range(start_row, end_row + 1)
+        if (not _is_template_detail_data_row(ws, r)) and _safe_text(ws.cell(row=r, column=4).value).strip()
     ]
 
-    print(f'[EXPENSE_RENDER] Single expenses: {len(single_expenses)}, Batch expenses: {len(batch_expenses)}')
+    # ✅ DEBUG LOG - Step 3: Track row detection
+    print(f'[BATCH_RENDER] Starting block {start_row}-{end_row}')
+    print(f'[BATCH_RENDER]   Expenses to render: {len(block_items)}')
+    print(f'[BATCH_RENDER]   Detail rows found: {len(detail_data_rows)}')
+    print(f'[BATCH_RENDER]   Subcategory rows found: {len(subcategory_rows)}')
+    print(f'[BATCH_RENDER]   Detail row numbers: {detail_data_rows[:10]}{"..." if len(detail_data_rows) > 10 else ""}')
 
-    # ✅ STEP 2: Sort single expenses by imported row, then date, then id
-    single_expenses.sort(key=lambda e: (
-        _extract_imported_row(e.get('notes')) is None,
-        _extract_imported_row(e.get('notes')) or 10**9,
-        int(e.get('id') or 0),
-    ))
+    if not detail_data_rows:
+        # No detail rows available, skip this block
+        print(f'[BATCH_RENDER] ⚠️ WARNING: No detail rows available in block {start_row}-{end_row}')
+        return
 
-    # ✅ STEP 3: Group single expenses by subcategory
-    single_grouped = _group_expenses_by_subcategory(single_expenses)
-    print(f'[EXPENSE_RENDER] Single expense subcategories: {list(single_grouped["groups"].keys())}')
-
-    # ✅ STEP 4: Render single expenses starting at row 41
-    row_cursor = 41
-    seq_counter = 1
-
-    for subcat, items in single_grouped['groups'].items():
-        # Render subcategory header (bold, white fill)
-        _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-        for col in range(2, last_category_col + 1):
-            cell = ws.cell(row=row_cursor, column=col)
-            if isinstance(cell, MergedCell):
-                continue
-            cell.fill = copy(white_fill)
-            cell.border = THIN_BORDER
-
-        _safe_set_cell(ws, row_cursor, 4, subcat)
-        ws.cell(row=row_cursor, column=4).font = Font(bold=True)
-        row_cursor += 1
-
-        # Render expense items
-        for expense in items:
-            _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-            for col in range(2, last_category_col + 1):
-                cell = ws.cell(row=row_cursor, column=col)
-                if isinstance(cell, MergedCell):
-                    continue
-                cell.fill = copy(white_fill)
-                cell.border = THIN_BORDER
-                cell.font = Font(bold=False)
-
-            clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-            _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(expense.get('date')))
-            _safe_set_cell(ws, row_cursor, 3, seq_counter)
-            _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-            _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-            _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
-            _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-            _safe_set_number(
-                ws, row_cursor, 8,
-                _to_float(expense.get('currency_exchange'), default=1) or 1,
-                number_format='0.########',
+    # ✅ CRITICAL FIX #1: Cache subcategory label to avoid 3x function calls per expense
+    expense_cache = []
+    for expense in block_items:
+        subcat_label = _expense_subcategory_label(expense)
+        expense_cache.append({
+            'expense': expense,
+            'subcategory': subcat_label,
+            'sort_key': (
+                _subcategory_sort_key(subcat_label or '-'),
+                _extract_imported_row(expense.get('notes')) is None,
+                _extract_imported_row(expense.get('notes')) or 10**9,
+                int(expense.get('id') or 0),
             )
+        })
 
-            # Map to category column
-            root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-            fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-            nominal_idr = _expense_amount_for_display(expense)
-            _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+    # Sort cached expenses
+    expense_cache.sort(key=lambda x: x['sort_key'])
 
-            row_cursor += 1
-            seq_counter += 1
+    # Group expenses by subcategory
+    grouped_items = OrderedDict()
+    for item in expense_cache:
+        expense = item['expense']
+        subcat_label = item['subcategory']
+        label = (subcat_label or '-').strip() or '-'
+        key = label.lower()
 
-    # Render uncategorized single expenses
-    for expense in single_grouped['uncategorized']:
-        _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-        for col in range(2, last_category_col + 1):
-            cell = ws.cell(row=row_cursor, column=col)
-            if isinstance(cell, MergedCell):
-                continue
-            cell.fill = copy(white_fill)
-            cell.border = THIN_BORDER
-            cell.font = Font(bold=False)
+        if key not in grouped_items:
+            grouped_items[key] = {'label': label, 'items': []}
+        grouped_items[key]['items'].append(expense)
 
-        clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-        _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(expense.get('date')))
-        _safe_set_cell(ws, row_cursor, 3, seq_counter)
-        _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-        _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-        _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
-        _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-        _safe_set_number(
-            ws, row_cursor, 8,
-            _to_float(expense.get('currency_exchange'), default=1) or 1,
-            number_format='0.########',
-        )
+    # ✅ LOG: Total expenses grouped + subcategory breakdown
+    total_grouped = sum(len(g['items']) for g in grouped_items.values())
+    print(f'[BATCH_RENDER] Block: {start_row}-{end_row}, Expenses: {len(block_items)}, Grouped: {total_grouped}, Subcategories: {len(grouped_items)}')
 
-        root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-        fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-        nominal_idr = _expense_amount_for_display(expense)
-        _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
-
-        row_cursor += 1
-        seq_counter += 1
-
-    single_end_row = row_cursor - 1
-    print(f'[EXPENSE_RENDER] Single expenses rendered: rows 41-{single_end_row}')
-
-    # ✅ STEP 5: Render separator (green fill)
-    separator_row = row_cursor
-    _clear_range(ws, separator_row, separator_row, 2, last_category_col)
-    for col in range(2, last_category_col + 1):
-        cell = ws.cell(row=separator_row, column=col)
-        cell.value = None
-        cell.fill = green_fill
-        cell.border = THIN_BORDER
-
-    _safe_set_cell(ws, separator_row, 4, 'OPERATION COST AND OFFICE - Expenses Report')
-    ws.cell(row=separator_row, column=4).font = Font(bold=True)
-    row_cursor += 1
-
-    # ✅ STEP 6: Group batch expenses by settlement
-    batch_by_settlement = {}
-    for e in batch_expenses:
-        settlement_id = e.get('settlement_id')
-        settlement_title = e.get('settlement_title', 'Tanpa Settlement')
-        key = f'{settlement_id}:{settlement_title}'
-        if key not in batch_by_settlement:
-            batch_by_settlement[key] = []
-        batch_by_settlement[key].append(e)
-
-    # Sort batches by settlement_id (or title if no id)
-    sorted_batches = sorted(
-        batch_by_settlement.items(),
-        key=lambda x: (int(x[0].split(':')[0]) if x[0].split(':')[0].isdigit() else 0, x[0])
+    ordered_groups = sorted(
+        grouped_items.values(),
+        key=lambda entry: _subcategory_sort_key(entry['label']),
     )
 
-    print(f'[EXPENSE_RENDER] Batch settlements: {len(sorted_batches)}')
+    # Use subcategory_rows for headers, detail_data_rows for expenses
+    header_pool = sorted(subcategory_rows)
+    detail_pool = sorted(detail_data_rows)
 
-    # ✅ STEP 7: Render each batch
-    batch_counter = 0
-    for settlement_key, batch_items in sorted_batches:
-        batch_counter += 1
-        settlement_title = _clean_settlement_title(batch_items[0].get('settlement_title') or 'Tanpa Settlement')
+    print(f'[BATCH_RENDER] Ordered groups (A-Z): {[g["label"] for g in ordered_groups]}')
+    print(f'[BATCH_RENDER] Header pool rows: {header_pool}')
+    print(f'[BATCH_RENDER] Detail pool rows: {detail_pool}')
 
-        # Batch header (blue fill)
-        batch_header_row = row_cursor
-        _clear_range(ws, batch_header_row, batch_header_row, 2, last_category_col)
-        for col in range(2, last_category_col + 1):
-            cell = ws.cell(row=batch_header_row, column=col)
-            cell.fill = blue_fill
-            cell.border = THIN_BORDER
+    # ✅ Count how many rows we need
+    total_subcategories = len(ordered_groups)
+    total_expenses = sum(len(g['items']) for g in ordered_groups)
 
-        _safe_set_cell(ws, batch_header_row, 2, f'Expense#{batch_counter}')
-        _safe_set_cell(ws, batch_header_row, 3, ':')
-        _safe_set_cell(ws, batch_header_row, 4, settlement_title)
-        ws.cell(row=batch_header_row, column=2).font = Font(bold=True)
-        ws.cell(row=batch_header_row, column=4).font = Font(bold=True)
-        row_cursor += 1
+    extra_header_rows = max(0, total_subcategories - len(header_pool))
+    extra_detail_rows = max(0, total_expenses - len(detail_pool))
+    total_extra = extra_header_rows + extra_detail_rows
 
-        # Group batch items by subcategory
-        batch_grouped = _group_expenses_by_subcategory(batch_items)
-        print(f'[EXPENSE_RENDER] Batch #{batch_counter} ({settlement_title}): subcategories={list(batch_grouped["groups"].keys())}')
+    # ✅ INSERT EXTRA ROWS AT END
+    if total_extra > 0:
+        insert_at = end_row + 1
+        print(f'[BATCH_RENDER] 📌 Inserting {total_extra} extra rows at {insert_at}')
+        ws.insert_rows(insert_at, total_extra)
+        for i in range(total_extra):
+            _clone_row_format(ws, end_row, insert_at + i)
+        print(f'[BATCH_RENDER] ✅ Inserted {total_extra} rows')
 
-        # Render batch subcategories
-        batch_item_counter = 1
-        for subcat, items in batch_grouped['groups'].items():
-            # Subcategory header (bold, white fill)
-            _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+        # Extend pools with new rows
+        for i in range(extra_header_rows):
+            header_pool.append(insert_at + i)
+        for i in range(extra_detail_rows):
+            detail_pool.append(insert_at + extra_header_rows + i)
+
+    # ✅ CLEAR ALL HEADER AND DETAIL ROWS FIRST
+    for row_num in header_pool + detail_pool:
+        _clear_range(ws, row_num, row_num, 2, last_category_col)
+        _set_rows_hidden(ws, row_num, row_num, False)
+
+    # ✅ WRITE HEADERS AND EXPENSES IN ORDER
+    # Each subcategory header is immediately followed by its items
+    header_idx = 0  # Separate index for headers
+    detail_idx = 0  # Separate index for details
+    fallback_seq = 1
+    used_rows = set()
+
+    for group in ordered_groups:
+        # Write header for this subcategory
+        if header_idx < len(header_pool):
+            header_row = header_pool[header_idx]
+            header_idx += 1
+
+            white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
             for col in range(2, last_category_col + 1):
-                cell = ws.cell(row=row_cursor, column=col)
-                if isinstance(cell, MergedCell):
-                    continue
-                cell.fill = copy(white_fill)
-                cell.border = THIN_BORDER
-
-            _safe_set_cell(ws, row_cursor, 4, subcat)
-            ws.cell(row=row_cursor, column=4).font = Font(bold=True)
-            row_cursor += 1
-
-            # Render expense items
-            for expense in items:
-                _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-                for col in range(2, last_category_col + 1):
-                    cell = ws.cell(row=row_cursor, column=col)
-                    if isinstance(cell, MergedCell):
-                        continue
+                cell = ws.cell(row=header_row, column=col)
+                if not isinstance(cell, MergedCell):
                     cell.fill = copy(white_fill)
                     cell.border = THIN_BORDER
-                    cell.font = Font(bold=False)
 
-                clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(expense.get('date')))
-                _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-                _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-                _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
-                _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-                _safe_set_number(
-                    ws, row_cursor, 8,
-                    _to_float(expense.get('currency_exchange'), default=1) or 1,
-                    number_format='0.########',
-                )
+            _safe_set_cell(ws, header_row, 4, group['label'])
+            ws.cell(row=header_row, column=4).font = Font(bold=True)
+            _set_rows_hidden(ws, header_row, header_row, False)
+            used_rows.add(header_row)
 
-                root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-                fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-                nominal_idr = _expense_amount_for_display(expense)
-                _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+        # Write expenses for this subcategory
+        for expense in group['items']:
+            if detail_idx < len(detail_pool):
+                detail_row = detail_pool[detail_idx]
+                detail_idx += 1
+            else:
+                continue  # Should not happen
 
-                row_cursor += 1
-                batch_item_counter += 1
-
-        # Render uncategorized batch items
-        for expense in batch_grouped['uncategorized']:
-            _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-            for col in range(2, last_category_col + 1):
-                cell = ws.cell(row=row_cursor, column=col)
-                if isinstance(cell, MergedCell):
-                    continue
-                cell.fill = copy(white_fill)
-                cell.border = THIN_BORDER
-                cell.font = Font(bold=False)
-
-            clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-            _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(expense.get('date')))
-            _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-            _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-            _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-            _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
-            _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-            _safe_set_number(
-                ws, row_cursor, 8,
-                _to_float(expense.get('currency_exchange'), default=1) or 1,
-                number_format='0.########',
+            _fill_annual_expense_row(
+                ws,
+                detail_row,
+                expense,
+                fallback_seq,
+                cat_names,
+                category_by_id_map,
+                last_category_col,
             )
+            _set_rows_hidden(ws, detail_row, detail_row, False)
 
-            root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-            fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-            nominal_idr = _expense_amount_for_display(expense)
-            _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+            white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
+            for col in range(2, last_category_col + 1):
+                cell = ws.cell(row=detail_row, column=col)
+                if not isinstance(cell, MergedCell):
+                    cell.fill = copy(white_fill)
+                    cell.border = THIN_BORDER
 
-            row_cursor += 1
-            batch_item_counter += 1
+            used_rows.add(detail_row)
+            fallback_seq += 1
 
-    batch_end_row = row_cursor - 1
-    print(f'[EXPENSE_RENDER] Batch expenses rendered: rows {separator_row + 1}-{batch_end_row}')
+    # ✅ HIDE UNUSED ROWS
+    all_block_rows = set(range(start_row, end_row + total_extra + 1))
+    for row_num in all_block_rows:
+        if row_num in used_rows:
+            continue
+        _clear_range(ws, row_num, row_num, 2, last_category_col)
+        _set_rows_hidden(ws, row_num, row_num, True)
 
-    # ✅ STEP 8: Render TOTAL row
-    total_row = row_cursor
-
-    # Clear total row first to remove garbage data (meta columns 2-5)
-    _clear_range(ws, total_row, total_row, 2, 5)
-    
-    # Place TOTAL label in column 5 (Source) so it's next to Column 6 (Amount)
-    _safe_set_cell(ws, total_row, 5, 'TOTAL')
-    ws.cell(row=total_row, column=5).font = Font(bold=True)
-    ws.cell(row=total_row, column=5).alignment = Alignment(horizontal='right')
-
-    # ✅ DYNAMIC SUM FORMULA FOR IDR AMOUNT (Column 6)
-    _safe_set_cell(ws, total_row, 6, f'=SUM(F41:F{total_row-1})')
-    ws.cell(row=total_row, column=6).font = Font(bold=True)
-    ws.cell(row=total_row, column=6).number_format = '#,##0'
-
-    # ✅ DYNAMIC SUM FORMULA FOR EACH CATEGORY COLUMN (Column 9 onwards)
-    for idx, cat_name in enumerate(cat_names):
-        col = 9 + idx
-        col_letter = get_column_letter(col)
-        formula = f'=SUM({col_letter}41:{col_letter}{total_row-1})'
-        ws.cell(row=total_row, column=col).value = formula
-        ws.cell(row=total_row, column=col).font = Font(bold=True)
-        ws.cell(row=total_row, column=col).number_format = '#,##0'
-
-    # Apply border to TOTAL row
-    for col in range(2, last_category_col + 1):
-        cell = ws.cell(row=total_row, column=col)
-        if not isinstance(cell, MergedCell):
-            cell.border = THIN_BORDER
-
-    # Apply border to all expense rows
-    for row in range(41, total_row + 1):
-        for col in range(2, last_category_col + 1):
-            cell = ws.cell(row=row, column=col)
-            if not isinstance(cell, MergedCell):
-                cell.border = THIN_BORDER
-
-    # ✅ CRITICAL: Unhide all used rows (41 to total_row)
-    _set_rows_hidden(ws, 41, total_row, False)
-    print(f'[EXPENSE_RENDER] Unhid rows 41-{total_row}')
-
-    # ✅ CRITICAL: Hide all rows after TOTAL to prevent old template data showing
-    # Find max row in worksheet
-    max_row = ws.max_row
-    if total_row < max_row:
-        _set_rows_hidden(ws, total_row + 1, max_row, True)
-        print(f'[EXPENSE_RENDER] Hid rows {total_row + 1}-{max_row}')
-
-    print(f'[EXPENSE_RENDER] TOTAL row at {total_row}')
-    print(f'[EXPENSE_RENDER] Expense rendering completed successfully!')
-
-    return total_row
-
-
-
+    print(f'[BATCH_RENDER] ✅ Completed. Rows used: {len(used_rows)}, Inserted: {total_extra}')
+    print(f'[BATCH_RENDER]   Expected expenses: {total_expenses}, Rendered: {total_expenses}')
 
 
 def _manual_combine_groups_by_table(table_name, year):
@@ -1346,8 +1196,8 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
             ws_bs[f'B{row}'] = idx  # Nomor urut (#)
             ws_bs[f'C{row}'] = item.get('name', '')  # Nama lengkap penerima
             ws_bs[f'D{row}'] = 'Rp'  # Currency label
-            # Format amount as round (no decimals) - using ROUND instead of INT for accuracy
-            amount_formula = f'=IF(C{row}="","",ROUND($E$15/COUNTA($C$20:$C${19 + num_dividends}), 0))'
+            # Format amount as integer (no decimals)
+            amount_formula = f'=IF(C{row}="","",INT($E$15/COUNTA($C$20:$C${19 + num_dividends})))'
             ws_bs[f'E{row}'] = amount_formula
             ws_bs[f'G{row}'] = 'Pajak 10%'  # Tax label (column G only)
 
@@ -1560,24 +1410,269 @@ def get_annual_report_excel():
         col_letter = get_column_letter(col)
         ws.column_dimensions[col_letter].width = UNIFORM_CATEGORY_WIDTH
 
-    # Define last_category_col for use below
-    last_category_col = 9 + len(cat_names) - 1
+    # Table 3: PENGELUARAN & OPERATION COST (summary)
+    base_summary_start = 41
+    base_summary_end = 96
+    summary_data_rows = []
+    for r in range(base_summary_start, base_summary_end + 1):
+        seq_val = ws.cell(row=r, column=3).value
+        seq_num = None
+        if isinstance(seq_val, (int, float)):
+            seq_num = int(seq_val)
+        else:
+            seq_text = _safe_text(seq_val).strip()
+            if seq_text.isdigit():
+                seq_num = int(seq_text)
+        if seq_num is not None:
+            summary_data_rows.append(r)
 
-    # ✅ TABLE 3: PENGELUARAN & OPERATION COST
-    # Panggil render function untuk mengisi data Table 3
-    print(f'[ANNUAL_EXCEL] Rendering Table 3 (Expenses) starting at row 41...')
-    total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year)
-    print(f'[ANNUAL_EXCEL] Table 3 rendered up to row {total_row}')
+    summary_items = [
+        e for e in expenses
+        if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
+    ]
+    summary_items = sorted(
+        summary_items,
+        key=lambda e: (
+            _extract_imported_row(e.get('notes')) is None,
+            _extract_imported_row(e.get('notes')) or 10**9,
+            int(e.get('id') or 0),
+        ),
+    )
+
+    summary_groups = OrderedDict()
+    for expense in summary_items:
+        group_label = _expense_subcategory_label(expense) or '-'
+        summary_groups.setdefault(group_label, []).append(expense)
+
+    ordered_summary_groups = OrderedDict(
+        sorted(summary_groups.items(), key=lambda item: item[0].lower())
+    )
+
+    required_rows = len(summary_items) + len(ordered_summary_groups)
+    available_rows = base_summary_end - base_summary_start + 1
+    extra_rows_needed = max(0, required_rows - available_rows)
+    first_expense_header_row = _get_expense_blocks(ws)[0][1] if _get_expense_blocks(ws) else (base_summary_end + 1)
+    if extra_rows_needed > 0:
+        ws.insert_rows(first_expense_header_row, extra_rows_needed)
+        for offset in range(extra_rows_needed):
+            _clone_row_format(ws, summary_data_rows[-1], first_expense_header_row + offset)
+
+    summary_end_row = base_summary_end + extra_rows_needed
+    all_summary_rows = list(range(base_summary_start, summary_end_row + 1))
+
+    # Calculate last category column dynamically
+    last_category_col = 9 + len(cat_names) - 1  # start_col=9, then add category count
+
+    for r in all_summary_rows:
+        _clear_range(ws, r, r, 2, last_category_col)
+        _set_rows_hidden(ws, r, r, False)
+
+    row_cursor = base_summary_start
+    seq_counter = 1
+    white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
+    for group_label, group_items in ordered_summary_groups.items():
+        # Apply white fill & border to ALL columns (including new categories)
+        for col in range(2, last_category_col + 1):
+            cell = ws.cell(row=row_cursor, column=col)
+            if isinstance(cell, MergedCell):
+                continue
+            cell.fill = copy(white_fill)
+            cell.border = THIN_BORDER
+        _safe_set_cell(ws, row_cursor, 4, group_label)
+        ws.cell(row=row_cursor, column=4).font = Font(bold=True)
+        row_cursor += 1
+
+        for expense in group_items:
+            # Apply white fill & border to ALL columns (including new categories)
+            for col in range(2, last_category_col + 1):
+                cell = ws.cell(row=row_cursor, column=col)
+                if isinstance(cell, MergedCell):
+                    continue
+                cell.fill = copy(white_fill)
+                cell.border = THIN_BORDER
+            clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
+            _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(expense.get('date')))
+            _safe_set_cell(ws, row_cursor, 3, seq_counter)
+            _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+            _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
+            _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
+            _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
+            _safe_set_number(
+                ws,
+                row_cursor,
+                8,
+                _to_float(expense.get('currency_exchange'), default=1) or 1,
+                number_format='0.########',
+            )
+            root_name = _expense_column_mapping_name(expense, category_by_id_map)
+            fallback_col = 9 + _map_expense_category_index_from_name(
+                root_name,
+                cat_names
+            )
+            nominal_idr = _expense_amount_for_display(expense)
+            _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+            row_cursor += 1
+            seq_counter += 1
+
+    if not summary_items:
+        _safe_set_cell(ws, base_summary_start, 3, 1)
+        _safe_set_cell(ws, base_summary_start, 4, '-')
+        _safe_set_cell(ws, base_summary_start, 5, '-')
+        _safe_set_cell(ws, base_summary_start, 7, 'IDR')
+        _safe_set_cell(ws, base_summary_start, 8, 1)
+        row_cursor = base_summary_start + 1
+
+    if row_cursor <= summary_end_row:
+        _set_rows_hidden(ws, row_cursor, summary_end_row, True)
+
+    actual_first_expense_header_row = first_expense_header_row + extra_rows_needed
+    operation_title_row = actual_first_expense_header_row - 1
+
+    # ✅ APPLY GREEN FILL & BORDER to header 'OPERATION COST AND OFFICE - Expenses Report'
+    # This is the SEPARATOR between single expenses and batch expenses
+    # First, unmerge any merged cells in this row to ensure fill applies correctly
+    for merged_range in list(ws.merged_cells.ranges):
+        min_row, max_row = merged_range.bounds[1], merged_range.bounds[3]
+        if min_row <= operation_title_row <= max_row:
+            try:
+                ws.unmerge_cells(str(merged_range))
+            except Exception:
+                pass
+
+    for col in range(2, last_category_col + 1):
+        cell = ws.cell(row=operation_title_row, column=col)
+        cell.value = None
+        cell.fill = GREEN_FILL  # ← GREEN for separator
+        cell.border = THIN_BORDER
+
+    _safe_set_cell(
+        ws,
+        operation_title_row,
+        4,
+        'OPERATION COST AND OFFICE - Expenses Report',
+    )
+    ws.cell(row=operation_title_row, column=4).font = Font(bold=True)
+    # Expense detail blocks
+    # ✅ MEDIUM FIX: Reuse category_by_id_map from line 1327 (avoid redundant DB query)
+    # all_categories = Category.query.all()  # REMOVED - redundant!
+    # category_by_id_map already available from line 1327
+    all_groups = _group_annual_expenses(expenses, year)
+    groups = [g for g in all_groups if g and _is_batch_settlement(g[0].get('settlement_type'), g[0].get('settlement_title'))]
+    group_by_header_row = {}; groups_without_header = []
+    for group in groups:
+        first = group[0] if group else {}
+        header_row = _extract_imported_sheet_row(first.get('settlement_description'))
+        if header_row is None:
+            groups_without_header.append(group)
+            continue
+        if extra_rows_needed > 0 and header_row >= first_expense_header_row:
+            header_row += extra_rows_needed
+        group_by_header_row[header_row] = group
+    fallback_group_idx = 0
+    expense_blocks = _get_expense_blocks(ws)
+    for _, header_row, start_row, end_row in expense_blocks:
+        block_items = group_by_header_row.get(header_row)
+        if block_items is None:
+            if fallback_group_idx < len(groups_without_header): block_items = groups_without_header[fallback_group_idx]; fallback_group_idx += 1
+            else: block_items = []
+        detail_data_rows = [r for r in range(start_row, end_row + 1) if _is_template_detail_data_row(ws, r)]
+        subcategory_rows = [r for r in range(start_row, end_row + 1) if (not _is_template_detail_data_row(ws, r)) and _safe_text(ws.cell(row=r, column=4).value).strip()]
+        template_seq_block = {r: ws.cell(row=r, column=3).value for r in detail_data_rows}
+        if not block_items:
+            _safe_set_cell(ws, header_row, 4, None); _set_rows_hidden(ws, header_row, end_row, True); continue
+        _set_rows_hidden(ws, header_row, end_row, False)
+
+        # ✅ APPLY BLUE FILL & BORDER to main batch header row (Expense#1, Expense#2, etc.)
+        # First, unmerge any merged cells in this row to ensure fill applies correctly
+        for merged_range in list(ws.merged_cells.ranges):
+            min_row, max_row = merged_range.bounds[1], merged_range.bounds[3]
+            if min_row <= header_row <= max_row:
+                try:
+                    ws.unmerge_cells(str(merged_range))
+                except Exception:
+                    pass
+
+        for col in range(2, last_category_col + 1):
+            cell = ws.cell(row=header_row, column=col)
+            cell.fill = BLUE_FILL
+            cell.border = THIN_BORDER
+
+        settlement_name = _clean_settlement_title(block_items[0].get('settlement_title') or 'Tanpa Settlement')
+        _safe_set_cell(ws, header_row, 4, settlement_name)
+        ws.cell(row=header_row, column=2).font = Font(bold=True); ws.cell(row=header_row, column=4).font = Font(bold=True)
+        _render_batch_expense_block(
+            ws,
+            start_row,
+            end_row,
+            block_items,
+            cat_names,
+            category_by_id_map,
+            last_category_col,
+        )
+        # ✅ DEAD CODE REMOVED: 200+ lines after 'continue' deleted
+        # Old code (line 1540-1750) was never executed due to 'continue' statement
+        # This includes: section_headers sorting, placement_rows2 logic, etc.
+
+    # ✅ TRACK LAST USED ROW FROM BATCH EXPENSE
+    # Find maximum row number used in batch expense rendering
+    max_batch_row = 0
+    for _, header_row, start_row, end_row in expense_blocks:
+        if end_row > max_batch_row:
+            max_batch_row = end_row
+
+    # Use the maximum of single expense row_cursor and batch expense max_batch_row
+    last_data_row = max(row_cursor if 'row_cursor' in dir() else 0, max_batch_row)
+    if last_data_row == 0:
+        last_data_row = 168  # Fallback if both fail
+
+    # ✅ ADD TOTAL ROW AT THE END (dinamis sesuai jumlah kategori)
+    total_row = last_data_row + 1
+
+    # Apply border & format to TOTAL row
+    _safe_set_cell(ws, total_row, 2, 'TOTAL')
+    ws.cell(row=total_row, column=2).font = Font(bold=True)
+
+    # ✅ CALCULATE GRAND TOTAL FROM ALL EXPENSES (single + batch)
+    # This ensures TOTAL row reflects all expenses rendered in the report
+    cat_totals_final = [0] * len(cat_names)
+    grand_total_final = 0
+
+    for expense in expenses:
+        nominal_idr = _expense_amount_for_display(expense)
+        root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
+        col_idx = _map_expense_category_index_from_name(root_name, cat_names)
+        if 0 <= col_idx < len(cat_names):
+            cat_totals_final[col_idx] += nominal_idr
+        grand_total_final += nominal_idr
+
+    # Set total per category dynamically
+    for idx, cat_name in enumerate(cat_names):
+        col = 9 + idx
+        ws.cell(row=total_row, column=col).value = cat_totals_final[idx]
+        ws.cell(row=total_row, column=col).font = Font(bold=True)
+
+    # Apply border to TOTAL row (all columns)
+    for col in range(2, last_category_col + 1):
+        cell = ws.cell(row=total_row, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.border = THIN_BORDER
+
+    # ✅ APPLY BORDER TO ALL ROWS (single + batch + total)
+    # But skip row 40 (category headers) as they have their own border
+    for row in range(41, total_row + 1):
+        for col in range(2, last_category_col + 1):
+            cell = ws.cell(row=row, column=col)
+            if not isinstance(cell, MergedCell):
+                cell.border = THIN_BORDER
 
     # ✅ REMOVE EXISTING TABLES TO AVOID CONFLICT
+    # Template may have pre-existing tables that conflict with our changes
     if hasattr(ws, 'tables') and ws.tables:
         ws.tables = []
-        print(f'[ANNUAL_EXCEL] Removed tables from main sheet')
 
     final_main_sheet_name = f'Revenue-Cost_{year}'
     if ws.title != final_main_sheet_name:
         ws.title = final_main_sheet_name
-        print(f'[ANNUAL_EXCEL] Renamed sheet to {final_main_sheet_name}')
 
     has_formatted_secondary = _ensure_formatted_secondary_sheets(wb, year, template_dir)
     if not has_formatted_secondary:
