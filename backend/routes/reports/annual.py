@@ -23,7 +23,8 @@ from models import User, Expense, Category, Settlement, ManualCombineGroup, db
 from . import reports_bp
 from .helpers import (
     _default_report_year, _safe_set_cell, _safe_set_number, _get_top_left_cell,
-    _normalize_external_formula_refs, _clear_range, _clear_data_keep_formulas,
+    _safe_set_cell_with_merge,
+    _normalize_external_formula_refs, _clear_range, _clear_range_force, _clear_data_keep_formulas,
     _set_rows_hidden, _safe_text, _extract_imported_row, _extract_imported_sheet_row,
     _is_template_detail_data_row, _map_expense_category_index_from_name,
     _pick_template_formula_col, _get_expense_blocks, _parse_iso_date,
@@ -288,6 +289,10 @@ def _build_annual_payload_from_db(year):
 
     revenue_data = [r.to_dict() for r in revenues]
     tax_data = [t.to_dict() for t in taxes]
+
+    # ✅ VALIDATE DATA EARLY - before any processing or rendering
+    _validate_revenue_data(revenue_data)
+
     dividend_calc = _compute_dividend_distribution(
         revenues,
         expenses,
@@ -472,7 +477,7 @@ def _sheet_ref(name: str) -> str:
     return f"'{name}'" if " " in name or "-" in name else name
 
 
-def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name):
+def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name, expense_total_row=None):
     revenues = payload.get('revenue', {}).get('data', [])
     taxes = payload.get('tax', {}).get('data', [])
     expenses = payload.get('operation_cost', {}).get('data', [])
@@ -489,9 +494,18 @@ def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name):
         dtv = _parse_iso_date(e.get('date'))
         if not dtv: continue
         monthly[dtv.month]['expense'] += _expense_amount_for_display(e)
+
+    # ✅ CENTRALIZED: Use single source of truth for revenue row bounds
+    last_revenue_row, total_revenue_row = _get_revenue_bounds(revenues)
+
+    # ✅ NO FALLBACK - expense_total_row is required
+    if expense_total_row is None:
+        raise ValueError("expense_total_row is required - expense rendering must complete successfully")
+    cost_totals_row = expense_total_row
+
     def _get_or_create(name):
         if name in wb.sheetnames:
-            ws = wb[name]; ws.delete_rows(1, ws.max_row or 1); return ws
+            return wb[name]
         return wb.create_sheet(name)
     header_fill = PatternFill(start_color='D9EAD3', end_color='D9EAD3', fill_type='solid')
     month_labels = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
@@ -516,11 +530,13 @@ def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name):
     for col, width in {'A':14,'B':22,'C':20,'D':24,'E':24}.items(): ws_lr.column_dimensions[col].width = width
     # sheet 3: business summary
     ws_bs = _get_or_create('Business Summary')
-    ws_bs['A1'] = f'Business Summary {year}'; ws_bs['A1'].font = Font(bold=True, size=14); ws_bs.merge_cells('A1:D1')
+    _safe_set_cell_with_merge(ws_bs, 1, 1, f'Business Summary {year}')
+    ws_bs['A1'].font = Font(bold=True, size=14)
+    # ✅ UNIFIED FORMULA APPROACH: Always use SUM range with column constants
     rows = [
-        ('Total Revenue (IDR)', f'={main_ref}!F22'),
-        ('Total Tax Out (IDR)', f'={main_ref}!N22'),
-        ('Total Operation Cost (IDR)', f'=SUM({main_ref}!I750:Q750)'),
+        ('Total Revenue (IDR)', f'=SUM({main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{last_revenue_row})'),
+        ('Total Tax Out (IDR)', f'=SUM({main_ref}!{get_column_letter(COL_PPH_23)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_PPH_23)}{last_revenue_row})'),
+        ('Total Operation Cost (IDR)', f'=SUM({main_ref}!I{cost_totals_row}:Q{cost_totals_row})'),
         ('Net Profit/Loss (IDR)', '=B4-B5-B6'),
     ]
     ws_bs['A3'] = 'Keterangan'; ws_bs['B3'] = 'Nilai'
@@ -681,7 +697,7 @@ def _group_expenses_by_subcategory(expenses):
     }
 
 
-def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year):
+def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year, start_row=41):
     """
     ✅ NEW DATA-DRIVEN APPROACH: Render expense section from scratch.
     Same logic as frontend Flutter app.
@@ -697,6 +713,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         cat_names: List of category names from DB
         category_by_id_map: Dict mapping category_id to category object
         year: Report year
+        start_row: Starting row for expense data (default: 41)
     """
     print(f'[EXPENSE_RENDER] Starting data-driven expense rendering...')
     print(f'[EXPENSE_RENDER] Total expenses: {len(expenses)}')
@@ -730,8 +747,8 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
     single_grouped = _group_expenses_by_subcategory(single_expenses)
     print(f'[EXPENSE_RENDER] Single expense subcategories: {list(single_grouped["groups"].keys())}')
 
-    # ✅ STEP 4: Render single expenses starting at row 41
-    row_cursor = 41
+    # ✅ STEP 4: Render single expenses starting at start_row
+    row_cursor = start_row
     seq_counter = 1
 
     for subcat, items in single_grouped['groups'].items():
@@ -814,7 +831,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         seq_counter += 1
 
     single_end_row = row_cursor - 1
-    print(f'[EXPENSE_RENDER] Single expenses rendered: rows 41-{single_end_row}')
+    print(f'[EXPENSE_RENDER] Single expenses rendered: rows {start_row}-{single_end_row}')
 
     # ✅ STEP 5: Render separator (green fill)
     separator_row = row_cursor
@@ -967,7 +984,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
     ws.cell(row=total_row, column=5).alignment = Alignment(horizontal='right')
 
     # ✅ DYNAMIC SUM FORMULA FOR IDR AMOUNT (Column 6)
-    _safe_set_cell(ws, total_row, 6, f'=SUM(F41:F{total_row-1})')
+    _safe_set_cell(ws, total_row, 6, f'=SUM(F{start_row}:F{total_row-1})')
     ws.cell(row=total_row, column=6).font = Font(bold=True)
     ws.cell(row=total_row, column=6).number_format = '#,##0'
 
@@ -975,7 +992,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
     for idx, cat_name in enumerate(cat_names):
         col = 9 + idx
         col_letter = get_column_letter(col)
-        formula = f'=SUM({col_letter}41:{col_letter}{total_row-1})'
+        formula = f'=SUM({col_letter}{start_row}:{col_letter}{total_row-1})'
         ws.cell(row=total_row, column=col).value = formula
         ws.cell(row=total_row, column=col).font = Font(bold=True)
         ws.cell(row=total_row, column=col).number_format = '#,##0'
@@ -987,15 +1004,15 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
             cell.border = THIN_BORDER
 
     # Apply border to all expense rows
-    for row in range(41, total_row + 1):
+    for row in range(start_row, total_row + 1):
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row, column=col)
             if not isinstance(cell, MergedCell):
                 cell.border = THIN_BORDER
 
-    # ✅ CRITICAL: Unhide all used rows (41 to total_row)
-    _set_rows_hidden(ws, 41, total_row, False)
-    print(f'[EXPENSE_RENDER] Unhid rows 41-{total_row}')
+    # ✅ CRITICAL: Unhide all used rows (start_row to total_row)
+    _set_rows_hidden(ws, start_row, total_row, False)
+    print(f'[EXPENSE_RENDER] Unhid rows {start_row}-{total_row}')
 
     # ✅ CRITICAL: Hide all rows after TOTAL to prevent old template data showing
     # Find max row in worksheet
@@ -1175,11 +1192,124 @@ def _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map=Non
     return totals
 
 
-def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
+# ============================================================================
+# CONSTANTS - TABLE ROW CONFIGURATION (NO HARDCODED ROWS!)
+# ============================================================================
+# Table 1: Revenue & Tax
+REVENUE_START_ROW = 8
+REVENUE_HEADER_ROW = 7
+REVENUE_TEMPLATE_END = 21
+
+# Table 2: Pajak Pengeluaran
+TAX_START_ROW = 27
+TAX_HEADER_ROW = 26
+TAX_TEMPLATE_END = 36
+
+# Table 3: Expenses
+EXPENSE_START_ROW = 41
+EXPENSE_HEADER_ROW = 40
+EXPENSE_TEMPLATE_END = 700  # Template limit
+
+# ============================================================================
+# COLUMN CONSTANTS - DO NOT HARDCODE COLUMN LETTERS
+# ============================================================================
+# Revenue & Tax table columns (main sheet)
+# ⚠️ NOTE: Column E (5) is SKIPPED in both tables per template design!
+
+# Revenue Table Columns
+COL_DATE = 2                # B: Invoice Date
+COL_SEQ = 3                 # C: #
+COL_DESCRIPTION = 4         # D: Detail/Description
+# COLUMN E (5) = SKIPPED!
+COL_INVOICE_VALUE = 6       # F: INVOICE VALUE
+COL_CURRENCY = 7            # G: Currency (IDR)
+COL_EXCHANGE_RATE = 8       # H: Currency Exchange
+COL_INVOICE_NUMBER = 9      # I: INVOICE Number
+COL_CLIENT = 10             # J: Client
+COL_RECEIVE_DATE = 11       # K: Receive Date
+COL_AMOUNT_RECEIVED = 12    # L: AMOUNT RECEIVED IDR
+COL_PPN = 13                # M: PPn 11%
+COL_PPH_23 = 14             # N: PPH (Pasal 23) 2%
+COL_TRANSFER_FEE = 15       # O: Biaya transfer
+COL_REMARK = 16             # P: Remark
+
+# Expense category columns (start at 9, dynamic based on categories)
+COL_EXPENSE_CATEGORY_START = 9
+
+# Tax table columns (same structure, E also skipped)
+COL_TAX_DATE = 2            # B: Date
+COL_TAX_SEQ = 3             # C: #
+COL_TAX_DESC = 4            # D: Description
+# COLUMN E (5) = SKIPPED!
+COL_TAX_TRANS_VALUE = 6     # F: Transaction Value
+COL_TAX_CURRENCY = 7        # G: Currency (IDR)
+COL_TAX_RATE = 8            # H: Rate
+COL_TAX_DPP_PPN = 9         # I: DPP PPN
+COL_TAX_VALUE_PPN = 10      # J: PPN Value
+COL_TAX_DPP_PPH21 = 11      # K: DPP PPh 21
+COL_TAX_VALUE_PPH21 = 12    # L: PPh 21 Value
+COL_TAX_DPP_PPH23 = 13      # M: DPP PPh 23
+COL_TAX_VALUE_PPH23 = 14    # N: PPh 23 Value
+COL_TAX_DPP_PPH26 = 15      # O: DPP PPh 26
+COL_TAX_VALUE_PPH26 = 16    # P: PPh 26 Value
+
+
+def _get_revenue_bounds(revenues):
+    """
+    ✅ CENTRALIZED: Calculate revenue table row bounds.
+    Returns (last_revenue_row, total_revenue_row) tuple.
+
+    Handles empty data case by falling back to template row.
+    """
+    if revenues:
+        last_revenue_row = REVENUE_START_ROW + len(revenues) - 1
+        total_revenue_row = last_revenue_row + 1
+    else:
+        # No data: fall back to template row to ensure formulas still work
+        last_revenue_row = REVENUE_TEMPLATE_END
+        total_revenue_row = REVENUE_TEMPLATE_END
+    return last_revenue_row, total_revenue_row
+
+
+def _validate_revenue_data(revenues):
+    """✅ VALIDATION LAYER: Prevent type bugs before render"""
+    for r in revenues:
+        # CRITICAL: transfer_fee must be numeric, not string like "Pemungut"
+        transfer_fee = r.get('transfer_fee')
+        if isinstance(transfer_fee, str):
+            print(f"[VALIDATION ERROR] transfer_fee is string at revenue ID {r.get('id')}: '{transfer_fee}'")
+            # Auto-fix: move string to remark, set transfer_fee to 0
+            existing_remark = r.get('remark') or ''
+            r['remark'] = f"{existing_remark} {transfer_fee}".strip()
+            r['transfer_fee'] = 0
+        # Ensure numeric types
+        r['transfer_fee'] = _to_float(r.get('transfer_fee'), 0)
+        r['ppn'] = _to_float(r.get('ppn'), 0)
+        r['pph_23'] = _to_float(r.get('pph_23'), 0)
+        r['amount_received'] = _to_float(r.get('amount_received'), 0)
+
+
+def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense_total_row=None):
+    """
+    ✅ REDESIGNED: No hardcoded cell references (F22, N22, I750)
+    All references are now dynamic based on actual table structure.
+
+    Args:
+        expense_total_row: Dynamic row where expense totals are stored (required, no fallback)
+    """
     expenses = payload.get('operation_cost', {}).get('data', [])
     revenues = payload.get('revenue', {}).get('data', [])
     annual_settings = payload.get('dividend', {}).get('settings', {}) or {}
 
+    # ✅ VALIDATION ALREADY DONE IN _build_annual_payload_from_db
+
+    # ✅ CENTRALIZED: Use single source of truth for revenue row bounds
+    last_revenue_row, total_revenue_row = _get_revenue_bounds(revenues)
+
+    # ✅ NO FALLBACK - expense_total_row is required
+    if expense_total_row is None:
+        raise ValueError("expense_total_row is required - expense rendering must complete successfully")
+    cost_totals_row = expense_total_row
     revenue_total = sum(
         _idr_from_currency(
             row.get('amount_received'),
@@ -1189,13 +1319,14 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
         for row in revenues
     )
     pph23_total = sum(_to_float(row.get('pph_23')) for row in revenues)
-    # Fetch root categories dynamically from DB - ORDER BY sort_order (from Kategori Tabular)
+
+    # Fetch root categories dynamically from DB
     root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     cat_names = [c.name for c in root_cats]
-    # Build category map for consistent lookup
     category_by_id_map = {c.id: c for c in root_cats}
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
     total_cost = sum(cost_totals)
+
     profit_before_tax = revenue_total - total_cost
     tax_corporate = max(0.0, profit_before_tax * 0.11) if profit_before_tax > 0 else 0.0
     after_tax = _to_float(payload.get('dividend', {}).get('profit_after_tax'))
@@ -1218,12 +1349,14 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
 
     main_ref = _sheet_ref(main_sheet_name)
 
+    # ✅ MAIN SHEET: Don't overwrite cells - let Excel formulas work
+    # Revenue total and PPh23 total are already calculated by Excel formulas in Table 1
+    # Cost totals are written to template row for Laba Rugi references
     if main_sheet_name in wb.sheetnames:
         ws_main = wb[main_sheet_name]
-        ws_main['F22'] = revenue_total
-        ws_main['N22'] = pph23_total
+        # ✅ Write cost totals to dynamic row (from render result)
         for idx, value in enumerate(cost_totals, start=9):
-            ws_main.cell(row=750, column=idx, value=value)
+            ws_main.cell(row=cost_totals_row, column=idx, value=value)
 
     lr_name = f'Laba rugi -{year}'
     if lr_name in wb.sheetnames:
@@ -1236,20 +1369,23 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
 
-        ws_lr['E9'] = f'=SUM({main_ref}!F8:F20)'
-        ws_lr['E10'] = f'=SUM({main_ref}!F21)'
+        # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
+        # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 11)
+        ws_lr['E9'] = f'=SUM({main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{last_revenue_row})'
+        ws_lr['E10'] = f'=SUM({main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{last_revenue_row})'  # Same as E9 for total
         ws_lr['E12'] = '=SUM(E9:E11)'
-        ws_lr['E15'] = f'={main_ref}!I750'
-        ws_lr['E16'] = f'={main_ref}!J750'
-        ws_lr['E17'] = f'={main_ref}!K750'
-        ws_lr['E18'] = f'={main_ref}!L750'
+        # ✅ Expense totals: reference dynamic cost_totals_row (columns 9-17)
+        ws_lr['E15'] = f'={main_ref}!I{cost_totals_row}'
+        ws_lr['E16'] = f'={main_ref}!J{cost_totals_row}'
+        ws_lr['E17'] = f'={main_ref}!K{cost_totals_row}'
+        ws_lr['E18'] = f'={main_ref}!L{cost_totals_row}'
         ws_lr['E21'] = '=SUM(E15:E20)'
-        ws_lr['E23'] = f'={main_ref}!Q750'
+        ws_lr['E23'] = f'={main_ref}!Q{cost_totals_row}'
         ws_lr['E27'] = '=SUM(E22:E26)'
-        ws_lr['E30'] = f'={main_ref}!M750'
-        ws_lr['E31'] = f'={main_ref}!N750'
-        ws_lr['E32'] = f'={main_ref}!O750'
-        ws_lr['E33'] = f'={main_ref}!P750'
+        ws_lr['E30'] = f'={main_ref}!M{cost_totals_row}'
+        ws_lr['E31'] = f'={main_ref}!N{cost_totals_row}'
+        ws_lr['E32'] = f'={main_ref}!O{cost_totals_row}'
+        ws_lr['E33'] = f'={main_ref}!P{cost_totals_row}'
         ws_lr['E35'] = '=SUM(E30:E34)'
         ws_lr['E37'] = '=E35+E21+E27'
         ws_lr['E40'] = 0
@@ -1292,12 +1428,16 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
         ws_bs = wb['Business Summary']
         ws_bs['A4'] = None  # Clean up mistake
         ws_bs['B4'] = f'BUSINESS SUMMARY | TAHUN {year}'
-        ws_bs['E7'] = f'={main_ref}!F22'
-        ws_bs['E8'] = f'=E7-{main_ref}!N22'
-        ws_bs['E9'] = f'=SUM({main_ref}!I750:Q750)'
+        # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
+        # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 11)
+        # PPh23 total: SUM of all revenue tax rows (COL_PPH_23 = 13)
+        ws_bs['E7'] = f'=SUM({main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_AMOUNT_RECEIVED)}{last_revenue_row})'
+        ws_bs['E8'] = f'=E7-SUM({main_ref}!{get_column_letter(COL_PPH_23)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_PPH_23)}{last_revenue_row})'
+        # ✅ Use dynamic cost_totals_row instead of hardcoded 750
+        ws_bs['E9'] = f'=SUM({main_ref}!I{cost_totals_row}:Q{cost_totals_row})'
         ws_bs['E10'] = '=E7-E9'
         ws_bs['E11'] = '=E10*22%*50%'
-        ws_bs['E12'] = f'={main_ref}!N22'
+        ws_bs['E12'] = f'=SUM({main_ref}!{get_column_letter(COL_PPH_23)}{REVENUE_START_ROW}:{main_ref}!{get_column_letter(COL_PPH_23)}{last_revenue_row})'  # PPh23 total
         ws_bs['E13'] = '=E11-E12'
         ws_bs['E14'] = '=E10-E13'
         dividends = payload.get('dividend', {}).get('data', [])
@@ -1518,103 +1658,157 @@ def get_annual_report_excel():
     _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
     _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
 
-    # ✅ TABLE 1: REVENUE & TAX - DYNAMIC ROWS (NO EMPTY ROWS!)
-    # Clear existing template data in rows 7-21 (Columns B-O)
-    _clear_range(ws, 7, 21, 2, 15)
-    # Clear total row 22 (Columns B-O)
-    _clear_range(ws, 22, 22, 2, 15)
+    # ✅ VALIDATE DATA BEFORE RENDER (prevent type bugs)
+    _validate_revenue_data(revenues)
 
-    # ✅ DYNAMIC REVENUE RENDERING (like Tax section)
-    row_cursor = 7
-    total_inv_value = 0.0
-    total_received = 0.0
-    total_ppn_rec = 0.0
-    total_pph23_rec = 0.0
-    total_transfer = 0.0
+    # ✅ MERGE D & E for header "Detail/Description" (row 6 = REVENUE_HEADER_ROW - 1)
+    # This makes the Description column wider and matches template design
+    header_desc_row = REVENUE_HEADER_ROW - 1  # Row 6
+    try:
+        ws.merge_cells(f'D{header_desc_row}:E{header_desc_row}')
+        print(f'[REVENUE] Merged D{header_desc_row}:E{header_desc_row} for Description header')
+    except Exception as e:
+        print(f'[REVENUE] Failed to merge header: {e}')
 
-    # Render revenue data dynamically (no fixed limit!)
+    # Clear data area with force clear to handle any remaining issues
+    _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 15)
+    _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 15)
+
+    # ✅ Render revenue data - SIMPLE & CLEAN with explicit column constants
+    row_cursor = REVENUE_START_ROW
+
     for idx, r in enumerate(revenues, 1):
-        inv_val = _idr_from_currency(r.get('invoice_value'), r.get('currency'), r.get('currency_exchange'))
-        amt_rec = _idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
+        # ✅ EXTRACT DATA WITH EXPLICIT MAPPING
+        invoice_value = _to_float(r.get('invoice_value'))
+        currency = r.get('currency') or 'IDR'
+        exchange = _to_float(r.get('currency_exchange'), 1) or 1
+        amount_received = _to_float(r.get('amount_received'))
         p_ppn = _to_float(r.get('ppn'))
         p_pph23 = _to_float(r.get('pph_23'))
-        p_trans = _to_float(r.get('transfer_fee'))
 
-        _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(r.get('invoice_date')))
-        _safe_set_cell(ws, row_cursor, 3, idx)
-        _safe_set_cell(ws, row_cursor, 4, r.get('description'))
-        _safe_set_number(ws, row_cursor, 5, inv_val)
-        _safe_set_cell(ws, row_cursor, 6, r.get('currency') or 'IDR')
-        _safe_set_number(ws, row_cursor, 7, _to_float(r.get('currency_exchange'), default=1) or 1)
-        _safe_set_cell(ws, row_cursor, 8, r.get('invoice_number'))
-        _safe_set_cell(ws, row_cursor, 9, r.get('client'))
-        _safe_set_cell(ws, row_cursor, 10, _parse_iso_date(r.get('receive_date')))
-        _safe_set_number(ws, row_cursor, 11, amt_rec)
-        _safe_set_number(ws, row_cursor, 12, p_ppn)
-        _safe_set_number(ws, row_cursor, 13, p_pph23)
-        _safe_set_number(ws, row_cursor, 14, p_trans)
-        _safe_set_cell(ws, row_cursor, 15, r.get('remark') or '')
+        # ✅ CRITICAL: Extract transfer_fee and remark separately
+        transfer_fee = _to_float(r.get('transfer_fee'), 0)
+        remark = _safe_text(r.get('remark'))
 
-        total_inv_value += inv_val
-        total_received += amt_rec
-        total_ppn_rec += p_ppn
-        total_pph23_rec += p_pph23
-        total_transfer += p_trans
-        row_cursor += 1  # ✅ Move to next row (dynamic!)
+        # ✅ COMBINE description + source (if any) for merged D:E cell
+        description = r.get('description') or ''
+        source = r.get('source') or ''
+        if source and source.strip():
+            combined_desc = f'{description} ({source})'
+        else:
+            combined_desc = description
 
-    # Calculate last revenue row
-    last_revenue_row = row_cursor - 1 if row_cursor > 7 else 7
-    visible_revenue_rows = last_revenue_row - 6
+        # ✅ WRITE TO EXCEL WITH COLUMN CONSTANTS
+        _safe_set_cell(ws, row_cursor, COL_DATE, _parse_iso_date(r.get('invoice_date')))
+        _safe_set_cell(ws, row_cursor, COL_SEQ, idx)
 
-    # ✅ HIDE unused template rows (no empty rows visible!)
-    if not revenues:
-        _safe_set_cell(ws, 7, 3, 1)  # Column C: #
-        _safe_set_cell(ws, 7, 4, 'Belum ada data revenue')  # Column D
-        _safe_set_cell(ws, 7, 7, 'IDR')  # Column G: Currency
-        _safe_set_number(ws, 7, 8, 1)  # Column H: Exchange Rate
-        visible_revenue_rows = 1
+        # ✅ MERGE D:E for this row ONLY (dynamic, per data row)
+        # Unmerge first to avoid conflicts
+        try:
+            ws.unmerge_cells(f'D{row_cursor}:E{row_cursor}')
+        except Exception:
+            pass
 
-    # Hide unused rows (7 + visible rows to 21)
-    _set_rows_hidden(ws, 7, 6 + visible_revenue_rows, False)
-    _set_rows_hidden(ws, 7 + visible_revenue_rows, 21, True)
-    print(f'[ANNUAL_EXCEL] Revenue: {len(revenues)} rows, visible: {visible_revenue_rows}, hiding {21 - (6 + visible_revenue_rows)} empty rows')
+        # Merge D and E for description
+        ws.merge_cells(start_row=row_cursor, start_column=4, end_row=row_cursor, end_column=5)
 
-    # ✅ FIX: TOTAL ROW MUST BE ADJACENT TO DATA (not hardcoded row 22!)
-    total_revenue_row = 6 + visible_revenue_rows
+        # Debug: verify merge happened
+        if idx <= 2:
+            cell_d = ws.cell(row=row_cursor, column=4)
+            print(f'[REVENUE] Row {row_cursor}: merged={isinstance(cell_d, MergedCell)}, value="{combined_desc}"')
 
-    # ✅ Use EXCEL FORMULAS (not hardcoded values)
+        # Write combined description to merged cell (column D)
+        _safe_set_cell_with_merge(ws, row_cursor, 4, combined_desc)
+
+        _safe_set_number(ws, row_cursor, COL_INVOICE_VALUE, invoice_value)
+        _safe_set_cell(ws, row_cursor, COL_CURRENCY, currency)
+        _safe_set_number(ws, row_cursor, COL_EXCHANGE_RATE, exchange)
+
+        # ✅ INVOICE NUMBER - use empty string fallback, NOT 'IDR'!
+        invoice_num = r.get('invoice_number')
+        if invoice_num and str(invoice_num).strip():
+            _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, str(invoice_num))
+        else:
+            _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, '')
+
+        _safe_set_cell(ws, row_cursor, COL_CLIENT, r.get('client') or '')
+        _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _parse_iso_date(r.get('receive_date')))
+        _safe_set_number(ws, row_cursor, COL_AMOUNT_RECEIVED, amount_received)
+        _safe_set_number(ws, row_cursor, COL_PPN, p_ppn)
+        _safe_set_number(ws, row_cursor, COL_PPH_23, p_pph23)
+
+        # ✅ Column N (14) = transfer_fee (number), Column O (15) = remark (text)
+        _safe_set_number(ws, row_cursor, COL_TRANSFER_FEE, transfer_fee)
+        _safe_set_cell(ws, row_cursor, COL_REMARK, remark)
+        row_cursor += 1
+
+    # ✅ Calculate last & total row - SIMPLE
+    last_revenue_row = row_cursor - 1
+    total_revenue_row = row_cursor
+
+    # ✅ Set total row with Excel formulas (column letters per template)
     _safe_set_cell(ws, total_revenue_row, 2, 'REVENUE (IDR)')
-    # ✅ Use _get_top_left_cell to handle merged cells
-    _get_top_left_cell(ws, total_revenue_row, 5).value = f'=SUM(E7:E{last_revenue_row})'  # Invoice Value
-    _get_top_left_cell(ws, total_revenue_row, 11).value = f'=SUM(K7:K{last_revenue_row})'  # Amount Received
-    _get_top_left_cell(ws, total_revenue_row, 12).value = f'=SUM(L7:L{last_revenue_row})'  # PPN
-    _get_top_left_cell(ws, total_revenue_row, 13).value = f'=SUM(M7:M{last_revenue_row})'  # PPh 23
-    _get_top_left_cell(ws, total_revenue_row, 14).value = f'=SUM(N7:N{last_revenue_row})'  # Transfer Fee
+    # Column F = INVOICE VALUE (COL_INVOICE_VALUE = 6)
+    _safe_set_cell(ws, total_revenue_row, COL_INVOICE_VALUE, f'=SUM(F{REVENUE_START_ROW}:F{last_revenue_row})')
+    # Column L = AMOUNT RECEIVED (COL_AMOUNT_RECEIVED = 12)
+    _safe_set_cell(ws, total_revenue_row, COL_AMOUNT_RECEIVED, f'=SUM(L{REVENUE_START_ROW}:L{last_revenue_row})')
+    # Column M = PPn (COL_PPN = 13)
+    _safe_set_cell(ws, total_revenue_row, COL_PPN, f'=SUM(M{REVENUE_START_ROW}:M{last_revenue_row})')
+    # Column N = PPH 23 (COL_PPH_23 = 14)
+    _safe_set_cell(ws, total_revenue_row, COL_PPH_23, f'=SUM(N{REVENUE_START_ROW}:N{last_revenue_row})')
+    # Column O = Transfer Fee (COL_TRANSFER_FEE = 15)
+    _safe_set_cell(ws, total_revenue_row, COL_TRANSFER_FEE, f'=SUM(O{REVENUE_START_ROW}:O{last_revenue_row})')
+    _safe_set_cell(ws, total_revenue_row, COL_REMARK, '')  # ✅ Remark column = empty text
 
-    # Bold total row (skip merged cells)
-    for col in range(2, 16):
-        cell = ws.cell(row=total_revenue_row, column=col)
-        if not isinstance(cell, MergedCell):
-            cell.font = Font(bold=True)
+    # ✅ Hide remaining template rows (clean, no duplicate calls!)
+    if total_revenue_row < REVENUE_TEMPLATE_END:
+        _set_rows_hidden(ws, total_revenue_row + 1, REVENUE_TEMPLATE_END, True)
 
-    print(f'[ANNUAL_EXCEL] Revenue total row at {total_revenue_row} with Excel formulas')
+    print(f'[ANNUAL_EXCEL] Revenue: {len(revenues)} rows, last_data={last_revenue_row}, total_row={total_revenue_row}')
 
     visible_tax_rows = max(1, min(len(taxes), 10))
     tax_last_visible = 26 + visible_tax_rows
 
     # ✅ TABLE 2: PAJAK PENGELUARAN - DYNAMIC ROWS (NO EMPTY ROWS!)
-    # ✅ FIX #1: Use row_cursor, NOT fixed range with empty rows
-    row_cursor = 27
+    # ✅ FIX #1: Use explicit row calculation from TAX_START_ROW
+    # ✅ MERGE D & E for header "Detail/Description" in Tax table (row 25 = TAX_HEADER_ROW - 1)
+    tax_header_row = TAX_HEADER_ROW - 1  # Row 25
+    try:
+        ws.merge_cells(f'D{tax_header_row}:E{tax_header_row}')
+        print(f'[TAX] Merged D{tax_header_row}:E{tax_header_row} for Description header')
+    except Exception as e:
+        print(f'[TAX] Failed to merge header: {e}')
 
     # Clear only rows we will use (no empty rows!)
     for idx in range(len(taxes[:10])):
-        _clear_range(ws, 27 + idx, 27 + idx, 2, 17)
+        _clear_range(ws, TAX_START_ROW + idx, TAX_START_ROW + idx, 2, 17)
 
-    # Render tax rows dynamically
+    # Render tax rows dynamically with merged D:E columns
     for idx, t in enumerate(taxes[:10]):
-        _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(t.get('date')))
-        _safe_set_cell(ws, row_cursor, 3, idx + 1)
-        _safe_set_cell(ws, row_cursor, 4, t.get('description'))
+        row = TAX_START_ROW + idx  # ✅ EXPLICIT ROW CALCULATION (27 + idx)
+
+        _safe_set_cell(ws, row, 2, _parse_iso_date(t.get('date')))
+        _safe_set_cell(ws, row, 3, idx + 1)
+
+        # ✅ MERGE D:E for TAX description (simple, no boundary check needed)
+        description = t.get('description') or ''
+
+        # Unmerge first to avoid conflicts
+        try:
+            ws.unmerge_cells(f'D{row}:E{row}')
+        except Exception:
+            pass
+
+        # Merge D and E for description
+        ws.merge_cells(start_row=row, start_column=4, end_row=row, end_column=5)
+
+        # Write description to merged cell (column D)
+        _safe_set_cell_with_merge(ws, row, 4, description)
+
+        # Debug: verify merge happened
+        if idx <= 2:
+            cell_d = ws.cell(row=row, column=4)
+            print(f'[TAX] Row {row}: merged={isinstance(cell_d, MergedCell)}, desc="{description[:30]}..."')
 
         # Get tax values
         trans_val = _to_float(t.get('transaction_value'))
@@ -1623,28 +1817,26 @@ def get_annual_report_excel():
         pph_23_val = _to_float(t.get('pph_23'))
         pph_26_val = _to_float(t.get('pph_26'))
 
-        _safe_set_number(ws, row_cursor, 6, trans_val)
-        _safe_set_cell(ws, row_cursor, 7, t.get('currency') or 'IDR')
-        _safe_set_number(ws, row_cursor, 8, _to_float(t.get('currency_exchange'), default=1) or 1)
+        _safe_set_number(ws, row, 6, trans_val)
+        _safe_set_cell(ws, row, 7, t.get('currency') or 'IDR')
+        _safe_set_number(ws, row, 8, _to_float(t.get('currency_exchange'), default=1) or 1)
 
         # ✅ Set DPP & Value ONLY for tax that has value (not all columns!)
         if ppn_val > 0:
-            _safe_set_number(ws, row_cursor, 9, trans_val)  # DPP PPN
-            _safe_set_number(ws, row_cursor, 10, ppn_val)   # PPN Value
+            _safe_set_number(ws, row, 9, trans_val)  # DPP PPN
+            _safe_set_number(ws, row, 10, ppn_val)   # PPN Value
 
         if pph_21_val > 0:
-            _safe_set_number(ws, row_cursor, 11, trans_val)  # DPP PPh 21
-            _safe_set_number(ws, row_cursor, 12, pph_21_val) # PPh 21 Value
+            _safe_set_number(ws, row, 11, trans_val)  # DPP PPh 21
+            _safe_set_number(ws, row, 12, pph_21_val) # PPh 21 Value
 
         if pph_23_val > 0:
-            _safe_set_number(ws, row_cursor, 13, trans_val)  # DPP PPh 23
-            _safe_set_number(ws, row_cursor, 14, pph_23_val) # PPh 23 Value
+            _safe_set_number(ws, row, 13, trans_val)  # DPP PPh 23
+            _safe_set_number(ws, row, 14, pph_23_val) # PPh 23 Value
 
         if pph_26_val > 0:
-            _safe_set_number(ws, row_cursor, 15, trans_val)  # DPP PPh 26
-            _safe_set_number(ws, row_cursor, 16, pph_26_val) # PPh 26 Value
-
-        row_cursor += 1  # ✅ Move to next row (dynamic!)
+            _safe_set_number(ws, row, 15, trans_val)  # DPP PPh 26
+            _safe_set_number(ws, row, 16, pph_26_val) # PPh 26 Value
 
     # ✅ HIDE unused template rows (no empty rows visible!)
     visible_tax_rows = len(taxes[:10])
@@ -1681,7 +1873,7 @@ def get_annual_report_excel():
     _safe_set_cell(ws, total_tax_row, 2, 'PENERIMAAN NEGARA (TAX) (IDR)')
     ws.cell(row=total_tax_row, column=10).value = f'=SUM(J27:J{last_tax_data_row})'  # PPN
     ws.cell(row=total_tax_row, column=12).value = f'=SUM(L27:L{last_tax_data_row})'  # PPh 21
-    ws.cell(row=total_tax_row, column=14).value = f'=SUM(N7:N{last_tax_data_row})'  # PPh 23
+    ws.cell(row=total_tax_row, column=14).value = f'=SUM(N27:N{last_tax_data_row})'  # PPh 23 (FIX: N27, not N7!)
     ws.cell(row=total_tax_row, column=16).value = f'=SUM(P27:P{last_tax_data_row})'  # PPh 26
     ws.cell(row=total_tax_row, column=9).value = 'PPN'
     ws.cell(row=total_tax_row, column=11).value = 'PPh'
@@ -1712,8 +1904,8 @@ def get_annual_report_excel():
 
     # ✅ TABLE 3: PENGELUARAN & OPERATION COST
     # Panggil render function untuk mengisi data Table 3
-    print(f'[ANNUAL_EXCEL] Rendering Table 3 (Expenses) starting at row 41...')
-    total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year)
+    print(f'[ANNUAL_EXCEL] Rendering Table 3 (Expenses) starting at row {EXPENSE_START_ROW}...')
+    total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year, start_row=EXPENSE_START_ROW)
     print(f'[ANNUAL_EXCEL] Table 3 rendered up to row {total_row}')
 
     # ✅ DO NOT REMOVE TABLES - Keep template structure intact!
@@ -1727,8 +1919,9 @@ def get_annual_report_excel():
 
     has_formatted_secondary = _ensure_formatted_secondary_sheets(wb, year, template_dir)
     if not has_formatted_secondary:
-        _write_secondary_summary_sheets(wb, payload, year, final_main_sheet_name)
-    _sync_formatted_secondary_sheets(wb, payload, year, final_main_sheet_name)
+        _write_secondary_summary_sheets(wb, payload, year, final_main_sheet_name, expense_total_row=total_row)
+    # ✅ Pass dynamic expense total row to sync function
+    _sync_formatted_secondary_sheets(wb, payload, year, final_main_sheet_name, expense_total_row=total_row)
     try:
         wb.calculation.calcMode = 'auto'
         wb.calculation.fullCalcOnLoad = True

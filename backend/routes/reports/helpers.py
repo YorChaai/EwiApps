@@ -118,6 +118,36 @@ def _clear_data_keep_formulas(ws, start_row, end_row, start_col=2, end_col=17):
             cell.value = None
 
 
+def _clear_range_force(ws, start_row, end_row, start_col=2, end_col=17):
+    """
+    ✅ FORCE CLEAR: Clear range including handling merged cells.
+    Use this when _clear_range fails to clear merged cells.
+    """
+    # Step 1: Unmerge all cells in this range first
+    ranges_to_unmerge = []
+    for merged_range in list(ws.merged_cells.ranges):
+        min_col, min_row, max_col, max_row = merged_range.bounds
+        overlaps = not (
+            max_row < start_row or min_row > end_row or
+            max_col < start_col or min_col > end_col
+        )
+        if overlaps:
+            ranges_to_unmerge.append(str(merged_range))
+
+    for merge_range in ranges_to_unmerge:
+        try:
+            ws.unmerge_cells(merge_range)
+        except Exception:
+            pass
+
+    # Step 2: Clear all values and reset format
+    for r in range(start_row, end_row + 1):
+        for c in range(start_col, end_col + 1):
+            cell = ws.cell(row=r, column=c)
+            cell.value = None
+            cell.number_format = 'General'
+
+
 def _set_rows_hidden(ws, start_row, end_row, hidden):
     if start_row > end_row:
         return
