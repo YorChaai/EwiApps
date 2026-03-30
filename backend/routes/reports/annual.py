@@ -22,7 +22,7 @@ from sqlalchemy import text as sql_text
 from models import User, Expense, Category, Settlement, ManualCombineGroup, db
 from . import reports_bp
 from .helpers import (
-    _default_report_year, _safe_set_cell, _safe_set_number,
+    _default_report_year, _safe_set_cell, _safe_set_number, _get_top_left_cell,
     _normalize_external_formula_refs, _clear_range, _clear_data_keep_formulas,
     _set_rows_hidden, _safe_text, _extract_imported_row, _extract_imported_sheet_row,
     _is_template_detail_data_row, _map_expense_category_index_from_name,
@@ -960,7 +960,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
 
     # Clear total row first to remove garbage data (meta columns 2-5)
     _clear_range(ws, total_row, total_row, 2, 5)
-    
+
     # Place TOTAL label in column 5 (Source) so it's next to Column 6 (Amount)
     _safe_set_cell(ws, total_row, 5, 'TOTAL')
     ws.cell(row=total_row, column=5).font = Font(bold=True)
@@ -1228,10 +1228,10 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
     lr_name = f'Laba rugi -{year}'
     if lr_name in wb.sheetnames:
         ws_lr = wb[lr_name]
-        ws_lr['A3'] = None  # Clean up mistake
-        ws_lr['F3'] = None  # Clean up mistake
-        ws_lr['B4'] = f'LABA RUGI | TAHUN {year}'
-        ws_lr['G4'] = f'NERACA | TAHUN YANG BERAKHIR, 31 DESEMBER {year}'
+        # ✅ DO NOT REBUILD - Template has proper layout
+        # Just clean up old data if any
+        ws_lr['A3'] = None
+        ws_lr['F3'] = None
         # bersihkan nilai template dummy spesifik di neraca
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
@@ -1495,13 +1495,9 @@ def get_annual_report_excel():
 
     print(f'[ANNUAL_EXCEL] Template loaded, processing sheets...')
 
-    # ✅ REMOVE ALL TABLES FROM TEMPLATE TO AVOID CONFLICT
-    # This prevents Excel repair/remove table errors
-    for sheet_name in wb.sheetnames:
-        ws_temp = wb[sheet_name]
-        if hasattr(ws_temp, 'tables') and ws_temp.tables:
-            ws_temp.tables = []
-            print(f'[ANNUAL_EXCEL] Removed tables from sheet: {sheet_name}')
+    # ✅ DO NOT REMOVE TABLES FROM TEMPLATE - Keep structure intact!
+    # ws_temp.tables = []  ← REMOVED! Ini yang bikin Excel ngaco
+    print(f'[ANNUAL_EXCEL] Keeping Excel tables from template for proper Alt+A behavior')
 
     # Hapus semua sheet Laba rugi yang lama dari template (akan dibuat ulang dengan tahun yang benar)
     sheets_to_remove = [name for name in wb.sheetnames if name.startswith('Laba rugi -')]
@@ -1522,29 +1518,180 @@ def get_annual_report_excel():
     _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
     _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
 
+    # ✅ TABLE 1: REVENUE & TAX - DYNAMIC ROWS (NO EMPTY ROWS!)
+    # Clear existing template data in rows 7-21 (Columns B-O)
+    _clear_range(ws, 7, 21, 2, 15)
+    # Clear total row 22 (Columns B-O)
+    _clear_range(ws, 22, 22, 2, 15)
+
+    # ✅ DYNAMIC REVENUE RENDERING (like Tax section)
+    row_cursor = 7
+    total_inv_value = 0.0
+    total_received = 0.0
+    total_ppn_rec = 0.0
+    total_pph23_rec = 0.0
+    total_transfer = 0.0
+
+    # Render revenue data dynamically (no fixed limit!)
+    for idx, r in enumerate(revenues, 1):
+        inv_val = _idr_from_currency(r.get('invoice_value'), r.get('currency'), r.get('currency_exchange'))
+        amt_rec = _idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
+        p_ppn = _to_float(r.get('ppn'))
+        p_pph23 = _to_float(r.get('pph_23'))
+        p_trans = _to_float(r.get('transfer_fee'))
+
+        _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(r.get('invoice_date')))
+        _safe_set_cell(ws, row_cursor, 3, idx)
+        _safe_set_cell(ws, row_cursor, 4, r.get('description'))
+        _safe_set_number(ws, row_cursor, 5, inv_val)
+        _safe_set_cell(ws, row_cursor, 6, r.get('currency') or 'IDR')
+        _safe_set_number(ws, row_cursor, 7, _to_float(r.get('currency_exchange'), default=1) or 1)
+        _safe_set_cell(ws, row_cursor, 8, r.get('invoice_number'))
+        _safe_set_cell(ws, row_cursor, 9, r.get('client'))
+        _safe_set_cell(ws, row_cursor, 10, _parse_iso_date(r.get('receive_date')))
+        _safe_set_number(ws, row_cursor, 11, amt_rec)
+        _safe_set_number(ws, row_cursor, 12, p_ppn)
+        _safe_set_number(ws, row_cursor, 13, p_pph23)
+        _safe_set_number(ws, row_cursor, 14, p_trans)
+        _safe_set_cell(ws, row_cursor, 15, r.get('remark') or '')
+
+        total_inv_value += inv_val
+        total_received += amt_rec
+        total_ppn_rec += p_ppn
+        total_pph23_rec += p_pph23
+        total_transfer += p_trans
+        row_cursor += 1  # ✅ Move to next row (dynamic!)
+
+    # Calculate last revenue row
+    last_revenue_row = row_cursor - 1 if row_cursor > 7 else 7
+    visible_revenue_rows = last_revenue_row - 6
+
+    # ✅ HIDE unused template rows (no empty rows visible!)
+    if not revenues:
+        _safe_set_cell(ws, 7, 3, 1)  # Column C: #
+        _safe_set_cell(ws, 7, 4, 'Belum ada data revenue')  # Column D
+        _safe_set_cell(ws, 7, 7, 'IDR')  # Column G: Currency
+        _safe_set_number(ws, 7, 8, 1)  # Column H: Exchange Rate
+        visible_revenue_rows = 1
+
+    # Hide unused rows (7 + visible rows to 21)
+    _set_rows_hidden(ws, 7, 6 + visible_revenue_rows, False)
+    _set_rows_hidden(ws, 7 + visible_revenue_rows, 21, True)
+    print(f'[ANNUAL_EXCEL] Revenue: {len(revenues)} rows, visible: {visible_revenue_rows}, hiding {21 - (6 + visible_revenue_rows)} empty rows')
+
+    # ✅ FIX: TOTAL ROW MUST BE ADJACENT TO DATA (not hardcoded row 22!)
+    total_revenue_row = 6 + visible_revenue_rows
+
+    # ✅ Use EXCEL FORMULAS (not hardcoded values)
+    _safe_set_cell(ws, total_revenue_row, 2, 'REVENUE (IDR)')
+    # ✅ Use _get_top_left_cell to handle merged cells
+    _get_top_left_cell(ws, total_revenue_row, 5).value = f'=SUM(E7:E{last_revenue_row})'  # Invoice Value
+    _get_top_left_cell(ws, total_revenue_row, 11).value = f'=SUM(K7:K{last_revenue_row})'  # Amount Received
+    _get_top_left_cell(ws, total_revenue_row, 12).value = f'=SUM(L7:L{last_revenue_row})'  # PPN
+    _get_top_left_cell(ws, total_revenue_row, 13).value = f'=SUM(M7:M{last_revenue_row})'  # PPh 23
+    _get_top_left_cell(ws, total_revenue_row, 14).value = f'=SUM(N7:N{last_revenue_row})'  # Transfer Fee
+
+    # Bold total row (skip merged cells)
+    for col in range(2, 16):
+        cell = ws.cell(row=total_revenue_row, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.font = Font(bold=True)
+
+    print(f'[ANNUAL_EXCEL] Revenue total row at {total_revenue_row} with Excel formulas')
+
     visible_tax_rows = max(1, min(len(taxes), 10))
     tax_last_visible = 26 + visible_tax_rows
-    _set_rows_hidden(ws, 27, 36, False)
-    if tax_last_visible < 36: _set_rows_hidden(ws, tax_last_visible + 1, 36, True)
+
+    # ✅ TABLE 2: PAJAK PENGELUARAN - DYNAMIC ROWS (NO EMPTY ROWS!)
+    # ✅ FIX #1: Use row_cursor, NOT fixed range with empty rows
+    row_cursor = 27
+
+    # Clear only rows we will use (no empty rows!)
+    for idx in range(len(taxes[:10])):
+        _clear_range(ws, 27 + idx, 27 + idx, 2, 17)
+
+    # Render tax rows dynamically
+    for idx, t in enumerate(taxes[:10]):
+        _safe_set_cell(ws, row_cursor, 2, _parse_iso_date(t.get('date')))
+        _safe_set_cell(ws, row_cursor, 3, idx + 1)
+        _safe_set_cell(ws, row_cursor, 4, t.get('description'))
+
+        # Get tax values
+        trans_val = _to_float(t.get('transaction_value'))
+        ppn_val = _to_float(t.get('ppn'))
+        pph_21_val = _to_float(t.get('pph_21'))
+        pph_23_val = _to_float(t.get('pph_23'))
+        pph_26_val = _to_float(t.get('pph_26'))
+
+        _safe_set_number(ws, row_cursor, 6, trans_val)
+        _safe_set_cell(ws, row_cursor, 7, t.get('currency') or 'IDR')
+        _safe_set_number(ws, row_cursor, 8, _to_float(t.get('currency_exchange'), default=1) or 1)
+
+        # ✅ Set DPP & Value ONLY for tax that has value (not all columns!)
+        if ppn_val > 0:
+            _safe_set_number(ws, row_cursor, 9, trans_val)  # DPP PPN
+            _safe_set_number(ws, row_cursor, 10, ppn_val)   # PPN Value
+
+        if pph_21_val > 0:
+            _safe_set_number(ws, row_cursor, 11, trans_val)  # DPP PPh 21
+            _safe_set_number(ws, row_cursor, 12, pph_21_val) # PPh 21 Value
+
+        if pph_23_val > 0:
+            _safe_set_number(ws, row_cursor, 13, trans_val)  # DPP PPh 23
+            _safe_set_number(ws, row_cursor, 14, pph_23_val) # PPh 23 Value
+
+        if pph_26_val > 0:
+            _safe_set_number(ws, row_cursor, 15, trans_val)  # DPP PPh 26
+            _safe_set_number(ws, row_cursor, 16, pph_26_val) # PPh 26 Value
+
+        row_cursor += 1  # ✅ Move to next row (dynamic!)
+
+    # ✅ HIDE unused template rows (no empty rows visible!)
+    visible_tax_rows = len(taxes[:10])
+    _set_rows_hidden(ws, 27, 26 + visible_tax_rows, False)
+    _set_rows_hidden(ws, 27 + visible_tax_rows, 36, True)
+
+    # Apply merge cells if any
     _apply_manual_tax_combine_groups(
         ws,
         taxes[:visible_tax_rows],
         tax_combine_groups,
         start_row=27,
     )
+
+    # Handle no tax data
     if not taxes:
-        _safe_set_cell(ws, 27, 3, 1); _safe_set_cell(ws, 27, 4, 'Belum ada data pajak'); _safe_set_cell(ws, 27, 7, 'IDR'); _safe_set_cell(ws, 27, 8, 1)
+        _safe_set_cell(ws, 27, 3, 1)
+        _safe_set_cell(ws, 27, 4, 'Belum ada data pajak')
+        _safe_set_cell(ws, 27, 7, 'IDR')
+        _safe_set_number(ws, 27, 8, 1)
+        visible_tax_rows = 1
+
+    # ✅ FIX #2: TOTAL ROW MUST BE ADJACENT TO DATA (not hardcoded row 37!)
+    total_tax_row = 27 + visible_tax_rows
+
+    # Calculate totals
     sum_tax1 = sum(_to_float(t.get('ppn')) for t in taxes[:10])
     sum_tax2 = sum(_to_float(t.get('pph_21')) for t in taxes[:10])
     sum_tax3 = sum(_to_float(t.get('pph_23')) for t in taxes[:10])
     sum_tax4 = sum(_to_float(t.get('pph_26')) for t in taxes[:10])
 
-    _safe_set_cell(ws, 37, 2, 'PENERIMAAN NEGARA (TAX) (IDR)')
-    _safe_set_cell(ws, 37, 9, 'PPN'); _safe_set_cell(ws, 37, 10, sum_tax1)
-    _safe_set_cell(ws, 37, 11, 'PPh'); _safe_set_cell(ws, 37, 12, sum_tax2)
-    _safe_set_cell(ws, 37, 13, 'PPh'); _safe_set_cell(ws, 37, 14, sum_tax3)
-    _safe_set_cell(ws, 37, 15, 'PPh'); _safe_set_cell(ws, 37, 16, sum_tax4)
-    _safe_set_cell(ws, 37, 17, '-')
+    # ✅ FIX #3: Use EXCEL FORMULAS (not hardcoded values)
+    last_tax_data_row = total_tax_row - 1
+    _safe_set_cell(ws, total_tax_row, 2, 'PENERIMAAN NEGARA (TAX) (IDR)')
+    ws.cell(row=total_tax_row, column=10).value = f'=SUM(J27:J{last_tax_data_row})'  # PPN
+    ws.cell(row=total_tax_row, column=12).value = f'=SUM(L27:L{last_tax_data_row})'  # PPh 21
+    ws.cell(row=total_tax_row, column=14).value = f'=SUM(N7:N{last_tax_data_row})'  # PPh 23
+    ws.cell(row=total_tax_row, column=16).value = f'=SUM(P27:P{last_tax_data_row})'  # PPh 26
+    ws.cell(row=total_tax_row, column=9).value = 'PPN'
+    ws.cell(row=total_tax_row, column=11).value = 'PPh'
+    ws.cell(row=total_tax_row, column=13).value = 'PPh'
+    ws.cell(row=total_tax_row, column=15).value = 'PPh'
+    ws.cell(row=total_tax_row, column=17).value = '-'
+
+    # Bold total row
+    for col in range(2, 18):
+        ws.cell(row=total_tax_row, column=col).font = Font(bold=True)
     # Fetch root categories dynamically from DB - ORDER BY sort_order (from Kategori Tabular)
     root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     cat_columns = [c.name for c in root_cats]
@@ -1569,10 +1716,9 @@ def get_annual_report_excel():
     total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year)
     print(f'[ANNUAL_EXCEL] Table 3 rendered up to row {total_row}')
 
-    # ✅ REMOVE EXISTING TABLES TO AVOID CONFLICT
-    if hasattr(ws, 'tables') and ws.tables:
-        ws.tables = []
-        print(f'[ANNUAL_EXCEL] Removed tables from main sheet')
+    # ✅ DO NOT REMOVE TABLES - Keep template structure intact!
+    # ws.tables = []  ← REMOVED! Ini yang bikin Excel ngaco
+    print(f'[ANNUAL_EXCEL] Keeping Excel tables for proper Alt+A behavior')
 
     final_main_sheet_name = f'Revenue-Cost_{year}'
     if ws.title != final_main_sheet_name:

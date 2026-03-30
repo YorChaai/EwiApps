@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime
+from copy import copy
 from flask import current_app
 from openpyxl.cell.cell import MergedCell
 
@@ -18,6 +19,30 @@ def _safe_set_cell(ws, row, col, value):
     cell.value = value
 
 
+def _get_top_left_cell(ws, row, col):
+    """
+    Get the top-left cell of a merged range.
+    If cell is not merged, return the cell itself.
+    This ensures we always write to the correct cell in merged regions.
+    """
+    for merged_range in ws.merged_cells.ranges:
+        min_col, min_row, max_col, max_row = merged_range.bounds
+        if min_row <= row <= max_row and min_col <= col <= max_col:
+            # Return top-left cell of merged range
+            return ws.cell(row=min_row, column=min_col)
+    # Not merged, return original cell
+    return ws.cell(row=row, column=col)
+
+
+def _safe_set_cell_with_merge(ws, row, col, value):
+    """
+    Set cell value, handling merged cells correctly.
+    Writes to top-left cell of merged range.
+    """
+    cell = _get_top_left_cell(ws, row, col)
+    cell.value = value
+
+
 def _safe_set_number(ws, row, col, value, number_format='#,##0'):
     # tulis nilai numerik dan paksa format numerik untuk menghindari artefak bergaya tanggal
     cell = ws.cell(row=row, column=col)
@@ -25,6 +50,36 @@ def _safe_set_number(ws, row, col, value, number_format='#,##0'):
         return
     cell.value = value
     cell.number_format = number_format
+
+
+def _unmerge_region(ws, start_row, end_row, start_col, end_col):
+    """
+    Find all merged ranges that overlap with the specified region and unmerge them.
+    Restores borders after unmerge to avoid 'white gaps'.
+    """
+    ranges_to_unmerge = []
+    for merged_range in list(ws.merged_cells.ranges):
+        min_col, min_row, max_col, max_row = merged_range.bounds
+        overlaps = not (
+            max_row < start_row or min_row > end_row or
+            max_col < start_col or min_col > end_col
+        )
+        if overlaps:
+            ranges_to_unmerge.append(merged_range)
+
+    for r_range in ranges_to_unmerge:
+        # Ambil border dari cell pertama (top-left) sebelum unmerge
+        first_cell = ws.cell(row=r_range.min_row, column=r_range.min_col)
+        original_border = copy(first_cell.border)
+
+        try:
+            ws.unmerge_cells(r_range.coord)
+            # Terapkan kembali border ke semua cell di range tersebut
+            for r in range(r_range.min_row, r_range.max_row + 1):
+                for c in range(r_range.min_col, r_range.max_col + 1):
+                    ws.cell(row=r, column=c).border = original_border
+        except Exception as e:
+            print(f'[EXCEL_RENDER] Warning: Failed to unmerge/restore {r_range}: {e}')
 
 
 def _normalize_external_formula_refs(wb):
@@ -44,12 +99,12 @@ def _normalize_external_formula_refs(wb):
 
 
 def _clear_range(ws, start_row, end_row, start_col=2, end_col=17):
+    # Membersihkan nilai (value) sel tanpa merubah layout atau penggabungan (merge)
     for r in range(start_row, end_row + 1):
         for c in range(start_col, end_col + 1):
             cell = ws.cell(row=r, column=c)
-            if isinstance(cell, MergedCell):
-                continue
-            cell.value = None
+            if not isinstance(cell, MergedCell):
+                cell.value = None
 
 
 def _clear_data_keep_formulas(ws, start_row, end_row, start_col=2, end_col=17):
