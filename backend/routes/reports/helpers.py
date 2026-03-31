@@ -38,9 +38,51 @@ def _safe_set_cell_with_merge(ws, row, col, value):
     """
     Set cell value, handling merged cells correctly.
     Writes to top-left cell of merged range.
+    Handles None values by setting empty string.
     """
     cell = _get_top_left_cell(ws, row, col)
-    cell.value = value
+    cell.value = value if value is not None else ''
+
+
+def _merge_description_cell(ws, row, description, col_start=4, col_end=5):
+    """
+    Merge columns D:E (or specified range) for description field.
+    Handles unmerge first to avoid conflicts, then writes description.
+
+    Args:
+        ws: Worksheet
+        row: Row number
+        description: Description text to write
+        col_start: Start column (default 4 = D)
+        col_end: End column (default 5 = E)
+
+    Returns:
+        True if merge successful, False otherwise
+    """
+    try:
+        # Unmerge first to avoid conflicts
+        ws.unmerge_cells(f'{_get_column_letter(col_start)}{row}:{_get_column_letter(col_end)}{row}')
+    except Exception:
+        pass
+
+    try:
+        # Merge columns
+        ws.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
+
+        # Write description to merged cell
+        _safe_set_cell_with_merge(ws, row, col_start, description or '')
+        return True
+    except Exception as e:
+        print(f'[MERGE_DESC] Failed to merge row {row}: {e}')
+        # Fallback: write without merge
+        _safe_set_cell(ws, row, col_start, description or '')
+        return False
+
+
+def _get_column_letter(col_num):
+    """Convert column number to letter (1->A, 2->B, etc.)"""
+    from openpyxl.utils import get_column_letter
+    return get_column_letter(col_num)
 
 
 def _safe_set_number(ws, row, col, value, number_format='#,##0'):
