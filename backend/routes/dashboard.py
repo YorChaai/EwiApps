@@ -41,6 +41,19 @@ def get_summary():
 
     total_expenses_month = float(expense_q.scalar() or 0)
 
+    # ✅ total expenses TAHUN INI (idr) - for yearly dashboard card
+    first_of_year = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    expense_year_q = (
+        db.session.query(func.coalesce(func.sum(Expense.idr_amount), 0))
+        .filter(Expense.status == 'approved')
+        .filter(Expense.date >= first_of_year.date())
+    )
+    if not is_manager:
+        expense_year_q = expense_year_q.join(Settlement).filter(Settlement.user_id == user.id)
+
+    total_expenses_year = float(expense_year_q.scalar() or 0)
+
     # total settlements & advances
     total_settle_q = Settlement.query
     total_advance_q = Advance.query
@@ -55,6 +68,7 @@ def get_summary():
         'pending_settlements': pending_settlements,
         'pending_advances': pending_advances,
         'total_expenses_this_month': total_expenses_month,
+        'total_expenses_this_year': total_expenses_year,  # ✅ ADDED: Return yearly total
         'total_settlements': total_settlements,
         'total_advances': total_advances,
         'is_manager': is_manager,

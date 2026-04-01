@@ -1,7 +1,10 @@
 # summary, settlement receipt, advance report, dan bulk export endpoints
 
+import re
+import logging
 from datetime import datetime
 from io import BytesIO
+from typing import Optional, List, Dict, Any, Tuple
 from flask import jsonify, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from openpyxl import Workbook
@@ -12,7 +15,10 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
-from models import User, Expense, Category, Settlement, db
+# Setup logging
+logger = logging.getLogger(__name__)
+
+from models import User, Expense, Category, Settlement, db, Advance
 from . import reports_bp
 from .helpers import _default_report_year, _parse_iso_date
 
@@ -35,30 +41,62 @@ COMMON_SUBCATEGORY_ORDER = [
 ]
 
 
-def _display_settlement_status(status):
+def _validate_date(date_str: str) -> Optional[datetime]:
+    """Validate date string format (YYYY-MM-DD)."""
+    if not date_str:
+        return None
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d')
+    except ValueError:
+        return None
+
+
+def _display_settlement_status(status: str) -> str:
+    """Convert settlement status to display format."""
     return 'approved' if status == 'completed' else status
 
 
-def _get_summary_approved_expenses(year, start_date, end_date):
+def _get_summary_approved_expenses(
+    year: int,
+    start_date: Optional[str],
+    end_date: Optional[str]
+) -> List[Expense]:
+    """Get approved expenses with optional date range filter."""
     query = Expense.query.filter(Expense.status == 'approved')
+
+    # Validate and apply date filters
     if start_date:
-        query = query.filter(Expense.date >= start_date)
+        validated = _validate_date(start_date)
+        if validated:
+            query = query.filter(Expense.date >= validated.date())
+
     if end_date:
-        query = query.filter(Expense.date <= end_date)
+        validated = _validate_date(end_date)
+        if validated:
+            # Include entire end date (until 23:59:59)
+            end_datetime = validated.replace(hour=23, minute=59, second=59)
+            query = query.filter(Expense.date <= end_datetime)
+
     if not start_date and not end_date:
         query = query.filter(db.extract('year', Expense.date) == year)
+
     return query.all()
 
 
-def _expense_amount_for_summary(expense):
-    return expense.idr_amount or 0
+def _expense_amount_for_summary(expense: Expense) -> float:
+    """Get expense amount in IDR."""
+    return expense.idr_amount or 0.0
 
 
-def _infer_summary_subcategory(expense, root_name, raw_subcategory_name):
+def _infer_summary_subcategory(
+    expense: Expense,
+    root_name: str,
+    raw_subcategory_name: str
+) -> str:
+    """Infer subcategory from expense description."""
     desc = (expense.description or '').strip()
     match = None
     try:
-        import re
         match = re.match(r'^\[(.*?)\]\s*(.*)$', desc)
     except Exception:
         match = None
@@ -155,10 +193,10 @@ def _build_summary_payload(expenses):
             if child.id not in used_ids:
                 ordered_children.append(child)
         children_by_parent_name[root.name] = {child.name: child for child in ordered_children}
-    
+
     summary_data = []
     grand_total = 0
-    
+
     for root in root_categories:
         root_expenses = []
         child_expense_map = {}
@@ -187,7 +225,7 @@ def _build_summary_payload(expenses):
                 monthly[month_str] += amount
                 yearly_total += amount
                 grand_total += amount
-            
+
             children_list.append({
                 'category': f"{child.code} - {child.name}",
                 'monthly': monthly,
@@ -195,23 +233,23 @@ def _build_summary_payload(expenses):
                 'is_parent': False,
                 'level': 1
             })
-        
+
         # Tambahkan pengeluaran langsung kategori induk ke grand_total
         for e in root_expenses:
             grand_total += _expense_amount_for_summary(e)
-            
+
         # Masukkan baris INDUK (User minta angka di kategori induk dikosongkan/0)
         summary_data.append({
             'category': f"{root.code} - {root.name}",
-            'monthly': {str(i): 0 for i in range(1, 13)}, 
-            'yearly_total': 0, 
+            'monthly': {str(i): 0 for i in range(1, 13)},
+            'yearly_total': 0,
             'is_parent': True,
             'level': 0
         })
-        
+
         # Masukkan baris ANAK-ANAK
         summary_data.extend(children_list)
-        
+
     return summary_data, grand_total
 
 
@@ -219,13 +257,22 @@ def _build_summary_payload(expenses):
 @jwt_required()
 def get_summary_report():
     user = User.query.get(int(get_jwt_identity()))
+    print(f'[SUMMARY_API] User={user.username}, role={user.role}')  # ✅ Debug
+
     if user.role != 'manager':
+        print(f'[SUMMARY_API] Access denied for non-manager')  # ✅ Debug
         return jsonify({'error': 'Akses ditolak'}), 403
+
     year = request.args.get('year', _default_report_year(), type=int)
+    print(f'[SUMMARY_API] Year filter={year}')  # ✅ Debug
+
     start_date = _parse_iso_date(request.args.get('start_date'))
     end_date = _parse_iso_date(request.args.get('end_date'))
     expenses = _get_summary_approved_expenses(year, start_date, end_date)
     summary_data, grand_total = _build_summary_payload(expenses)
+
+    print(f'[SUMMARY_API] grand_total={grand_total}')  # ✅ Debug
+
     return jsonify({'summary': summary_data, 'grand_total': grand_total, 'year': year,
                     'start_date': start_date.isoformat() if start_date else None,
                     'end_date': end_date.isoformat() if end_date else None}), 200
@@ -261,13 +308,13 @@ def export_summary_pdf():
         monthly = row.get('monthly', {})
         is_parent = row.get('is_parent', False)
         level = row.get('level', 0)
-        
+
         values = []
         for i in range(1, 13):
             val = float(monthly.get(str(i), 0) or 0)
             month_totals[i - 1] += val
             values.append(f"{val:,.0f}" if val > 0 else "-")
-            
+
         cat_name = row.get('category', '-')
         # Gunakan Paragraph untuk mendukung bold dan indentasi di PDF table
         p_style = ParagraphStyle('TableText', parent=styles['Normal'], fontSize=7)
@@ -276,12 +323,12 @@ def export_summary_pdf():
         else:
             p_style.leftIndent = level * 12
             display_name = Paragraph(cat_name, p_style)
-            
+
         table_data.append([display_name] + values + [f"{float(row.get('yearly_total', 0) or 0):,.0f}"])
-        
-    table_data.append([Paragraph("<b>GRAND TOTAL</b>", ParagraphStyle('Total', parent=styles['Normal'], fontSize=7))] + 
+
+    table_data.append([Paragraph("<b>GRAND TOTAL</b>", ParagraphStyle('Total', parent=styles['Normal'], fontSize=7))] +
                       [f"{v:,.0f}" if v > 0 else "-" for v in month_totals] + [f"{float(grand_total):,.0f}"])
-    
+
     table = Table(table_data, colWidths=[155] + [42] * 12 + [70], repeatRows=1)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -302,42 +349,42 @@ def generate_excel_report():
     user = User.query.get(int(get_jwt_identity()))
     if user.role != 'manager':
         return jsonify({'error': 'Akses ditolak'}), 403
-    
+
     # Gunakan build_summary_payload agar konsisten dengan hirarki & sorting
     year = request.args.get('year', _default_report_year(), type=int)
     start_date = _parse_iso_date(request.args.get('start_date'))
     end_date = _parse_iso_date(request.args.get('end_date'))
     expenses = _get_summary_approved_expenses(year, start_date, end_date)
     summary_data, grand_total_val = _build_summary_payload(expenses)
-    
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Laporan Summary Bulanan"
-    
+
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
     headers = ["Kategori"] + months + ["Total"]
     ws.append(headers)
     for cell in ws[1]: cell.font = Font(bold=True)
-    
+
     for row in summary_data:
         is_parent = row.get('is_parent', False)
         level = row.get('level', 0)
         cat_name = row.get('category', '-')
-        
+
         # Tambahkan spasi untuk indentasi di Excel
         display_name = ("  " * level) + cat_name
-        
+
         monthly = row.get('monthly', {})
         row_values = [display_name]
         for i in range(1, 13):
             row_values.append(monthly.get(str(i), 0))
         row_values.append(row.get('yearly_total', 0))
-        
+
         ws.append(row_values)
         if is_parent:
             for cell in ws[ws.max_row]:
                 cell.font = Font(bold=True)
-                
+
     # Grand Total row
     gt_row = ["GRAND TOTAL"]
     for i in range(1, 13):
@@ -352,7 +399,7 @@ def generate_excel_report():
     for i, col_name in enumerate(headers, 1):
         ws.column_dimensions[get_column_letter(i)].width = 15
     ws.column_dimensions['A'].width = 35
-    
+
     buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     return send_file(buffer, as_attachment=True, download_name=f"summary_{timestamp}.xlsx", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -364,19 +411,30 @@ def generate_excel_advance_report():
     # Natural Sort: panjang kode -> isi kode (A1, A2... A10)
     # Sertakan semua kategori agar data di kategori induk ikut muncul
     categories = Category.query.order_by(db.func.length(Category.code).asc(), Category.code.asc()).all()
-    
+
     category_map = {cat.id: cat for cat in categories}
     cat_col_map = {cat.name: i + 4 for i, cat in enumerate(categories)}
     from models import Advance
+
     advance_id = request.args.get('advance_id', type=int)
-    start_date_str = request.args.get('start_date'); end_date_str = request.args.get('end_date')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
     query = Advance.query.filter_by(id=advance_id) if advance_id else Advance.query.filter_by(status='approved')
+
     if start_date_str:
-        try: query = query.filter(Advance.approved_at >= datetime.strptime(start_date_str, '%Y-%m-%d'))
-        except ValueError: pass
+        try:
+            query = query.filter(Advance.approved_at >= datetime.strptime(start_date_str, '%Y-%m-%d'))
+        except ValueError as e:
+            logger.debug(f'Invalid start_date format: {start_date_str} - {e}')
+
     if end_date_str:
-        try: query = query.filter(Advance.approved_at <= datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59))
-        except ValueError: pass
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+            query = query.filter(Advance.approved_at <= end_date)
+        except ValueError as e:
+            logger.debug(f'Invalid end_date format: {end_date_str} - {e}')
+
     approved_advances = query.order_by(Advance.approved_at.asc()).all()
     wb = Workbook(); ws = wb.active; ws.title = "Laporan Perencanaan Kasbon"
     headers = ["Tanggal Disetujui", "Deskripsi Kasbon", "Karyawan", "Judul Kasbon"] + [cat.name for cat in categories]

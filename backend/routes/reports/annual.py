@@ -3,10 +3,12 @@
 import os
 import re
 import json
+import logging
 from datetime import datetime
 from io import BytesIO
 from copy import copy
 from collections import OrderedDict
+from typing import List, Dict, Optional, Any, Tuple
 from flask import jsonify, send_file, current_app, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from openpyxl import load_workbook
@@ -30,8 +32,28 @@ from .helpers import (
     _pick_template_formula_col, _get_expense_blocks, _parse_iso_date,
     _to_float, _as_iso_date, _idr_from_currency, _shorten, _map_expense_column,
     _is_batch_settlement, _clean_settlement_title, _group_annual_expenses,
+    _format_date_dd_mmm_yy, _set_formula_with_format, _set_date_with_format,
 )
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Column width constants
+COLUMN_WIDTH_CURRENCY = 5
+COLUMN_WIDTH_EXCHANGE = 10
+COLUMN_WIDTH_CATEGORY = 18
+ROW_HEIGHT_HEADER_VERTICAL = 60
+ROW_HEIGHT_DIVIDEND = 20
+
+# Row constants
+EXPENSE_HEADER_ROW = 40
+EXPENSE_START_ROW = 41
+REVENUE_START_ROW = 8
+TAX_START_ROW = 26
+
+# Template row limits
+REVENUE_TEMPLATE_END = 22
+TAX_TEMPLATE_END = 37
 
 PARENT_CATEGORY_NAMES = {
     'biaya operasi',
@@ -47,8 +69,6 @@ PARENT_CATEGORY_NAMES = {
 
 # Green style for category headers (matching template)
 GREEN_FILL = PatternFill(fill_type='solid', fgColor='C6EFCE')
-GREEN_FONT = Font(bold=True, color='000000', size=10)  # Black font like "Jumlah"
-UNIFORM_CATEGORY_WIDTH = 18
 
 # Border style for all cells (thin black border)
 THIN_BORDER = Border(
@@ -245,23 +265,24 @@ def _compute_dividend_distribution(revenues, expenses, profit_retained, recipien
         'dividend_per_person': dividend_per_person,
     }
 
-def _build_annual_payload_from_db(year):
+def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
+    """Build annual report payload from database."""
     from models import Dividend, DividendSetting, Revenue, Tax
 
-    print(f'[ANNUAL_PAYLOAD] Building payload for year={year}')
+    logger.debug(f'Building payload for year={year}')
 
     has_report_tags = _has_any_report_tags()
     tagged_revenue_ids = _tagged_ids_for_year('revenues', year)
     tagged_tax_ids = _tagged_ids_for_year('taxes', year)
 
-    print(f'[ANNUAL_PAYLOAD] Report tags: has={has_report_tags}, revenue_ids={tagged_revenue_ids}, tax_ids={tagged_tax_ids}')
+    logger.debug(f'Report tags: has={has_report_tags}, revenue_ids={len(tagged_revenue_ids)}, tax_ids={len(tagged_tax_ids)}')
 
     if has_report_tags:
         if tagged_revenue_ids:
             revenues_raw = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
             # ✅ Filter tagged revenue by year too - handle None invoice_date
             revenues_raw = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
-            print(f'[ANNUAL_PAYLOAD] Filtered {len(revenues_raw)} tagged revenues from {len(revenues_raw)} for year {year}')
+            logger.debug(f'Filtered {len(revenues_raw)} tagged revenues for year {year}')
             # Meskipun ada tags, tetap urutkan berdasarkan tanggal invoice agar logis
             revenues = sorted(revenues_raw, key=lambda r: (r.invoice_date or datetime.min.date(), r.id))
         else:
@@ -270,17 +291,17 @@ def _build_annual_payload_from_db(year):
         revenues_raw = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
         # ✅ Filter tagged revenue by year too - handle None invoice_date
         revenues = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
-        print(f'[ANNUAL_PAYLOAD] Filtered {len(revenues)} tagged revenues from {len(revenues_raw)} for year {year}')
+        logger.debug(f'Filtered {len(revenues)} tagged revenues from {len(revenues_raw)} for year {year}')
         revenues.sort(key=lambda r: (r.invoice_date or datetime.min.date(), r.id))
     else:
         # ✅ FIX: Use Python filter for consistent year filtering
         all_revenues = Revenue.query.order_by(Revenue.invoice_date.asc(), Revenue.id.asc()).all()
         revenues = [r for r in all_revenues if (r.invoice_date and r.invoice_date.year == year)]
-        print(f'[ANNUAL_PAYLOAD] Filtered {len(revenues)} revenues from {len(all_revenues)} total for year {year}')
+        logger.debug(f'Filtered {len(revenues)} revenues from {len(all_revenues)} for year {year}')
 
-    print(f'[ANNUAL_PAYLOAD] Loaded {len(revenues)} revenues for year {year}')
+    logger.debug(f'Loaded {len(revenues)} revenues for year {year}')
     if revenues:
-        print(f'[ANNUAL_PAYLOAD] Revenue date range: {revenues[0].invoice_date} to {revenues[-1].invoice_date}')
+        logger.debug(f'Revenue date range: {revenues[0].invoice_date} to {revenues[-1].invoice_date}')
 
     if has_report_tags:
         if tagged_tax_ids:
@@ -300,11 +321,11 @@ def _build_annual_payload_from_db(year):
         # ✅ FIX: Use Python filter for consistent year filtering
         all_taxes = Tax.query.order_by(Tax.date.asc(), Tax.id.asc()).all()
         taxes = [t for t in all_taxes if (t.date and t.date.year == year)]
-        print(f'[ANNUAL_PAYLOAD] Filtered {len(taxes)} taxes from {len(all_taxes)} total for year {year}')
+        logger.debug(f'Filtered {len(taxes)} taxes from {len(all_taxes)} for year {year}')
 
-    print(f'[ANNUAL_PAYLOAD] Loaded {len(taxes)} taxes for year {year}')
+    logger.debug(f'Loaded {len(taxes)} taxes for year {year}')
     if taxes:
-        print(f'[ANNUAL_PAYLOAD] Tax date range: {taxes[0].date} to {taxes[-1].date}')
+        logger.debug(f'Tax date range: {taxes[0].date} to {taxes[-1].date}')
 
     expenses_query = Expense.query.join(
         Settlement, Expense.settlement_id == Settlement.id
@@ -314,16 +335,16 @@ def _build_annual_payload_from_db(year):
     )
     expenses = expenses_query.order_by(Expense.date.asc()).all()
 
-    print(f'[ANNUAL_PAYLOAD] Loaded {len(expenses)} expenses for year {year}')
+    logger.debug(f'Loaded {len(expenses)} expenses for year {year}')
     if expenses:
-        print(f'[ANNUAL_PAYLOAD] Expense date range: {expenses[0].date} to {expenses[-1].date}')
+        logger.debug(f'Expense date range: {expenses[0].date} to {expenses[-1].date}')
 
     dividends = Dividend.query.filter(
         db.extract('year', Dividend.date) == year,
     ).order_by(Dividend.date.asc(), Dividend.id.asc()).all()
     dividend_setting = DividendSetting.query.filter_by(year=year).first()
 
-    print(f'[ANNUAL_PAYLOAD] Loaded {len(dividends)} dividends for year {year}')
+    logger.debug(f'Loaded {len(dividends)} dividends for year {year}')
 
     revenue_data = [r.to_dict() for r in revenues]
     tax_data = [t.to_dict() for t in taxes]
@@ -735,34 +756,37 @@ def _group_expenses_by_subcategory(expenses):
     }
 
 
-def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year, start_row=41):
+def _render_expense_section_from_data(
+    ws,
+    expenses: List[Dict],
+    cat_names: List[str],
+    category_by_id_map: Dict,
+    year: int,
+    start_row: int = 41
+) -> int:
     """
-    ✅ NEW DATA-DRIVEN APPROACH: Render expense section from scratch.
-    Same logic as frontend Flutter app.
-
-    Structure:
-    - Single expenses grouped by subcategory (A-Z)
-    - Batch expenses grouped by settlement, then subcategory (A-Z)
-    - Total row with category totals
+    Render expense section from data.
 
     Args:
-        ws: Excel worksheet
-        expenses: List of expense dicts from API
-        cat_names: List of category names from DB
-        category_by_id_map: Dict mapping category_id to category object
+        ws: Worksheet object
+        expenses: List of expense dictionaries
+        cat_names: List of category names
+        category_by_id_map: Category ID to object mapping
         year: Report year
-        start_row: Starting row for expense data (default: 41)
+        start_row: Starting row number
+
+    Returns:
+        Total row number
     """
-    print(f'[EXPENSE_RENDER] Starting data-driven expense rendering...')
-    print(f'[EXPENSE_RENDER] Total expenses: {len(expenses)}')
-    print(f'[EXPENSE_RENDER] Categories: {cat_names}')
+    logger.debug('Starting data-driven expense rendering')
+    logger.debug(f'Total expenses: {len(expenses)}, Categories: {cat_names}')
 
     last_category_col = 9 + len(cat_names) - 1
     white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
-    green_fill = GREEN_FILL  # Separator between single and batch
-    blue_fill = BLUE_FILL    # Batch headers
+    green_fill = GREEN_FILL
+    blue_fill = BLUE_FILL
 
-    # ✅ STEP 1: Separate single vs batch expenses
+    # STEP 1: Separate single vs batch expenses
     single_expenses = [
         e for e in expenses
         if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
@@ -772,24 +796,22 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         if _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
     ]
 
-    print(f'[EXPENSE_RENDER] Single expenses: {len(single_expenses)}, Batch expenses: {len(batch_expenses)}')
+    logger.debug(f'Single: {len(single_expenses)}, Batch: {len(batch_expenses)}')
 
-    # ✅ STEP 2: Sort single expenses by imported row, then date, then id
+    # STEP 2: Sort single expenses
     single_expenses.sort(key=lambda e: (
         _extract_imported_row(e.get('notes')) is None,
         _extract_imported_row(e.get('notes')) or 10**9,
         int(e.get('id') or 0),
     ))
 
-    # ✅ STEP 3: Group single expenses by subcategory
+    # STEP 3: Group by subcategory
     single_grouped = _group_expenses_by_subcategory(single_expenses)
-    print(f'[EXPENSE_RENDER] Single expense subcategories: {list(single_grouped["groups"].keys())}')
+    logger.debug(f'Single subcategories: {list(single_grouped["groups"].keys())}')
 
-    # ✅ STEP 4: Render single expenses starting at start_row
+    # STEP 4: Render single expenses
     row_cursor = start_row
     seq_counter = 1
-
-    # ✅ Check if there's any single data BEFORE rendering
     has_single_data = bool(single_grouped['groups']) or bool(single_grouped['uncategorized'])
 
     if has_single_data:
@@ -830,7 +852,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
                         cell.font = cell.font.copy(bold=False)
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                date_val = _parse_iso_date(expense.get('date'))
+                date_val = _format_date_dd_mmm_yy(expense.get('date'))
                 _safe_set_cell(ws, row_cursor, 2, date_val)
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
@@ -873,7 +895,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
                     cell.font = cell.font.copy(bold=False)
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-            date_val = _parse_iso_date(expense.get('date'))
+            date_val = _format_date_dd_mmm_yy(expense.get('date'))
             _safe_set_cell(ws, row_cursor, 2, date_val)
             # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
             ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
@@ -917,7 +939,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         row_cursor += 1
 
     single_end_row = row_cursor - 1
-    print(f'[EXPENSE_RENDER] Single expenses rendered: rows {start_row}-{single_end_row}')
+    logger.debug(f'Single expenses rendered: rows {start_row}-{single_end_row}')
 
     # ✅ STEP 5: Render separator (green fill)
     separator_row = row_cursor
@@ -948,7 +970,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         key=lambda x: (int(x[0].split(':')[0]) if x[0].split(':')[0].isdigit() else 0, x[0])
     )
 
-    print(f'[EXPENSE_RENDER] Batch settlements: {len(sorted_batches)}')
+    logger.debug(f'Batch settlements: {len(sorted_batches)}')
 
     # ✅ Check if there's any batch data BEFORE rendering
     has_batch_data = bool(sorted_batches)
@@ -977,7 +999,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
 
             # Group batch items by subcategory
             batch_grouped = _group_expenses_by_subcategory(batch_items)
-            print(f'[EXPENSE_RENDER] Batch #{batch_counter} ({settlement_title}): subcategories={list(batch_grouped["groups"].keys())}')
+            logger.debug(f'Batch #{batch_counter} ({settlement_title}): subcategories={list(batch_grouped["groups"].keys())}')
 
             # Render batch subcategories
             batch_item_counter = 1
@@ -1011,7 +1033,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
                             cell.font = cell.font.copy(bold=False)
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                    date_val = _parse_iso_date(expense.get('date'))
+                    date_val = _format_date_dd_mmm_yy(expense.get('date'))
                     _safe_set_cell(ws, row_cursor, 2, date_val)
                     # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                     ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
@@ -1055,7 +1077,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
                         cell.font = cell.font.copy(bold=False)
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                date_val = _parse_iso_date(expense.get('date'))
+                date_val = _format_date_dd_mmm_yy(expense.get('date'))
                 _safe_set_cell(ws, row_cursor, 2, date_val)
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
@@ -1099,7 +1121,7 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
         row_cursor += 1
 
     batch_end_row = row_cursor - 1
-    print(f'[EXPENSE_RENDER] Batch expenses rendered: rows {separator_row + 1}-{batch_end_row}')
+    logger.debug(f'Batch expenses rendered: rows {separator_row + 1}-{batch_end_row}')
 
     # ✅ STEP 9: Render TOTAL row
     total_row = row_cursor
@@ -1132,17 +1154,17 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
 
     # ✅ CRITICAL: Unhide all used rows (start_row to total_row)
     _set_rows_hidden(ws, start_row, total_row, False)
-    print(f'[EXPENSE_RENDER] Unhid rows {start_row}-{total_row}')
+    logger.debug(f'Unhid rows {start_row}-{total_row}')
 
     # ✅ CRITICAL: Hide all rows after TOTAL to prevent old template data showing
     # Find max row in worksheet
     max_row = ws.max_row
     if total_row < max_row:
         _set_rows_hidden(ws, total_row + 1, max_row, True)
-        print(f'[EXPENSE_RENDER] Hid rows {total_row + 1}-{max_row}')
+        logger.debug(f'Hid rows {total_row + 1}-{max_row}')
 
-    print(f'[EXPENSE_RENDER] TOTAL row at {total_row}')
-    print(f'[EXPENSE_RENDER] Expense rendering completed successfully!')
+    logger.debug(f'TOTAL row at {total_row}')
+    logger.debug('Expense rendering completed successfully')
 
     return total_row
 
@@ -1410,6 +1432,7 @@ def _validate_revenue_data(revenues):
         transfer_fee = r.get('transfer_fee')
         if isinstance(transfer_fee, str):
             print(f"[VALIDATION ERROR] transfer_fee is string at revenue ID {r.get('id')}: '{transfer_fee}'")
+            logger.error(f"Validation error: transfer_fee is string at revenue ID {r.get('id')}")
             # Auto-fix: move string to remark, set transfer_fee to 0
             existing_remark = r.get('remark') or ''
             r['remark'] = f"{existing_remark} {transfer_fee}".strip()
@@ -1554,10 +1577,9 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_bs['A4'] = None  # Clean up mistake
         ws_bs['B4'] = f'BUSINESS SUMMARY | TAHUN {year}'
 
-        # ✅ FIX: Set consistent row height for main table (rows 6-16)
-        # Override template height to prevent row from being too tall
+        # FIX: Set consistent row height for main table (rows 6-16)
         for row in range(6, 17):
-            ws_bs.row_dimensions[row].height = 20
+            ws_bs.row_dimensions[row].height = ROW_HEIGHT_DIVIDEND
 
         # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
         # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 11)
@@ -1603,8 +1625,8 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_bs['G19'].font = Font(bold=True, size=14, name='Trebuchet MS')
         ws_bs['G19'].alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
 
-        # ✅ FIX: Set row height for header row
-        ws_bs.row_dimensions[19].height = 20
+        # FIX: Set row height for header row
+        ws_bs.row_dimensions[19].height = ROW_HEIGHT_DIVIDEND
 
         # Clear dividend data rows (20-80), columns B-G
         for row in range(20, 80):
@@ -1644,8 +1666,8 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             # Number format for amount (no decimals)
             ws_bs[f'E{row}'].number_format = '#,##0'
 
-            # ✅ FIX: Set consistent row height for all dividend rows (lebih kecil)
-            ws_bs.row_dimensions[row].height = 20
+        # FIX: Set consistent row height for all dividend rows
+        ws_bs.row_dimensions[row].height = ROW_HEIGHT_DIVIDEND
 
         # ✅ FIX: Apply border with NO vertical line between D and E for all dividend data rows
         for row in range(20, last_row + 1):
@@ -1752,107 +1774,120 @@ def get_annual_report_pdf():
 @reports_bp.route('/annual/excel', methods=['GET'])
 @jwt_required()
 def get_annual_report_excel():
+    """Generate and export annual report as Excel file."""
     user = User.query.get(int(get_jwt_identity()))
-    year = request.args.get('year', _default_report_year(), type=int)
 
-    print(f'[ANNUAL_EXCEL] Starting export for year={year}')
-
-    payload = _save_annual_payload_cache(year, _build_annual_payload_from_db(year))
-    revenues = payload.get('revenue', {}).get('data', [])
-    taxes = payload.get('tax', {}).get('data', [])
-    expenses = payload.get('operation_cost', {}).get('data', [])
-
-    print(f'[ANNUAL_EXCEL] Data loaded: {len(revenues)} revenues, {len(taxes)} taxes, {len(expenses)} expenses')
-
-    revenue_combine_groups = _manual_combine_groups_by_table('revenues', year)
-    tax_combine_groups = _manual_combine_groups_by_table('taxes', year)
-    imported_source_name = None
+    # Get and validate year parameter
     try:
-        imported_source_name = db.session.execute(sql_text(
-            """SELECT source_excel FROM report_entry_tags
-               WHERE report_year = :year AND source_excel IS NOT NULL AND TRIM(source_excel) <> ''
-               ORDER BY imported_at DESC, id DESC LIMIT 1"""),
-            {'year': int(year)}).scalar()
-    except Exception:
+        year = request.args.get('year', _default_report_year(), type=int)
+        current_year = datetime.now().year
+        # Allow year range from 2020 to 10 years in future (for planning/projection)
+        if not (2020 <= year <= current_year + 10):
+            error_msg = f'Year must be between 2020 and {current_year + 10}'
+            logger.error(f'Invalid year parameter: {year}')
+            return jsonify({'error': error_msg}), 400
+    except (TypeError, ValueError) as e:
+        logger.error(f'Invalid year parameter: {e}')
+        return jsonify({'error': 'Invalid year parameter'}), 400
+
+    logger.info(f'Starting Excel export for year={year}')
+
+    try:
+        # Load data
+        payload = _save_annual_payload_cache(year, _build_annual_payload_from_db(year))
+        revenues = payload.get('revenue', {}).get('data', [])
+        taxes = payload.get('tax', {}).get('data', [])
+        expenses = payload.get('operation_cost', {}).get('data', [])
+
+        logger.debug(f'Data loaded: {len(revenues)} revenues, {len(taxes)} taxes, {len(expenses)} expenses')
+
+        # Load manual combine groups
+        revenue_combine_groups = _manual_combine_groups_by_table('revenues', year)
+        tax_combine_groups = _manual_combine_groups_by_table('taxes', year)
+
+        # Get imported source name
         imported_source_name = None
-    template_dir = os.path.abspath(os.path.join(current_app.root_path, '..', 'excel'))
-    template_candidates = []
-    if imported_source_name:
+        try:
+            imported_source_name = db.session.execute(sql_text(
+                """SELECT source_excel FROM report_entry_tags
+                   WHERE report_year = :year AND source_excel IS NOT NULL AND TRIM(source_excel) <> ''
+                   ORDER BY imported_at DESC, id DESC LIMIT 1"""),
+                {'year': int(year)}).scalar()
+        except Exception:
+            logger.debug('No imported source name found')
+
+        template_dir = os.path.abspath(os.path.join(current_app.root_path, '..', 'excel'))
+
+        template_candidates = []
+        if imported_source_name:
+            template_candidates.extend([
+                os.path.abspath(os.path.join(template_dir, imported_source_name)),
+                os.path.abspath(os.path.join(current_app.root_path, '..', 'data', imported_source_name)),
+            ])
         template_candidates.extend([
-            os.path.abspath(os.path.join(template_dir, imported_source_name)),
-            os.path.abspath(os.path.join(current_app.root_path, '..', 'data', imported_source_name)),
+            os.path.abspath(os.path.join(template_dir, 'Revenue-Cost_2024_cleaned_asli_cleaned.xlsx')),
+            os.path.abspath(os.path.join(template_dir, 'Revenue-Cost_2024_cleaned.xlsx')),
         ])
-    template_candidates.extend([
-        os.path.abspath(os.path.join(template_dir, 'Revenue-Cost_2024_cleaned_asli_cleaned.xlsx')),
-        os.path.abspath(os.path.join(template_dir, 'Revenue-Cost_2024_cleaned.xlsx')),
-    ])
-    template_path = next((p for p in template_candidates if os.path.exists(p)), template_candidates[0])
+        template_path = next((p for p in template_candidates if os.path.exists(p)), template_candidates[0])
 
-    print(f'[ANNUAL_EXCEL] Template path: {template_path}')
+        logger.debug(f'Template path: {template_path}')
 
-    if not os.path.exists(template_path):
-        print(f'[ANNUAL_EXCEL] ERROR: Template not found: {template_path}')
-        return jsonify({'error': f'Template tidak ditemukan: {template_path}'}), 404
-    wb = load_workbook(template_path, keep_links=False)
-    _normalize_external_formula_refs(wb)
+        if not os.path.exists(template_path):
+            logger.error(f'Template not found: {template_path}')
+            return jsonify({'error': f'Template tidak ditemukan: {template_path}'}), 404
 
-    print(f'[ANNUAL_EXCEL] Template loaded, processing sheets...')
+        wb = load_workbook(template_path, keep_links=False)
+        _normalize_external_formula_refs(wb)
 
-    # ✅ DO NOT REMOVE TABLES FROM TEMPLATE - Keep structure intact!
-    # ws_temp.tables = []  ← REMOVED! Ini yang bikin Excel ngaco
-    print(f'[ANNUAL_EXCEL] Keeping Excel tables from template for proper Alt+A behavior')
+        logger.debug('Template loaded, processing sheets')
+        logger.debug('Keeping Excel tables from template for proper Alt+A behavior')
 
-    # Hapus semua sheet Laba rugi yang lama dari template (akan dibuat ulang dengan tahun yang benar)
-    sheets_to_remove = [name for name in wb.sheetnames if name.startswith('Laba rugi -')]
-    for sheet_name in sheets_to_remove:
-        del wb[sheet_name]
+        # Hapus semua sheet Laba rugi yang lama dari template
+        sheets_to_remove = [name for name in wb.sheetnames if name.startswith('Laba rugi -')]
+        for sheet_name in sheets_to_remove:
+            del wb[sheet_name]
 
-    # Cari sheet Revenue-Cost (bisa Revenue-Cost_2024 atau nama lain)
-    revenue_cost_sheet_name = next((name for name in wb.sheetnames if name.startswith('Revenue-Cost')), None)
-    if revenue_cost_sheet_name:
-        ws = wb[revenue_cost_sheet_name]
-        # Rename sheet dengan tahun yang benar
-        ws.title = f'Revenue-Cost_{year}'
-    else:
-        ws = wb.active
-        ws.title = f'Revenue-Cost_{year}'
+        # Cari dan rename sheet Revenue-Cost
+        revenue_cost_sheet_name = next((name for name in wb.sheetnames if name.startswith('Revenue-Cost')), None)
+        if revenue_cost_sheet_name:
+            ws = wb[revenue_cost_sheet_name]
+            ws.title = f'Revenue-Cost_{year}'
+        else:
+            ws = wb.active
+            ws.title = f'Revenue-Cost_{year}'
 
-    # Update header document dengan tahun yang benar
-    _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
-    _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
+        # Update header document
+        _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
+        _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
 
-    # ✅ VALIDATE DATA BEFORE RENDER (prevent type bugs)
-    _validate_revenue_data(revenues)
+        # VALIDATE DATA BEFORE RENDER
+        _validate_revenue_data(revenues)
 
-    # ✅ MERGE D & E for header "Detail/Description" (row 6 = REVENUE_HEADER_ROW - 1)
-    # This makes the Description column wider and matches template design
-    header_desc_row = REVENUE_HEADER_ROW - 1  # Row 6
-    try:
-        ws.merge_cells(f'D{header_desc_row}:E{header_desc_row}')
+        # MERGE D & E for header "Detail/Description"
+        header_desc_row = REVENUE_HEADER_ROW - 1
+        try:
+            ws.merge_cells(f'D{header_desc_row}:E{header_desc_row}')
+        except Exception as e:
+            logger.warning(f'Failed to merge header: {e}')
+
+        # Set Q7 as example for Remark column
+        try:
+            ws.cell(row=7, column=17).value = 'con: inc.PPN11%'
+            ws.cell(row=7, column=17).font = Font(italic=True, color='808080')
+            ws.cell(row=7, column=17).alignment = Alignment(horizontal='center')
+        except Exception as e:
+            logger.warning(f'Failed to set Q7 example: {e}')
+
+        # Clear data area
+        _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 17)
+        _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 17)
+
+        # Render revenue data
+        row_cursor = REVENUE_START_ROW
+        has_revenue_data = len(revenues) > 0
     except Exception as e:
-        print(f'[REVENUE] Failed to merge header: {e}')
-
-    # ✅ Set Q7 as example for Remark column (con: inc.PPN11%)
-    # This is a template example for companies to follow
-    try:
-        ws.cell(row=7, column=17).value = 'con: inc.PPN11%'
-        ws.cell(row=7, column=17).font = Font(italic=True, color='808080')
-        ws.cell(row=7, column=17).alignment = Alignment(horizontal='center')
-    except Exception as e:
-        print(f'[REVENUE] Failed to set Q7 example: {e}')
-
-    # Clear data area with force clear to handle any remaining issues
-    # Clear rows 8-22 (data area + total row position) - include column Q (17) to remove template "inc.PPN11%"
-    _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 17)
-    # Clear row 23 (separator between Table 1 and Table 2) - keep visible!
-    _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 17)
-    # NOTE: Row 23 is NOT hidden - it's the separator between Table 1 and Table 2
-
-    # ✅ Render revenue data - SIMPLE & CLEAN with explicit column constants
-    row_cursor = REVENUE_START_ROW
-
-    # ✅ Check if there's any revenue data BEFORE rendering
-    has_revenue_data = len(revenues) > 0
+        logger.error(f'Error during initial setup: {e}')
+        raise
 
     if has_revenue_data:
         for idx, r in enumerate(revenues, 1):
@@ -1877,7 +1912,7 @@ def get_annual_report_excel():
                 remark = remark_from_db  # Keep "Pemungut" and other remarks
 
             # ✅ Write Date and Seq columns (B and C)
-            _safe_set_cell(ws, row_cursor, COL_DATE, _parse_iso_date(r.get('invoice_date')))
+            _safe_set_cell(ws, row_cursor, COL_DATE, _format_date_dd_mmm_yy(r.get('invoice_date')))
             _safe_set_cell(ws, row_cursor, COL_SEQ, idx)
 
             # ✅ MERGE D:E for description using helper (col_start=4, col_end=5)
@@ -1903,7 +1938,10 @@ def get_annual_report_excel():
                 _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, '')
 
             _safe_set_cell(ws, row_cursor, COL_CLIENT, r.get('client') or '')
-            _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _parse_iso_date(r.get('receive_date')))
+            _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _format_date_dd_mmm_yy(r.get('receive_date')))
+            # Format receive date as dd-mmm-yy
+            ws.cell(row=row_cursor, column=COL_RECEIVE_DATE).number_format = 'dd-mmm-yy'
+            # Format numeric columns with thousand separator
             _safe_set_number(ws, row_cursor, COL_AMOUNT_RECEIVED, amount_received)
             _safe_set_number(ws, row_cursor, COL_PPN, p_ppn)
             _safe_set_number(ws, row_cursor, COL_PPH_23, p_pph23)
@@ -1952,15 +1990,11 @@ def get_annual_report_excel():
     ws.cell(row=total_revenue_row, column=2).font = Font(bold=True)
 
     # ✅ Set total row with Excel formulas (column letters per template)
-    _safe_set_cell(ws, total_revenue_row, COL_INVOICE_VALUE, f'=SUM(F{REVENUE_START_ROW}:F{last_revenue_row})')
-    # Column L = AMOUNT RECEIVED (COL_AMOUNT_RECEIVED = 12)
-    _safe_set_cell(ws, total_revenue_row, COL_AMOUNT_RECEIVED, f'=SUM(L{REVENUE_START_ROW}:L{last_revenue_row})')
-    # Column M = PPn (COL_PPN = 13)
-    _safe_set_cell(ws, total_revenue_row, COL_PPN, f'=SUM(M{REVENUE_START_ROW}:M{last_revenue_row})')
-    # Column N = PPH 23 (COL_PPH_23 = 14)
-    _safe_set_cell(ws, total_revenue_row, COL_PPH_23, f'=SUM(N{REVENUE_START_ROW}:N{last_revenue_row})')
-    # Column O = Transfer Fee (COL_TRANSFER_FEE = 15)
-    _safe_set_cell(ws, total_revenue_row, COL_TRANSFER_FEE, f'=SUM(O{REVENUE_START_ROW}:O{last_revenue_row})')
+    _set_formula_with_format(ws, total_revenue_row, COL_INVOICE_VALUE, f'=SUM(F{REVENUE_START_ROW}:F{last_revenue_row})')
+    _set_formula_with_format(ws, total_revenue_row, COL_AMOUNT_RECEIVED, f'=SUM(L{REVENUE_START_ROW}:L{last_revenue_row})')
+    _set_formula_with_format(ws, total_revenue_row, COL_PPN, f'=SUM(M{REVENUE_START_ROW}:M{last_revenue_row})')
+    _set_formula_with_format(ws, total_revenue_row, COL_PPH_23, f'=SUM(N{REVENUE_START_ROW}:N{last_revenue_row})')
+    _set_formula_with_format(ws, total_revenue_row, COL_TRANSFER_FEE, f'=SUM(O{REVENUE_START_ROW}:O{last_revenue_row})')
     _safe_set_cell(ws, total_revenue_row, COL_REMARK, '')  # ✅ Remark column = empty text
 
     # ✅ STYLE KOLOM KUNING (I sampai N)
@@ -1973,7 +2007,7 @@ def get_annual_report_excel():
     if total_revenue_row < REVENUE_TEMPLATE_END:
         _set_rows_hidden(ws, total_revenue_row + 1, REVENUE_TEMPLATE_END, True)
 
-    print(f'[ANNUAL_EXCEL] Revenue: {len(revenues)} rows, last_data={last_revenue_row}, total_row={total_revenue_row}')
+    logger.debug(f'Revenue: {len(revenues)} rows, last_data={last_revenue_row}, total_row={total_revenue_row}')
 
     visible_tax_rows = max(1, min(len(taxes), 10))
 
@@ -1987,7 +2021,7 @@ def get_annual_report_excel():
     try:
         ws.merge_cells(f'D{tax_header_row}:E{tax_header_row}')
     except Exception as e:
-        print(f'[TAX] Failed to merge header: {e}')
+        logger.warning(f'Failed to merge tax header: {e}')
 
     # ✅ Clear data area - UNMERGE D:E FIRST (from template), then clear values
     # This is CRITICAL to remove existing merge from template before rendering
@@ -2009,7 +2043,7 @@ def get_annual_report_excel():
     for idx, t in enumerate(taxes[:10]):
         row = TAX_START_ROW + idx  # ✅ EXPLICIT ROW CALCULATION (27 + idx)
 
-        _safe_set_cell(ws, row, 2, _parse_iso_date(t.get('date')))
+        _safe_set_cell(ws, row, 2, _format_date_dd_mmm_yy(t.get('date')))
         _safe_set_cell(ws, row, 3, idx + 1)
 
         # ✅ MERGE D:E for TAX description using helper
@@ -2028,6 +2062,7 @@ def get_annual_report_excel():
         _safe_set_number(ws, row, 8, _to_float(t.get('currency_exchange'), default=1) or 1)
 
         # ✅ Set DPP & Value ONLY for tax that has value (not all columns!)
+        # Format all numeric columns with thousand separator
         if ppn_val > 0:
             _safe_set_number(ws, row, 9, trans_val)  # DPP PPN
             _safe_set_number(ws, row, 10, ppn_val)   # PPN Value
@@ -2096,10 +2131,10 @@ def get_annual_report_excel():
     ws.cell(row=total_tax_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
     ws.cell(row=total_tax_row, column=2).font = Font(bold=True)
 
-    ws.cell(row=total_tax_row, column=10).value = f'=SUM(J{TAX_START_ROW}:J{last_tax_data_row})'  # PPN
-    ws.cell(row=total_tax_row, column=12).value = f'=SUM(L{TAX_START_ROW}:L{last_tax_data_row})'  # PPh 21
-    ws.cell(row=total_tax_row, column=14).value = f'=SUM(N{TAX_START_ROW}:N{last_tax_data_row})'  # PPh 23
-    ws.cell(row=total_tax_row, column=16).value = f'=SUM(P{TAX_START_ROW}:P{last_tax_data_row})'  # PPh 26
+    _set_formula_with_format(ws, total_tax_row, 10, f'=SUM(J{TAX_START_ROW}:J{last_tax_data_row})')  # PPN
+    _set_formula_with_format(ws, total_tax_row, 12, f'=SUM(L{TAX_START_ROW}:L{last_tax_data_row})')  # PPh 21
+    _set_formula_with_format(ws, total_tax_row, 14, f'=SUM(N{TAX_START_ROW}:N{last_tax_data_row})')  # PPh 23
+    _set_formula_with_format(ws, total_tax_row, 16, f'=SUM(P{TAX_START_ROW}:P{last_tax_data_row})')  # PPh 26
     ws.cell(row=total_tax_row, column=9).value = 'PPN'
     ws.cell(row=total_tax_row, column=11).value = 'PPh'
     ws.cell(row=total_tax_row, column=13).value = 'PPh'
@@ -2128,16 +2163,16 @@ def get_annual_report_excel():
     category_by_id_map = {c.id: c for c in root_cats}
     _write_dynamic_category_headers(ws, root_cats)
 
-    # ✅ SET UNIFORM COLUMN WIDTH FOR ALL CATEGORIES
+    # SET UNIFORM COLUMN WIDTH FOR ALL CATEGORIES
     start_col = 9
     for offset in range(len(root_cats)):
         col = start_col + offset
         col_letter = get_column_letter(col)
-        ws.column_dimensions[col_letter].width = UNIFORM_CATEGORY_WIDTH
+        ws.column_dimensions[col_letter].width = COLUMN_WIDTH_CATEGORY
 
-    # ✅ FIX: Set column width for Currency (G) and Currency Exchange (H)
-    ws.column_dimensions['G'].width = 18  # Currency (IDR, USD, etc.)
-    ws.column_dimensions['H'].width = 35  # Currency Exchange rate (cukup untuk "Currency Exchange" vertikal + wrap)
+    # FIX: Set column width for Currency (G) and Currency Exchange (H)
+    ws.column_dimensions['G'].width = COLUMN_WIDTH_CURRENCY
+    ws.column_dimensions['H'].width = COLUMN_WIDTH_EXCHANGE
 
     # ✅ FIX: Override font for Expense header row (row 40) to Arial Narrow 12
     # Template uses Aptos Narrow 10, we want Arial Narrow 12
@@ -2157,41 +2192,47 @@ def get_annual_report_excel():
             # ✅ FIX: wrap_text=True + text_rotation=90 supaya text vertical wrap ke bawah
             cell.alignment = Alignment(horizontal='center', vertical='center', text_rotation=90, wrap_text=True)
 
-    # ✅ FIX: Set row height for header row to accommodate vertical text and wrapped category headers
-    ws.row_dimensions[EXPENSE_HEADER_ROW].height = 60
+    # FIX: Set row height for header row to accommodate vertical text and wrapped category headers
+    ws.row_dimensions[EXPENSE_HEADER_ROW].height = ROW_HEIGHT_HEADER_VERTICAL
 
     # Define last_category_col for use below
     last_category_col = 9 + len(cat_names) - 1
 
-    # ✅ TABLE 3: PENGELUARAN & OPERATION COST
-    # Panggil render function untuk mengisi data Table 3
-    print(f'[ANNUAL_EXCEL] Rendering Table 3 (Expenses) starting at row {EXPENSE_START_ROW}...')
+    # TABLE 3: PENGELUARAN & OPERATION COST
+    logger.debug(f'Rendering Table 3 (Expenses) starting at row {EXPENSE_START_ROW}')
     total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year, start_row=EXPENSE_START_ROW)
-    print(f'[ANNUAL_EXCEL] Table 3 rendered up to row {total_row}')
+    logger.debug(f'Table 3 rendered up to row {total_row}')
 
-    # ✅ DO NOT REMOVE TABLES - Keep template structure intact!
-    # ws.tables = []  ← REMOVED! Ini yang bikin Excel ngaco
-    print(f'[ANNUAL_EXCEL] Keeping Excel tables for proper Alt+A behavior')
+    # DO NOT REMOVE TABLES - Keep template structure intact
+    logger.debug('Keeping Excel tables for proper Alt+A behavior')
 
     final_main_sheet_name = f'Revenue-Cost_{year}'
     if ws.title != final_main_sheet_name:
         ws.title = final_main_sheet_name
-        print(f'[ANNUAL_EXCEL] Renamed sheet to {final_main_sheet_name}')
+        logger.debug(f'Renamed sheet to {final_main_sheet_name}')
 
     has_formatted_secondary = _ensure_formatted_secondary_sheets(wb, year, template_dir)
     if not has_formatted_secondary:
         _write_secondary_summary_sheets(wb, payload, year, final_main_sheet_name, expense_total_row=total_row)
-    # ✅ Pass dynamic expense total row to sync function
     _sync_formatted_secondary_sheets(wb, payload, year, final_main_sheet_name, expense_total_row=total_row)
+
     try:
         wb.calculation.calcMode = 'auto'
         wb.calculation.fullCalcOnLoad = True
         wb.calculation.forceFullCalc = True
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f'Failed to set calculation mode: {e}')
 
-    print(f'[ANNUAL_EXCEL] Export completed, sending file...')
+    logger.info('Export completed, sending file')
 
-    buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
-    filename = f'Revenue-Cost_{year}.xlsx'
-    return send_file(buffer, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    # CRITICAL: Error handling for Excel save and send
+    try:
+        buffer = BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        filename = f'Revenue-Cost_{year}.xlsx'
+        return send_file(buffer, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    except Exception as e:
+        logger.error(f'ERROR: Failed to save/export Excel: {e}')
+        wb.close()
+        raise

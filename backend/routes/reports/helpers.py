@@ -1,99 +1,103 @@
 # shared helper/utility function untuk package reports
 
 import re
+import logging
 from datetime import datetime
+from typing import Optional, Any, List, Dict, Tuple
 from copy import copy
 from flask import current_app
 from openpyxl.cell.cell import MergedCell
+from openpyxl.utils import get_column_letter as openpyxl_get_column_letter
+
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Default column constants
+DEFAULT_START_COL = 2
+DEFAULT_END_COL = 17
 
 
-def _default_report_year():
+def _default_report_year() -> int:
+    """Get default report year from config or current year."""
     return int(current_app.config.get('REPORT_DEFAULT_YEAR', datetime.now().year))
 
 
-def _safe_set_cell(ws, row, col, value):
-    # tulis ke cell hanya jika bukan mergedcell
+def _safe_set_cell(ws, row: int, col: int, value: Optional[Any]) -> None:
+    """Set cell value only if not a merged cell."""
     cell = ws.cell(row=row, column=col)
     if isinstance(cell, MergedCell):
         return
     cell.value = value
 
 
-def _get_top_left_cell(ws, row, col):
+def _get_top_left_cell(ws, row: int, col: int):
     """
     Get the top-left cell of a merged range.
     If cell is not merged, return the cell itself.
-    This ensures we always write to the correct cell in merged regions.
     """
     for merged_range in ws.merged_cells.ranges:
         min_col, min_row, max_col, max_row = merged_range.bounds
         if min_row <= row <= max_row and min_col <= col <= max_col:
-            # Return top-left cell of merged range
             return ws.cell(row=min_row, column=min_col)
-    # Not merged, return original cell
     return ws.cell(row=row, column=col)
 
 
-def _safe_set_cell_with_merge(ws, row, col, value):
+def _safe_set_cell_with_merge(ws, row: int, col: int, value: Optional[Any]) -> None:
     """
     Set cell value, handling merged cells correctly.
     Writes to top-left cell of merged range.
-    Handles None values by setting empty string.
     """
     cell = _get_top_left_cell(ws, row, col)
     cell.value = value if value is not None else ''
 
 
-def _merge_description_cell(ws, row, description, col_start=4, col_end=5):
+def _merge_description_cell(
+    ws,
+    row: int,
+    description: Optional[str],
+    col_start: int = 4,
+    col_end: int = 5
+) -> bool:
     """
     Merge columns D:E (or specified range) for description field.
     Handles unmerge first to avoid conflicts, then writes description.
-
-    Args:
-        ws: Worksheet
-        row: Row number
-        description: Description text to write
-        col_start: Start column (default 4 = D)
-        col_end: End column (default 5 = E)
 
     Returns:
         True if merge successful, False otherwise
     """
     try:
-        # Unmerge first to avoid conflicts
         ws.unmerge_cells(f'{_get_column_letter(col_start)}{row}:{_get_column_letter(col_end)}{row}')
     except Exception:
         pass
 
     try:
-        # Merge columns
         ws.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
-
-        # Write description to merged cell
         _safe_set_cell_with_merge(ws, row, col_start, description or '')
         return True
     except Exception as e:
-        print(f'[MERGE_DESC] Failed to merge row {row}: {e}')
-        # Fallback: write without merge
+        logger.debug(f'Failed to merge description cell at row {row}: {e}')
         _safe_set_cell(ws, row, col_start, description or '')
         return False
 
 
-def _get_column_letter(col_num):
-    """Convert column number to letter (1->A, 2->B, etc.)"""
-    from openpyxl.utils import get_column_letter
-    return get_column_letter(col_num)
+def _get_column_letter(col_num: int) -> str:
+    """Convert column number to letter (1->A, 2->B, etc.)."""
+    return openpyxl_get_column_letter(col_num)
 
 
-def _safe_set_number(ws, row, col, value, number_format='#,##0'):
-    # tulis nilai numerik dan paksa format numerik untuk menghindari artefak bergaya tanggal
+def _safe_set_number(
+    ws,
+    row: int,
+    col: int,
+    value: Optional[float],
+    number_format: str = '#,##0'
+) -> None:
+    """Set numeric value with format, skip if merged cell."""
     cell = ws.cell(row=row, column=col)
     if isinstance(cell, MergedCell):
         return
     cell.value = value
     cell.number_format = number_format
-
-
 def _unmerge_region(ws, start_row, end_row, start_col, end_col):
     """
     Find all merged ranges that overlap with the specified region and unmerge them.
@@ -121,7 +125,7 @@ def _unmerge_region(ws, start_row, end_row, start_col, end_col):
                 for c in range(r_range.min_col, r_range.max_col + 1):
                     ws.cell(row=r, column=c).border = original_border
         except Exception as e:
-            print(f'[EXCEL_RENDER] Warning: Failed to unmerge/restore {r_range}: {e}')
+            logger.debug(f'Warning: Failed to unmerge/restore {r_range}: {e}')
 
 
 def _normalize_external_formula_refs(wb):
@@ -369,6 +373,7 @@ def _get_expense_blocks(ws):
 
 
 def _parse_iso_date(date_str):
+    """Parse ISO date string and return date object."""
     if not date_str:
         return None
     try:
@@ -377,7 +382,27 @@ def _parse_iso_date(date_str):
         return None
 
 
+def _format_date_dd_mmm_yy(date_value) -> str:
+    """
+    Format date to DD-Mon-YY format (e.g., 11-Dec-24).
+    Accepts datetime object, date object, or ISO date string.
+    """
+    if not date_value:
+        return ''
+    try:
+        if isinstance(date_value, (datetime, datetime)):
+            return date_value.strftime('%d-%b-%y')
+        elif isinstance(date_value, str):
+            dt = datetime.strptime(date_value, '%Y-%m-%d')
+            return dt.strftime('%d-%b-%y')
+        return ''
+    except (ValueError, TypeError) as e:
+        logger.debug(f'Failed to format date: {date_value} - {e}')
+        return ''
+
+
 def _to_float(value, default=0.0):
+    """Convert value to float with default fallback."""
     if value is None:
         return default
     if isinstance(value, (int, float)):
@@ -386,6 +411,30 @@ def _to_float(value, default=0.0):
         return float(str(value).replace(',', '').strip())
     except Exception:
         return default
+
+
+def _set_formula_with_format(ws, row: int, col: int, formula: str, number_format: str = '#,##0') -> None:
+    """
+    Set formula with number format in one call.
+    Eliminates redundancy of setting formula and format separately.
+    """
+    cell = ws.cell(row=row, column=col)
+    if isinstance(cell, MergedCell):
+        return
+    cell.value = formula
+    cell.number_format = number_format
+
+
+def _set_date_with_format(ws, row: int, col: int, date_value, date_format: str = 'dd-mmm-yy') -> None:
+    """
+    Set date value with format in one call.
+    Eliminates redundancy of setting date and format separately.
+    """
+    cell = ws.cell(row=row, column=col)
+    if isinstance(cell, MergedCell):
+        return
+    cell.value = _format_date_dd_mmm_yy(date_value)
+    cell.number_format = date_format
 
 
 def _as_iso_date(value):

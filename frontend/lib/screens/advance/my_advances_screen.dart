@@ -493,6 +493,8 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
                           onChanged: (value) {
                             if (value == null) return;
                             prov.setReportYear(value, reload: true);
+                            // ✅ Load annual summary dengan tahun baru
+                            _loadAnnualAdvanceSummary();
                           },
                         ),
                       ),
@@ -674,6 +676,8 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
     final prov = context.read<AdvanceProvider>();
     await prov.syncReportYear();
     _reloadAdvances();
+    // ✅ Load annual summary setelah year di-sync
+    _loadAnnualAdvanceSummary();
   }
 
   Future<void> _exportExcel() async {
@@ -755,11 +759,9 @@ class _MyAdvancesScreenState extends State<MyAdvancesScreen> {
     super.initState();
     _listScrollController.addListener(_handleListScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // Parallel API calls untuk faster initial load
-      await Future.wait([
-        _loadDefaultReportYearAndReload(),
-        _loadAnnualAdvanceSummary(),
-      ]);
+      // ✅ Sequential: sync year first, then load data
+      await _loadDefaultReportYearAndReload();
+      // _loadAnnualAdvanceSummary() sudah dipanggil di dalam _loadDefaultReportYearAndReload()
     });
   }
 
