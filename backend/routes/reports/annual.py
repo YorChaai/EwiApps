@@ -108,11 +108,13 @@ def _write_dynamic_category_headers(ws, root_cats, header_row=40, start_col=9, t
 
         # ✅ APPLY GREEN STYLE TO ALL CATEGORIES (OLD + NEW)
         cell.fill = GREEN_FILL
-        cell.font = GREEN_FONT
+        # ✅ FIX: Use Arial Narrow 12 instead of Aptos Narrow 10
+        cell.font = Font(bold=True, size=12, name='Arial Narrow')
 
         # ✅ APPLY BORDER TO CATEGORY HEADERS
         cell.border = THIN_BORDER
 
+        # ✅ FIX: wrap_text=True supaya nama kategori panjang wrap ke bawah
         alignment = Alignment(wrap_text=True, horizontal='center', vertical='center')
         cell.alignment = alignment
 
@@ -138,6 +140,31 @@ def _is_true(value):
     if value is None:
         return False
     return str(value).strip().lower() in ('1', 'true', 'yes', 'y')
+
+
+def _set_dividend_row_border(ws, row, col_b='B', col_c='C', col_d='D', col_e='E'):
+    """
+    ✅ Helper function to set border for dividend row with NO vertical line between D and E
+    Reusable for header, data rows, and last row
+    """
+    # Column B: full border
+    ws.cell(row=row, column=2).border = THIN_BORDER
+    # Column C: full border
+    ws.cell(row=row, column=3).border = THIN_BORDER
+    # Column D: border without right side
+    ws.cell(row=row, column=4).border = Border(
+        left=Side(style='thin', color='000000'),
+        right=Side(style=None),
+        top=Side(style='thin', color='000000'),
+        bottom=Side(style='thin', color='000000')
+    )
+    # Column E: border without left side
+    ws.cell(row=row, column=5).border = Border(
+        left=Side(style=None),
+        right=Side(style='thin', color='000000'),
+        top=Side(style='thin', color='000000'),
+        bottom=Side(style='thin', color='000000')
+    )
 
 
 def _annual_cache_paths(year):
@@ -1080,26 +1107,17 @@ def _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_ma
     # Clear total row first to remove garbage data (meta columns 2-5)
     _clear_range(ws, total_row, total_row, 2, 5)
 
-    # Place TOTAL label in column 5 (Source) so it's next to Column 6 (Amount)
-    _safe_set_cell(ws, total_row, 5, 'TOTAL')
-    ws.cell(row=total_row, column=5).font = Font(bold=True)
-    ws.cell(row=total_row, column=5).alignment = Alignment(horizontal='right')
+    # ✅ FIX: Merge columns B to H (Date to Amount) for TOTAL row
+    # Column B=2, H=8, so merge B{total_row}:H{total_row}
+    merge_range = f'B{total_row}:H{total_row}'
+    ws.merge_cells(merge_range)
 
-    # ✅ DYNAMIC SUM FORMULA FOR IDR AMOUNT (Column 6)
-    _safe_set_cell(ws, total_row, 6, f'=SUM(F{start_row}:F{total_row-1})')
-    ws.cell(row=total_row, column=6).font = Font(bold=True)
-    ws.cell(row=total_row, column=6).number_format = '#,##0'
+    # Place TOTAL label in merged cell (starts at column B)
+    _safe_set_cell(ws, total_row, 2, 'TOTAL')
+    ws.cell(row=total_row, column=2).font = Font(bold=True)
+    ws.cell(row=total_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
 
-    # ✅ DYNAMIC SUM FORMULA FOR EACH CATEGORY COLUMN (Column 9 onwards)
-    for idx, cat_name in enumerate(cat_names):
-        col = 9 + idx
-        col_letter = get_column_letter(col)
-        formula = f'=SUM({col_letter}{start_row}:{col_letter}{total_row-1})'
-        ws.cell(row=total_row, column=col).value = formula
-        ws.cell(row=total_row, column=col).font = Font(bold=True)
-        ws.cell(row=total_row, column=col).number_format = '#,##0'
-
-    # Apply border to TOTAL row
+    # ✅ Apply border to TOTAL row
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=total_row, column=col)
         if not isinstance(cell, MergedCell):
@@ -1531,17 +1549,16 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_lr['J44'] = '=SUM(J41:J43)'
         ws_lr['J46'] = '=J44+J38'
 
-        # DEMONSTRASI KEAMANAN KOLOM: Menulis ke Kolom K (Kolom ke-11)
-        # Sesuai saran, kolom K ke kanan adalah "Kolom Aman"
-        ws_lr['K4'] = "CATATAN KEAMANAN"
-        ws_lr['K4'].font = Font(bold=True)
-        ws_lr['K5'] = "Kolom ini aman dari overwrite sistem."
-        ws_lr['K6'] = "Diverifikasi pada: " + datetime.now().strftime('%Y-%m-%d %H:%M')
-
     if 'Business Summary' in wb.sheetnames:
         ws_bs = wb['Business Summary']
         ws_bs['A4'] = None  # Clean up mistake
         ws_bs['B4'] = f'BUSINESS SUMMARY | TAHUN {year}'
+
+        # ✅ FIX: Set consistent row height for main table (rows 6-16)
+        # Override template height to prevent row from being too tall
+        for row in range(6, 17):
+            ws_bs.row_dimensions[row].height = 20
+
         # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
         # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 11)
         # PPh23 total: SUM of all revenue tax rows (COL_PPH_23 = 13)
@@ -1576,12 +1593,18 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         for col in ('B', 'C', 'D', 'E'):
             cell = ws_bs[f'{col}19']
             cell.font = Font(bold=True, size=14, name='Trebuchet MS')
-            cell.border = THIN_BORDER
-            cell.alignment = Alignment(horizontal='center')
+            # ✅ FIX: wrap_text=False untuk mencegah row melebar
+            cell.alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
+
+        # ✅ FIX: Apply border with NO vertical line between D and E for header
+        _set_dividend_row_border(ws_bs, 19)
 
         # Header Pajak (column G) - no border
         ws_bs['G19'].font = Font(bold=True, size=14, name='Trebuchet MS')
-        ws_bs['G19'].alignment = Alignment(horizontal='center')
+        ws_bs['G19'].alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
+
+        # ✅ FIX: Set row height for header row
+        ws_bs.row_dimensions[19].height = 20
 
         # Clear dividend data rows (20-80), columns B-G
         for row in range(20, 80):
@@ -1608,27 +1631,30 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             # ✅ FIX: Apply border AND center alignment to ALL cells including column #
             for col in ('B', 'C', 'D', 'E'):
                 cell = ws_bs[f'{col}{row}']
-                cell.border = THIN_BORDER
                 cell.font = Font(size=14, name='Trebuchet MS')
                 # ✅ Center align column # (B), left align others
+                # ✅ FIX: wrap_text=False untuk mencegah row melebar
                 if col == 'B':
-                    cell.alignment = Alignment(horizontal='center', vertical='center')
+                    cell.alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
                 elif col == 'C':
-                    cell.alignment = Alignment(horizontal='left', vertical='center')
+                    cell.alignment = Alignment(wrap_text=False, horizontal='left', vertical='center')
                 elif col in ('D', 'E'):
-                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                    cell.alignment = Alignment(wrap_text=False, horizontal='right', vertical='center')
 
             # Number format for amount (no decimals)
             ws_bs[f'E{row}'].number_format = '#,##0'
 
-            # ✅ FIX: Set consistent row height for all dividend rows
-            ws_bs.row_dimensions[row].height = 30
+            # ✅ FIX: Set consistent row height for all dividend rows (lebih kecil)
+            ws_bs.row_dimensions[row].height = 20
+
+        # ✅ FIX: Apply border with NO vertical line between D and E for all dividend data rows
+        for row in range(20, last_row + 1):
+            _set_dividend_row_border(ws_bs, row)
 
         # Add bottom border at last row to close the table
         if num_dividends > 0:
-            for col in ('B', 'C', 'D', 'E'):
-                cell = ws_bs[f'{col}{last_row}']
-                cell.border = THIN_BORDER  # Same thin border as other cells
+            # ✅ FIX: Apply border with NO vertical line between D and E for last row
+            _set_dividend_row_border(ws_bs, last_row)
 
 def _clone_sheet_from_template(src_ws, target_wb, new_name):
     if new_name in target_wb.sheetnames: del target_wb[new_name]
@@ -1684,6 +1710,19 @@ def _ensure_formatted_secondary_sheets(wb, year, template_dir):
 
     _clone_sheet_from_template(donor_lr, wb, target_lr)
     _clone_sheet_from_template(donor_bs, wb, target_bs)
+
+    # ✅ FIX: Override column widths from template for Business Summary
+    # Template has wide columns, we want smaller consistent columns
+    if target_bs in wb.sheetnames:
+        ws_bs = wb[target_bs]
+        ws_bs.column_dimensions['A'].width = 1       # # column - kecil
+        ws_bs.column_dimensions['B'].width = 5       # # column - kecil
+        ws_bs.column_dimensions['C'].width = 40      # Items / Nama Lengkap (diperlebar)
+        ws_bs.column_dimensions['D'].width = 5       # Rp currency
+        ws_bs.column_dimensions['E'].width = 25      # Amount (diperlebar)
+        ws_bs.column_dimensions['F'].width = 4       # Empty separator
+        ws_bs.column_dimensions['G'].width = 10      # Pajak
+
     return True
 
 
@@ -2097,8 +2136,29 @@ def get_annual_report_excel():
         ws.column_dimensions[col_letter].width = UNIFORM_CATEGORY_WIDTH
 
     # ✅ FIX: Set column width for Currency (G) and Currency Exchange (H)
-    ws.column_dimensions['G'].width = 12  # Currency (IDR, USD, etc.)
-    ws.column_dimensions['H'].width = 16  # Currency Exchange rate
+    ws.column_dimensions['G'].width = 18  # Currency (IDR, USD, etc.)
+    ws.column_dimensions['H'].width = 35  # Currency Exchange rate (cukup untuk "Currency Exchange" vertikal + wrap)
+
+    # ✅ FIX: Override font for Expense header row (row 40) to Arial Narrow 12
+    # Template uses Aptos Narrow 10, we want Arial Narrow 12
+    # Only apply to columns B-H (non-category headers)
+    for col in range(2, 9):  # Columns B to H only
+        cell = ws.cell(row=EXPENSE_HEADER_ROW, column=col)
+        if not isinstance(cell, MergedCell):
+            cell.font = Font(bold=True, size=12, name='Arial Narrow')
+            # Default alignment: center
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+
+    # ✅ FIX: Set vertical text for Source (E=5), Currency (G=7), Currency Exchange (H=8)
+    # These columns should have text rotated 90 degrees (vertical)
+    for col_idx in (5, 7, 8):  # E, G, H
+        cell = ws.cell(row=EXPENSE_HEADER_ROW, column=col_idx)
+        if not isinstance(cell, MergedCell):
+            # ✅ FIX: wrap_text=True + text_rotation=90 supaya text vertical wrap ke bawah
+            cell.alignment = Alignment(horizontal='center', vertical='center', text_rotation=90, wrap_text=True)
+
+    # ✅ FIX: Set row height for header row to accommodate vertical text and wrapped category headers
+    ws.row_dimensions[EXPENSE_HEADER_ROW].height = 60
 
     # Define last_category_col for use below
     last_category_col = 9 + len(cat_names) - 1
