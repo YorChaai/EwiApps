@@ -70,23 +70,23 @@ def _validate_manual_revenue_group(year, row_ids):
 @jwt_required()
 def get_revenues():
     user = User.query.get(int(get_jwt_identity()))
-    
+
     # filter opsional
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
-    
+
     query = Revenue.query
-    
+
     if start_date_str:
         start_date = _parse_date(start_date_str)
         if start_date:
             query = query.filter(Revenue.invoice_date >= start_date)
-            
+
     if end_date_str:
         end_date = _parse_date(end_date_str)
         if end_date:
             query = query.filter(Revenue.invoice_date <= end_date)
-            
+
     revenues = query.order_by(Revenue.invoice_date.asc(), Revenue.id.asc()).all()
     return jsonify([r.to_dict() for r in revenues]), 200
 
@@ -114,6 +114,11 @@ def create_revenue():
     if not invoice_date or not description or invoice_value is None:
         return jsonify({'error': 'invoice_date, description, and invoice_value are required'}), 400
 
+    # Normalize and validate revenue_type
+    revenue_type = Revenue.normalize_revenue_type(data.get('revenue_type'))
+    if revenue_type not in (Revenue.REVENUE_DIRECT, Revenue.REVENUE_OTHER):
+        return jsonify({'error': 'Invalid revenue_type. Must be "pendapatan_langsung" or "pendapatan_lain_lain"'}), 400
+
     try:
         revenue = Revenue(
             invoice_date=invoice_date,
@@ -128,7 +133,8 @@ def create_revenue():
             ppn=float(data['ppn']) if data.get('ppn') is not None else None,
             pph_23=float(data['pph_23']) if data.get('pph_23') is not None else None,
             transfer_fee=float(data['transfer_fee']) if data.get('transfer_fee') is not None else None,
-            remark=data.get('remark')
+            remark=data.get('remark'),
+            revenue_type=revenue_type
         )
         db.session.add(revenue)
         db.session.commit()
@@ -146,7 +152,7 @@ def update_revenue(revenue_id):
 
     revenue = Revenue.query.get_or_404(revenue_id)
     data = request.get_json()
-    
+
     if 'invoice_date' in data:
         revenue.invoice_date = _parse_date(data['invoice_date'])
     if 'description' in data:
@@ -173,6 +179,11 @@ def update_revenue(revenue_id):
         revenue.transfer_fee = float(data['transfer_fee']) if data['transfer_fee'] is not None else None
     if 'remark' in data:
         revenue.remark = data['remark']
+    if 'revenue_type' in data:
+        revenue_type = Revenue.normalize_revenue_type(data['revenue_type'])
+        if revenue_type not in (Revenue.REVENUE_DIRECT, Revenue.REVENUE_OTHER):
+            return jsonify({'error': 'Invalid revenue_type. Must be "pendapatan_langsung" or "pendapatan_lain_lain"'}), 400
+        revenue.revenue_type = revenue_type
 
     try:
         db.session.commit()

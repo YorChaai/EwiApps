@@ -407,7 +407,23 @@ class Revenue(db.Model):
     pph_23 = db.Column(db.Float, nullable=True)
     transfer_fee = db.Column(db.Float, nullable=True)
     remark = db.Column(db.Text, nullable=True)
+    revenue_type = db.Column(db.String(32), nullable=False, default='pendapatan_langsung', index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    REVENUE_DIRECT = 'pendapatan_langsung'
+    REVENUE_OTHER = 'pendapatan_lain_lain'
+
+    @staticmethod
+    def normalize_revenue_type(value):
+        raw = (value or '').strip().lower().replace(' ', '_')
+        mapping = {
+            'langsung': 'pendapatan_langsung',
+            'pendapatan_langsung': 'pendapatan_langsung',
+            'lain': 'pendapatan_lain_lain',
+            'lain_lain': 'pendapatan_lain_lain',
+            'pendapatan_lain_lain': 'pendapatan_lain_lain'
+        }
+        return mapping.get(raw, 'pendapatan_langsung')
 
     @property
     def idr_invoice_value(self):
@@ -439,6 +455,7 @@ class Revenue(db.Model):
             'pph_23': self.pph_23,
             'transfer_fee': self.transfer_fee,
             'remark': self.remark,
+            'revenue_type': self.revenue_type,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
