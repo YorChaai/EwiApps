@@ -16,7 +16,18 @@
       "Bash(pylint *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git *)",
+      "Bash(flutter *)",
+      "Bash(.\\venv\\scripts\\activate.ps1)",
+      "Bash(.\\venv\\scripts\\python.exe *)",
+      "WebFetch(github.com)",
+      "WebFetch(raw.githubusercontent.com)",
+      "Bash(tree *)",
+      "Bash(del *)",
+      "Bash(rmdir *)",
+      "Bash(move *)",
+      "Bash(mkdir *)"
     ]
   },
   "$version": 3

@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/advance_provider.dart';
 import '../../providers/settlement_provider.dart';
-import '../settlement_detail_screen.dart';
+import '../settlement/settlement_detail_screen.dart';
 import '../dashboard_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
