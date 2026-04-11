@@ -14,3 +14,10 @@ cloudflared tunnel --url http://127.0.0.1:5000
 # Opsional: Jika run di HP via Cloudflare, ubah baseUrl di lib/services/api_service.dart
 # cd "D:\2. Organize\1. Projects\MiniProjectKPI_EWI\frontend" && flutter run
 ```
+
+
+cd 'D:\2. Organize\1. Projects\MiniProjectKPI_EWI'
+git status
+git add .
+git commit -m "Fix: Konsistensi style Excel & empty state handling"
+git push origin main
