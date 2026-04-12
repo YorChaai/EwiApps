@@ -1,221 +1,367 @@
-# CHECKLIST UJI MANUAL REVISI 2 (Versi Sinkron Sistem Terbaru)
+# CHECKLIST UJI MANUAL - REVISI TERAKHIR
 
-Dokumen ini dipakai untuk regression test setelah perubahan besar backend/frontend:
-- notifikasi role-based + deep-link.
-- workflow kasbon/settlement draft vs submitted.
-- laporan annual/dividen/neraca.
-- perbaikan tema light mode dan keterbacaan font.
-
-Gunakan status hasil:
-- `OK`
-- `BUG`
-- `PERLU IMPROVE`
-
-Gunakan prioritas:
-- `TINGGI`: merusak data/alur utama.
-- `SEDANG`: alur jalan tapi membingungkan/berisiko.
-- `RENDAH`: kosmetik/non-blocking.
+> **Tanggal:** 12 April 2026  
+> **Update:** Restrukturisasi folder + Fix 4 Bug Critical  
+> **Status:** Siap testing manual
 
 ---
 
-## 1. Login, Sesi, Role, dan Akses Data
+## 📋 Panduan Testing
 
-### 1.1 Login
-- [ ] Login manager berhasil.
-- [ ] Login staff berhasil.
-- [ ] Login mitra (jika role aktif) berhasil.
-- [ ] Login dengan password salah ditolak dengan pesan jelas.
-- [ ] Logout membersihkan sesi.
-- [ ] Tutup-buka aplikasi, sesi valid tetap masuk otomatis.
-
-### 1.2 Otorisasi role
-- [ ] Manager melihat menu admin (Laporan, Kategori, Pengaturan).
-- [ ] Staff tidak melihat menu admin.
-- [ ] Staff tidak bisa buka data milik staff lain via UI.
-- [ ] Coba akses direct URL/path detail data user lain, backend tetap menolak.
-
-### 1.3 Integritas identitas
-- [ ] Nama dan role di sidebar sesuai user login.
-- [ ] Badge notifikasi dan pending mengikuti role aktif.
+| Field | Keterangan |
+|-------|-----------|
+| **Status** | ✅ OK / ❌ BUG / ⚠️ IMPROVE |
+| **Prioritas** | 🔴 TINGGI (data/alur utama) / 🟡 SEDANG (UI/UX) / 🟢 RENDAH (kosmetik) |
+| **Tester** | Nama siapa yang test |
+| **Tanggal** | Tanggal testing |
 
 ---
 
-## 2. Notifikasi (Wajib diuji detail)
+## 🔥 1. PENGHAPUSAN FILE SAMPAH
 
-### 2.1 Distribusi notifikasi per role
-- [ ] Manager menerima notifikasi aktivitas penting dari semua staff/mitra yang relevan.
-- [ ] Staff hanya menerima notifikasi aktivitas miliknya.
-- [ ] Mitra hanya menerima notifikasi aktivitas miliknya.
+### 1.1 Frontend - File Dihapus
+| Test | Detail | Status |
+|------|--------|--------|
+| `change_icon.bat` tidak ada lagi | Cek `frontend/` root | |
+| `repair.py` tidak ada lagi | Cek `frontend/` root | |
+| `analyze_output.txt` tidak ada lagi | Cek `frontend/` root | |
+| `settings_screen_backup.dart` tidak ada lagi | Cek `frontend/lib/screens/` | |
 
-### 2.2 Tampilan panel notifikasi
-- [ ] Klik icon bell membuka panel.
-- [ ] Ada tombol centang (`mark all read`).
-- [ ] Ada tombol silang `X` di kanan atas untuk menutup panel.
-- [ ] Teks notifikasi terbaca jelas di dark dan light theme.
-- [ ] Badge unread count turun setelah mark read.
+### 1.2 Backend - File Dihapus
+| Test | Detail | Status |
+|------|--------|--------|
+| Debug scripts tidak ada (6 files) | `debug_titles.py`, `fix_*.py`, `test_*.py` | |
+| Migration scripts tidak ada (9 files) | `migrate_add_*.py`, `migrate_sort_order*.py`, `migrate_evidence.py` | |
+| Folder `scripts/` tidak ada | 18 debug Excel files | |
+| Folder `_archive/` tidak ada | 7 archive files | |
+| Folder `backup/` di routes tidak ada | 3 backup files | |
+| `CODE_ANALYSIS_REPORT.md` tidak ada | Cek `backend/routes/reports/` | |
+| Database tidak terpakai tidak ada | `app.db`, `database_import_dividen.db`, `ewi.db` | |
+| Backend masih bisa jalan | Run `python app.py` tanpa error | |
 
-### 2.3 Aksi notifikasi
-- [ ] Tombol `Buka Settlement` mengarahkan ke detail settlement yang benar.
-- [ ] Tombol `Buka Kasbon` mengarahkan ke detail kasbon yang benar.
-- [ ] Klik item notifikasi juga menjalankan deep-link.
-- [ ] Hapus notifikasi menghilangkan item dari list.
-
----
-
-## 3. Kasbon (Advance) - Flow Inti
-
-### 3.1 Draft state
-- [ ] Saat status `draft`, header kasbon bisa diedit.
-- [ ] Saat status `draft`, item bisa tambah/edit/hapus.
-- [ ] Validasi form item berjalan (kategori, deskripsi, nominal).
-
-### 3.2 Submit/Approve/Reject
-- [ ] Submit draft mengubah status ke `submitted`.
-- [ ] Setelah submit, mode edit terkunci untuk staff.
-- [ ] Manager bisa approve.
-- [ ] Manager bisa reject dengan catatan.
-- [ ] Notifikasi terkirim ke pihak yang tepat.
-
-### 3.3 Revisi
-- [ ] Start revisi membuat status revisi yang benar.
-- [ ] Item revisi bisa dikelola pada revision draft.
-- [ ] Submit revisi -> manager approve/reject.
-- [ ] Hitungan total approved/base/revision konsisten.
-
-### 3.4 Sinkron list/filter
-- [ ] Ubah filter status/tahun/range tidak membuat data hilang semu.
-- [ ] Pindah menu lalu balik lagi, data list tetap sinkron.
+**Prioritas:** 🟢 RENDAH - Tidak mempengaruhi fitur
 
 ---
 
-## 4. Settlement - Flow Inti
+## 📁 2. RESTRUKTURISASI FOLDER FRONTEND
 
-### 4.1 Draft state
-- [ ] Saat `draft`, settlement bisa edit header.
-- [ ] Saat `draft`, item expense bisa tambah/edit/hapus.
-- [ ] Checklist reject bisa diisi/diupdate.
+### 2.1 Struktur Folder Baru
+| Test | Detail | Status |
+|------|--------|--------|
+| Folder `screens/auth/` ada | `login_screen.dart`, `register_screen.dart` | |
+| Folder `screens/management/` ada | 5 management screens | |
+| Folder `screens/reports/` ada | `report_screen.dart`, `annual_report_screen.dart` | |
+| Folder `screens/settings/` ada | `settings_screen.dart`, `balance_sheet_settings_screen.dart` | |
+| Folder `screens/settlement/` ada | `settlement_detail_screen.dart` | |
+| Tidak ada file berantakan di `screens/` root | Hanya `dashboard_screen.dart` | |
 
-### 4.2 Submit/Approve/Reject/Complete
-- [ ] Submit mengubah status settlement ke `submitted`.
-- [ ] Manager approve settlement berhasil.
-- [ ] Manager reject all dengan alasan berhasil.
-- [ ] Complete settlement hanya aktif saat syarat terpenuhi.
-- [ ] Setelah complete, data tidak bisa diubah sembarangan.
+### 2.2 Navigasi Aplikasi
+| Test | Detail | Status |
+|------|--------|--------|
+| Login screen terbuka normal | Dari `main.dart` | |
+| Dashboard screen terbuka normal | Navigasi dari login | |
+| Klik "Kasbon" → halaman advance | Buka `advances_screen.dart` | |
+| Klik "Settlement" → halaman settlement | Buka `settlement_detail_screen.dart` | |
+| Klik "Laporan" → halaman report | Buka `report_screen.dart` | |
+| Klik "Kategori" → halaman management | Buka `category_management_screen.dart` | |
+| Klik "Pengaturan" → halaman settings | Buka `settings_screen.dart` | |
+| Klik "Input Revenue" → revenue management | Dari annual report | |
+| Klik "Input Pajak" → tax management | Dari annual report | |
+| Klik "Input Dividen" → dividend management | Dari annual report | |
+| Klik "Input Neraca" → balance sheet settings | Dari annual report | |
 
-### 4.3 Rule visibility sesuai status
-- [ ] Untuk status non-draft, aksi edit tidak muncul bagi staff.
-- [ ] Pada status submitted, user hanya bisa lihat detail.
+### 2.3 Import Paths (Critical!)
+| Test | Detail | Status |
+|------|--------|--------|
+| Tidak ada error merah di VS Code | Cek semua file Dart | |
+| `flutter analyze` bersih | Run di terminal | |
+| App bisa build tanpa error | `flutter build apk` atau run | |
+| Hot reload tidak error | Ubah text di screen manapun | |
 
----
-
-## 5. Kategori
-
-### 5.1 CRUD kategori
-- [ ] Manager bisa tambah kategori utama.
-- [ ] Manager bisa tambah subkategori.
-- [ ] Edit/hapus kategori berjalan sesuai aturan.
-
-### 5.2 Approval kategori pending
-- [ ] Kategori baru masuk antrian pending.
-- [ ] Manager approve/reject kategori pending berhasil.
-- [ ] Jika parent belum approved, subkategori pending ditangani dengan pesan yang jelas.
-
----
-
-## 6. Laporan Summary
-
-### 6.1 Data dan filter
-- [ ] Tahun laporan bisa diganti.
-- [ ] Date range berfungsi.
-- [ ] Tabel summary menampilkan angka sesuai data approved.
-
-### 6.2 Export
-- [ ] Export PDF summary berhasil.
-- [ ] Export Excel summary berhasil.
-- [ ] File terbuka dan isi konsisten.
+**Prioritas:** 🔴 TINGGI - Kalau import salah, app tidak jalan
 
 ---
 
-## 7. Laporan Tahunan, Dividen, Neraca
+## 🐛 3. BUG FIX: REVENUE COMBINE LOGIC
 
-### 7.1 Annual report screen
-- [ ] Halaman memuat data tahunan terbaru saat dibuka.
-- [ ] Tabel Revenue/Tax/Operation tampil tanpa crash.
-- [ ] Grouping single/batch expense masuk ke section yang benar.
+### 3.1 Combine Manual Revenue
+| Test | Detail | Status |
+|------|--------|--------|
+| Pilih 2 baris dengan Receive Date sama → combine berhasil | Baris berurutan | |
+| Pilih 3 baris dengan Receive Date sama → combine berhasil | Baris berurutan | |
+| Pilih baris dengan Receive Date berbeda → ERROR | Pesan: "Receive Date harus sama" | |
+| Pilih baris tidak berurutan (skip 1 baris di tengah) → ERROR | Pesan: "Baris harus berurutan" | |
+| Combine group sudah ada → tidak bisa combine lagi | Pesan: "Lepas combine lama dulu" | |
 
-### 7.2 Input turunan annual
-- [ ] Tombol `Input Revenue` membuka layar revenue management.
-- [ ] Tombol `Input Pajak` membuka layar tax management.
-- [ ] Tombol `Input Dividen` membuka layar dividend management.
-- [ ] Tombol `Input Neraca` membuka layar balance sheet settings.
-- [ ] Setelah kembali dari input screen, annual report refresh data.
+### 3.2 Consistency UI vs Backend
+| Test | Detail | Status |
+|------|--------|--------|
+| Urutan di UI sama dengan backend | Sort berdasarkan `receive_date` | |
+| Pilih baris 1, 2 di UI → backend validasi benar | Tidak ada mismatch | |
+| Lepas combine berhasil | Group dihapus | |
 
-### 7.3 Export annual
-- [ ] Export annual PDF berhasil.
-- [ ] Export annual Excel berhasil.
-- [ ] Sheet utama + summary sheet terisi sesuai mapping terbaru.
-
----
-
-## 8. Tema dan Keterbacaan UI
-
-### 8.1 Light theme consistency
-- [ ] Sidebar, card, tabel, dialog tidak menyisakan warna dark hardcoded.
-- [ ] Font utama terlihat jelas (gelap di background terang).
-- [ ] Halaman Settlement/Kasbon/Laporan/Kategori/Annual konsisten dengan style light theme.
-
-### 8.2 Dark theme consistency
-- [ ] Kontras di dark tetap baik.
-- [ ] Komponen status badge tetap terbaca.
-
-### 8.3 Warna semantik
-- [ ] Alert success tetap hijau.
-- [ ] Alert error tetap merah.
-- [ ] Warning tetap kuning/oranye.
+**Prioritas:** 🔴 TINGGI - Bug critical, data bisa salah
 
 ---
 
-## 9. Pengaturan Sistem
+## 🐛 4. BUG FIX: TAX INPUT ANGKA
 
-### 9.1 Tema
-- [ ] Toggle Light/Dark/System bekerja.
-- [ ] Pilihan tema tersimpan setelah restart app.
+### 4.1 Parsing Angka Indonesia
+| Test | Detail | Status |
+|------|--------|--------|
+| Input `1.500.000,50` → jadi `1500000.50` | Format Indonesia benar | |
+| Input `1500000` → jadi `1500000` | Tanpa separator | |
+| Input `1,50` → jadi `1.50` | Desimal saja | |
+| Input kosong → jadi `null` | Valid | |
+| Input `abc` → ERROR | Pesan: "Angka tidak valid" | |
 
-### 9.2 Default tahun laporan
-- [ ] Ubah default tahun berhasil disimpan.
-- [ ] Screen report/annual membaca default tahun dengan benar.
+### 4.2 Format Angka di Dialog
+| Test | Detail | Status |
+|------|--------|--------|
+| Edit tax → angka tampil `1.500.000,00` | Format Indonesia | |
+| Edit tax → angka tampil `15.000.000,50` | Dengan desimal | |
+| Edit tax → angka tampil `0` | Zero value | |
+| Edit tax → angka tampil `-500.000,00` | Negatif | |
 
-### 9.3 Folder lampiran
-- [ ] Ubah direktori penyimpanan berhasil.
-- [ ] Data lama dipindahkan dengan aman (jika fitur aktif).
+### 4.3 Simpan Tax
+| Test | Detail | Status |
+|------|--------|--------|
+| Simpan tax dengan angka format Indonesia | Data tersimpan benar | |
+| Cek database → angka benar | Tidak ada corruption | |
+| Tampil di list → angka benar | Format konsisten | |
 
----
-
-## 10. Error Handling dan Stabilitas
-
-### 10.1 Error API/network
-- [ ] Saat backend mati, UI menampilkan pesan koneksi yang jelas.
-- [ ] Aplikasi tidak freeze saat request timeout.
-
-### 10.2 Error asset/font Flutter
-- [ ] Hot restart tidak memunculkan error `AssetManifest.bin` pada kondisi normal project.
-- [ ] Font fallback tetap menampilkan teks (tidak blank).
-
-### 10.3 Polling notifikasi
-- [ ] Polling berhenti saat logout/keluar halaman yang dispose provider.
-- [ ] Tidak ada lonjakan request berulang tak terkendali.
+**Prioritas:** 🔴 TINGGI - Uang bisa salah hitung
 
 ---
 
-## 11. Skenario Smoke Test Cepat (15 Menit)
+## 🐛 5. BUG FIX: CASCADE DELETE COMBINE GROUP
 
-1. Login manager.
-2. Buat kasbon draft, submit, approve.
-3. Buat settlement dari kasbon, submit, approve.
-4. Cek notifikasi manager/staff + deep-link tombol.
-5. Ganti ke light theme dan cek keterbacaan halaman utama.
-6. Export summary PDF/Excel.
-7. Buka annual report, export PDF/Excel.
+### 5.1 Delete Row dalam Group (2 rows)
+| Test | Detail | Status |
+|------|--------|--------|
+| Combine 2 rows → jadi group C1 | Buat group | |
+| Hapus 1 row dari group | Delete row | |
+| Group C1 otomatis terhapus | Tidak ada dangling group | |
+| Row lain tetap ada | Data tidak hilang | |
 
-Semua langkah di atas harus `OK` sebelum release internal.
+### 5.2 Delete Row dalam Group (3+ rows)
+| Test | Detail | Status |
+|------|--------|--------|
+| Combine 3 rows → jadi group C1 | Buat group | |
+| Hapus 1 row dari group | Delete row | |
+| Group C1 tetap ada (dengan 2 rows) | Row dihapus dari group | |
+| Cek `row_ids_json` → hanya 2 IDs | Data konsisten | |
+| 2 rows lain masih bisa di-combine | Tidak error | |
 
+### 5.3 Delete Row Bukan dalam Group
+| Test | Detail | Status |
+|------|--------|--------|
+| Delete row yang tidak di-combine | Normal delete | |
+| Group lain tidak terpengaruh | Tidak ada side effect | |
+| Data lain tetap utuh | Tidak ada corruption | |
+
+**Prioritas:** 🟡 SEDANG - Data bisa inconsistent
+
+---
+
+## 🐛 6. BUG FIX: TAX DIALOG NUMERIC FORMATTING
+
+### 6.1 Tampilan Dialog Tax
+| Test | Detail | Status |
+|------|--------|--------|
+| Buka dialog tambah tax → field kosong | Clean state | |
+| Edit tax existing → Transaction Value terformat | `1.500.000,00` | |
+| Edit tax existing → PPN terformat | `165.000.000,00` | |
+| Edit tax existing → PPh21 terformat | `3.000.000,00` | |
+| Edit tax existing → Currency Exchange terformat | `1,00` atau `15000,00` | |
+
+### 6.2 Input di Dialog
+| Test | Detail | Status |
+|------|--------|--------|
+| Ketik `1500000` → tampil `1.500.000` | Auto-format saat ketik | |
+| Ketik `1500000,50` → tampil `1.500.000,50` | Dengan desimal | |
+| Hapus semua → field kosong | Valid | |
+| Submit dengan format benar | Data tersimpan | |
+
+**Prioritas:** 🟢 RENDAH - UX improvement
+
+---
+
+## 📊 7. EXCEL REPORT - CONSISTENCY CHECK
+
+### 7.1 Revenue Ordering di Excel
+| Test | Detail | Status |
+|------|--------|--------|
+| Export Excel annual report | File terdownload | |
+| Buka Excel → revenue urut berdasarkan `Receive Date` | Bukan `Invoice Date` | |
+| Urutan di Excel SAMA dengan UI | Konsisten | |
+| Merge cell di kolom K (Receive Date) benar | Tidak berantakan | |
+| Merge cell di kolom L (Amt Received) benar | Tidak berantakan | |
+| Total row benar | Jumlah akurat | |
+
+### 7.2 Tax Ordering di Excel
+| Test | Detail | Status |
+|------|--------|--------|
+| Export Excel annual report | File terdownload | |
+| Buka Excel → tax urut berdasarkan `Date` | Konsisten | |
+| Merge cell di kolom B (Date) benar | Tidak berantakan | |
+| Merge cell di kolom F-Q (nilai pajak) benar | Tidak berantakan | |
+| Total row benar | Jumlah akurat | |
+
+### 7.3 Combine Groups di Excel
+| Test | Detail | Status |
+|------|--------|--------|
+| Buat combine group di UI | Group C1 | |
+| Export Excel → group C1 ter-merge dengan benar | Cell merge tepat | |
+| Nilai di-merge benar (total) | Bukan salah satu nilai | |
+| Tanggal di-merge benar | Semua tanggal sama | |
+
+**Prioritas:** 🔴 TINGGI - Report untuk management
+
+---
+
+## 📂 8. RENAME FILE
+
+### 8.1 Frontend File Rename
+| Test | Detail | Status |
+|------|--------|--------|
+| `my_advances_screen.dart` → `advances_screen.dart` | File renamed | |
+| Class `MyAdvancesScreen` → `AdvancesScreen` | Class renamed | |
+| Import di `dashboard_screen.dart` update | `advance/advances_screen.dart` | |
+| App tidak error saat buka halaman Kasbon | Navigation works | |
+
+### 8.2 Widget Rename
+| Test | Detail | Status |
+|------|--------|--------|
+| `settlement_widgets.dart` → `common_widgets.dart` | File renamed | |
+| Import di `dashboard_screen.dart` update | `widgets/common_widgets.dart` | |
+| Widget tetap berfungsi normal | UI tidak broken | |
+
+**Prioritas:** 🟡 SEDANG - Konsistensi nama
+
+---
+
+## ✅ 9. REGRESSION TEST - FITUR LAMA
+
+### 9.1 Login & Autentikasi
+| Test | Detail | Status |
+|------|--------|--------|
+| Login manager berhasil | Token tersimpan | |
+| Login staff berhasil | Token tersimpan | |
+| Password salah → error message | Valid | |
+| Logout → sesi bersih | Redirect ke login | |
+| Re-login setelah logout | Berhasil | |
+
+### 9.2 Kasbon (Advance)
+| Test | Detail | Status |
+|------|--------|--------|
+| Buat kasbon draft | Form valid | |
+| Tambah item kasbon | Item tersimpan | |
+| Submit kasbon | Status → submitted | |
+| Manager approve kasbon | Status → approved | |
+| Manager reject kasbon | Status → rejected | |
+| Notifikasi terkirim | Bell icon update | |
+
+### 9.3 Settlement
+| Test | Detail | Status |
+|------|--------|--------|
+| Buat settlement draft | Form valid | |
+| Tambah expense | Upload bukti | |
+| Submit settlement | Status → submitted | |
+| Manager approve settlement | Status → approved | |
+| Manager reject settlement | Status → rejected | |
+| Complete settlement | Status → completed | |
+
+### 9.4 Kategori
+| Test | Detail | Status |
+|------|--------|--------|
+| Manager tambah kategori | Kategori pending | |
+| Manager approve kategori | Kategori approved | |
+| Staff lihat kategori approved | Hanya approved | |
+| Manager edit kategori | Update berhasil | |
+| Manager hapus kategori | Cascade delete | |
+
+### 9.5 Dividen
+| Test | Detail | Status |
+|------|--------|--------|
+| Input dividen | Form valid | |
+| Hitung profit after tax | Formula benar | |
+| Distribusi dividen | Persentase benar | |
+| Export PDF dividen | File tergenerate | |
+
+### 9.6 Notifikasi
+| Test | Detail | Status |
+|------|--------|--------|
+| Bell icon ada di header | Visible | |
+| Badge unread count benar | Angka akurat | |
+| Klik notifikasi → deep link | Navigasi benar | |
+| Mark all read → badge hilang | Update UI | |
+| Polling berjalan | Real-time update | |
+
+### 9.7 Tema
+| Test | Detail | Status |
+|------|--------|--------|
+| Dark theme → UI gelap | Konsisten | |
+| Light theme → UI terang | Konsisten | |
+| Toggle theme → update instant | No lag | |
+| Restart app → tema tersimpan | Persistent | |
+
+### 9.8 Laporan Summary
+| Test | Detail | Status |
+|------|--------|--------|
+| Filter tahun → data update | Valid | |
+| Export PDF summary | File tergenerate | |
+| Export Excel summary | File tergenerate | |
+| Angka di report akurat | Sesuai database | |
+
+---
+
+## 🚀 10. SMOKE TEST CEPAT (10 MENIT)
+
+Jalankan ini untuk quick check sebelum release:
+
+```
+✅ 1. Login manager
+✅ 2. Buat kasbon → submit → approve
+✅ 3. Buat settlement → submit → approve
+✅ 4. Cek notifikasi → deep link bekerja
+✅ 5. Combine 2 revenue (Receive Date sama) → berhasil
+✅ 6. Combine revenue (Receive Date beda) → ERROR (benar!)
+✅ 7. Input tax `1.500.000,50` → tampil `1.500.000,50`
+✅ 8. Edit tax → angka terformat benar
+✅ 9. Delete row dalam combine group → group update/hapus
+✅ 10. Export Excel annual → urutan revenue benar
+✅ 11. Toggle dark/light theme → update
+✅ 12. flutter analyze → no issues
+```
+
+**Semua harus ✅ OK sebelum release!**
+
+---
+
+## 📝 CATATAN PENTING
+
+### Yang TIDAK Berubah (Tetap Sama):
+- ✅ Database schema tidak berubah
+- ✅ API endpoints tidak berubah
+- ✅ Logic dividen tidak berubah
+- ✅ Logic settlement tidak berubah
+- ✅ Tax combine logic sudah benar dari awal
+
+### Yang Berubah (Hati-hati):
+- 🔴 Urutan revenue di Excel (dari `invoice_date` → `receive_date`)
+- 🔴 Parsing angka di tax input (format Indonesia)
+- 🟡 Cascade delete untuk combine groups
+- 🟢 Numeric formatting di tax dialog
+
+### Potensi Side Effects:
+- ⚠️ Excel report urutan baris berubah (tapi data tetap sama)
+- ⚠️ User terbiasa urutan lama mungkin bingung sebentar
+- ✅ Tidak ada data loss
+- ✅ Tidak ada API breaking change
+
+---
+
+**Tester:** ___________________  
+**Tanggal:** ___________________  
+**Status Akhir:** ☐ PASS / ☐ FAIL / ☐ NEED REVIEW

@@ -70,22 +70,22 @@ def _validate_manual_tax_group(year, row_ids):
 @jwt_required()
 def get_taxes():
     user = User.query.get(int(get_jwt_identity()))
-    
+
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
-    
+
     query = Tax.query
-    
+
     if start_date_str:
         start_date = _parse_date(start_date_str)
         if start_date:
             query = query.filter(Tax.date >= start_date)
-            
+
     if end_date_str:
         end_date = _parse_date(end_date_str)
         if end_date:
             query = query.filter(Tax.date <= end_date)
-            
+
     taxes = query.order_by(Tax.date.asc(), Tax.id.asc()).all()
     return jsonify([t.to_dict() for t in taxes]), 200
 
@@ -141,7 +141,7 @@ def update_tax(tax_id):
 
     tax = Tax.query.get_or_404(tax_id)
     data = request.get_json()
-    
+
     if 'date' in data:
         tax.date = _parse_date(data['date'])
     if 'description' in data:
@@ -177,6 +177,26 @@ def delete_tax(tax_id):
 
     tax = Tax.query.get_or_404(tax_id)
     try:
+        # Hapus combine groups yang mengandung row ini
+        groups_to_delete = []
+        groups_to_update = []
+        for group in ManualCombineGroup.query.filter_by(table_name='taxes').all():
+            row_ids = group.row_ids()
+            if tax_id in row_ids:
+                if len(row_ids) <= 2:
+                    # Hanya 2 row, hapus group saja
+                    groups_to_delete.append(group)
+                else:
+                    # Lebih dari 2, hapus ID dari group
+                    new_row_ids = [rid for rid in row_ids if rid != tax_id]
+                    group.row_ids_json = json.dumps(new_row_ids)
+                    groups_to_update.append(group)
+
+        for group in groups_to_delete:
+            db.session.delete(group)
+        for group in groups_to_update:
+            db.session.add(group)
+
         db.session.delete(tax)
         db.session.commit()
         return jsonify({'message': 'Tax deleted'}), 200

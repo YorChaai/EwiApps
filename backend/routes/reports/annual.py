@@ -331,8 +331,8 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
             # ✅ Filter tagged revenue by year too - handle None invoice_date
             revenues_raw = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
             logger.debug(f'Filtered {len(revenues_raw)} tagged revenues for year {year}')
-            # Meskipun ada tags, tetap urutkan berdasarkan tanggal invoice agar logis
-            revenues = sorted(revenues_raw, key=lambda r: (r.invoice_date or datetime.min.date(), r.id))
+            # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
+            revenues = sorted(revenues_raw, key=lambda r: (r.receive_date or datetime.min.date(), r.id))
         else:
             revenues = []
     elif tagged_revenue_ids:
@@ -340,10 +340,12 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         # ✅ Filter tagged revenue by year too - handle None invoice_date
         revenues = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
         logger.debug(f'Filtered {len(revenues)} tagged revenues from {len(revenues_raw)} for year {year}')
-        revenues.sort(key=lambda r: (r.invoice_date or datetime.min.date(), r.id))
+        # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
+        revenues.sort(key=lambda r: (r.receive_date or datetime.min.date(), r.id))
     else:
         # ✅ FIX: Use Python filter for consistent year filtering
-        all_revenues = Revenue.query.order_by(Revenue.invoice_date.asc(), Revenue.id.asc()).all()
+        # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
+        all_revenues = Revenue.query.order_by(Revenue.receive_date.asc(), Revenue.id.asc()).all()
         revenues = [r for r in all_revenues if (r.invoice_date and r.invoice_date.year == year)]
         logger.debug(f'Filtered {len(revenues)} revenues from {len(all_revenues)} for year {year}')
 

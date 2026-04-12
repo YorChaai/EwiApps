@@ -27,7 +27,7 @@ def _validate_manual_revenue_group(year, row_ids):
         return None, 'Pilih minimal 2 data revenue untuk combine.'
 
     items = Revenue.query.filter(Revenue.id.in_(clean_ids)).order_by(
-        Revenue.invoice_date.asc(),
+        Revenue.receive_date.asc(),
         Revenue.id.asc(),
     ).all()
     if len(items) != len(clean_ids):
@@ -42,7 +42,7 @@ def _validate_manual_revenue_group(year, row_ids):
         for idx, (row_id,) in enumerate(
             db.session.query(Revenue.id)
             .filter(db.extract('year', Revenue.invoice_date) == int(year))
-            .order_by(Revenue.invoice_date.asc(), Revenue.id.asc())
+            .order_by(Revenue.receive_date.asc(), Revenue.id.asc())
             .all()
         )
     }
@@ -201,6 +201,30 @@ def delete_revenue(revenue_id):
 
     revenue = Revenue.query.get_or_404(revenue_id)
     try:
+        # Hapus combine groups yang mengandung row ini
+        ManualCombineGroup.query.filter(
+            ManualCombineGroup.table_name == 'revenues',
+        ).all()
+        # Filter manual untuk hapus yang mengandung ID ini
+        groups_to_delete = []
+        groups_to_update = []
+        for group in ManualCombineGroup.query.filter_by(table_name='revenues').all():
+            row_ids = group.row_ids()
+            if revenue_id in row_ids:
+                if len(row_ids) <= 2:
+                    # Hanya 2 row, hapus group saja
+                    groups_to_delete.append(group)
+                else:
+                    # Lebih dari 2, hapus ID dari group
+                    new_row_ids = [rid for rid in row_ids if rid != revenue_id]
+                    group.row_ids_json = json.dumps(new_row_ids)
+                    groups_to_update.append(group)
+
+        for group in groups_to_delete:
+            db.session.delete(group)
+        for group in groups_to_update:
+            db.session.add(group)
+
         db.session.delete(revenue)
         db.session.commit()
         return jsonify({'message': 'Revenue deleted'}), 200
