@@ -370,7 +370,9 @@ def reject_expense(expense_id):
 
     expense.status = 'rejected'
     expense.notes = _merge_rejection_notes(expense.notes or '', notes)
-    expense.settlement.status = 'draft'
+    # ✅ FIX: Jangan auto-draft parent settlement saat satu item ditolak.
+    # Status parent tetap 'submitted' agar manager bisa lanjut review item lain.
+    # Draft hanya bisa diubah secara manual oleh pemilik melalui tombol "Move to Draft".
     db.session.commit()
 
     # Notify staff about expense rejection

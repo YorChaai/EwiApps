@@ -796,10 +796,9 @@ def reject_advance_item(item_id):
 
     item.status = 'rejected'
     item.notes = _merge_rejection_notes_advance(item.notes or '', notes)
-    if advance.status == 'submitted':
-        advance.status = 'draft'
-    elif advance.status == 'revision_submitted':
-        advance.status = 'revision_draft'
+    # ✅ FIX: Jangan auto-draft parent kasbon saat satu item ditolak.
+    # Status parent tetap 'submitted'/'revision_submitted' agar manager bisa lanjut review item lain.
+    # Draft hanya bisa diubah secara manual oleh pemilik melalui tombol "Move to Draft".
     db.session.commit()
 
     # Notify staff about item rejection
