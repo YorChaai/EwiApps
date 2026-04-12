@@ -2773,20 +2773,22 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
                 child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ...localChecklist.asMap().entries.map((entry) {
-                        final item = entry.value;
-                        return _buildChecklistTile(
-                          item,
-                          canEdit,
-                          setModalState,
-                        );
-                      }),
-                      if (canAddComment)
-                        _buildAddCommentButton(localChecklist, setModalState),
-                    ],
+                  child: SelectionArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ...localChecklist.asMap().entries.map((entry) {
+                          final item = entry.value;
+                          return _buildChecklistTile(
+                            item,
+                            canEdit,
+                            setModalState,
+                          );
+                        }),
+                        if (canAddComment)
+                          _buildAddCommentButton(localChecklist, setModalState),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2841,13 +2843,20 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       onChanged: canEdit
           ? (val) => setModalState(() => item['checked'] = val ?? false)
           : null,
-      title: Text(
-        item['text'] ?? '',
-        style: TextStyle(
-          color: alreadyChecked ? AppTheme.textSecondary : AppTheme.cream,
-          decoration: alreadyChecked ? TextDecoration.lineThrough : null,
-        ),
-      ),
+      title: alreadyChecked
+          ? SelectionContainer.disabled(
+              child: Text(
+                item['text'] ?? '',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  decoration: TextDecoration.lineThrough,
+                ),
+              ),
+            )
+          : Text(
+              item['text'] ?? '',
+              style: const TextStyle(color: AppTheme.cream),
+            ),
       activeColor: AppTheme.success,
       checkColor: Colors.white,
       controlAffinity: ListTileControlAffinity.leading,
