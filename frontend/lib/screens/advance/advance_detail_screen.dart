@@ -730,6 +730,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
   void _showAddItemDialog(BuildContext context, [Map<String, dynamic>? item]) {
     final isEditing = item != null;
+    final reportYear = context.read<AdvanceProvider>().reportYear;
+    final now = DateTime.now();
+    final defaultDate = reportYear == 0 || reportYear == now.year ? now : DateTime(reportYear, 12, 31);
     final descCtrl = TextEditingController(text: item?['description']);
     final amountCtrl = TextEditingController(
       text: item?['estimated_amount'] != null
@@ -747,7 +750,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       text: (item?['currency_exchange'] ?? 1.0).toString(),
     );
     final dateCtrl = TextEditingController(
-      text: item?['date'] ?? DateFormat('yyyy-MM-dd').format(DateTime.now()),
+      text: item?['date'] ?? DateFormat('yyyy-MM-dd').format(defaultDate),
     );
 
     // Load initial values if editing
@@ -961,15 +964,17 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       controller: dateCtrl,
                       decoration: InputDecoration(
                         labelText: 'Tanggal',
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.calendar_today, size: 18),
-                          onPressed: () async {
-                            final d = await showDatePicker(
-                              context: ctx,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2030),
-                            );
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.calendar_today, size: 18),
+                        onPressed: () async {
+                          final initialDate =
+                              DateTime.tryParse(dateCtrl.text) ?? defaultDate;
+                          final d = await showDatePicker(
+                            context: ctx,
+                            initialDate: initialDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                          );
                             if (d != null) {
                               dateCtrl.text = DateFormat(
                                 'yyyy-MM-dd',
@@ -1322,6 +1327,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           'revision_draft',
           'revision_rejected',
         ].contains(adv['status']);
+    final isSingleAdvance =
+        (adv?['advance_type'] ?? 'single').toString().toLowerCase() == 'single';
     final canCreateSettlement =
         adv != null &&
         auth.user?['id'] == adv['user_id'] &&
@@ -1341,6 +1348,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final items = adv != null
         ? List<Map<String, dynamic>>.from(adv['items'] ?? [])
         : <Map<String, dynamic>>[];
+    final canAddItems = canEditItems && !(isSingleAdvance && items.isNotEmpty);
     final workflowItems = adv != null
         ? _workflowItems(adv, items)
         : <Map<String, dynamic>>[];
@@ -1643,7 +1651,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         ],
                       )
                     : _buildContent(context, adv, auth, prov, items),
-                floatingActionButton: canEditItems
+                floatingActionButton: canAddItems
                     ? FloatingActionButton.extended(
                         onPressed: () => _showAddItemDialog(context),
                         icon: const Icon(Icons.add),

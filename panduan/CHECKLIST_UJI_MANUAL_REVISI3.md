@@ -74,26 +74,26 @@
 - [ ] Di `screens/` root **CUMA ADA** `dashboard_screen.dart` (tidak ada file lain)
 
 ### Navigasi Masih Jalan
-- [ ] Buka app → login screen muncul normal
-- [ ] Login → dashboard muncul normal
-- [ ] Klik tab "Settlement" → list settlement muncul
-- [ ] Klik 1 settlement → detail settlement muncul
-- [ ] Klik tab "Kasbon" → list kasbon muncul
-- [ ] Klik 1 kasbon → detail kasbon muncul
-- [ ] Klik tab "Laporan" → report screen muncul
-- [ ] Klik "Laporan Tahunan" → annual report muncul
-- [ ] Klik "Kategori" → category management muncul
-- [ ] Klik "Pengaturan" → settings screen muncul
-- [ ] Klik "Input Revenue" (dari annual) → revenue management muncul
-- [ ] Klik "Input Pajak" (dari annual) → tax management muncul
-- [ ] Klik "Input Dividen" (dari annual) → dividend management muncul
-- [ ] Klik "Input Neraca" (dari annual) → balance sheet settings muncul
+- [v] Buka app → login screen muncul normal
+- [v] Login → dashboard muncul normal
+- [v] Klik tab "Settlement" → list settlement muncul
+- [v] Klik 1 settlement → detail settlement muncul
+- [v] Klik tab "Kasbon" → list kasbon muncul
+- [v] Klik 1 kasbon → detail kasbon muncul
+- [v] Klik tab "Laporan" → report screen muncul
+- [v] Klik "Laporan Tahunan" → annual report muncul
+- [v] Klik "Kategori" → category management muncul
+- [v] Klik "Pengaturan" → settings screen muncul
+- [v] Klik "Input Revenue" (dari annual) → revenue management muncul
+- [v] Klik "Input Pajak" (dari annual) → tax management muncul
+- [v] Klik "Input Dividen" (dari annual) → dividend management muncul
+- [v] Klik "Input Neraca" (dari annual) → balance sheet settings muncul
 
 ### Import Paths
-- [ ] Buka VS Code → **TIDAK ADA** garis merah di file manapun
-- [ ] Terminal: `flutter analyze` → "No issues found!"
-- [ ] `flutter run` → app jalan tanpa error
-- [ ] Hot reload di screen manapun → tidak error
+- [v] Buka VS Code → **TIDAK ADA** garis merah di file manapun
+- [v] Terminal: `flutter analyze` → "No issues found!"
+- [v] `flutter run` → app jalan tanpa error
+- [v] Hot reload di screen manapun → tidak error
 
 **Prioritas:** 🔴 TINGGI
 

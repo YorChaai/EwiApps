@@ -111,3 +111,11 @@ cd "D:\2. Organize\1. Projects\MiniProjectKPI_EWI"
 git add -A
 git commit -m "docs: update panduan performa step"
 git push
+
+
+
+cd "D:\2. Organize\1. Projects\MiniProjectKPI_EWI" && git add frontend/lib/utils/file_helper.dart && git commit -m "FIX: Change notification duration from 5s to 10s for annual report Excel export
+
+- Updated file_helper.dart: SnackBar duration from 5 to 10 seconds
+- Applies to all file save notifications (annual report, settlements, etc.)
+- User feedback: green notification banner stays longer for better UX" (Commit notification duration fix)

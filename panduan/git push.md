@@ -65,7 +65,7 @@ Jalankan command ini di terminal:
 
 ### 1. **Cek Status**
 ```powershell
-cd D:\2. Organize\1. Projects\MiniProjectKPI_EWI
+cd 'D:\2. Organize\1. Projects\MiniProjectKPI_EWI'
 git status
 ```
 

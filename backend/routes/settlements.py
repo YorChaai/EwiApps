@@ -208,18 +208,18 @@ def create_settlement():
     db.session.flush()
 
     if linked_advance:
-        today = datetime.now(timezone.utc).date()
         for item in linked_advance.items:
             revision_no = item.revision_no or 0
             if revision_no > (linked_advance.approved_revision_no or 0):
                 continue
+            expense_date = item.date or datetime.now(timezone.utc).date()
             db.session.add(
                 Expense(
                     settlement_id=settlement.id,
                     category_id=item.category_id,
                     description=item.description,
                     amount=item.estimated_amount,
-                    date=today,
+                    date=expense_date,
                     source='Kasbon',
                     advance_item_id=item.id,
                     revision_no=revision_no,

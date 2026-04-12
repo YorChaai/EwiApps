@@ -59,17 +59,17 @@ def _sync_revision_items_to_settlement(advance, revision_no):
         for expense in settlement.expenses
         if expense.advance_item_id is not None
     }
-    today = datetime.now(timezone.utc).date()
     for item in _items_for_revision(advance, revision_no):
         if item.id in existing_advance_item_ids:
             continue
+        expense_date = item.date or datetime.now(timezone.utc).date()
         db.session.add(
             Expense(
                 settlement_id=settlement.id,
                 category_id=item.category_id,
                 description=item.description,
                 amount=item.estimated_amount,
-                date=today,
+                date=expense_date,
                 source=f'Advance Revisi {revision_no}' if revision_no > 0 else 'Advance',
                 advance_item_id=item.id,
                 revision_no=revision_no,
@@ -158,8 +158,23 @@ def list_advances():
         except ValueError:
             pass
 
-    if report_year is not None:
-        query = query.filter(db.extract('year', Advance.created_at) == report_year)
+    if report_year is not None and report_year != 0:
+        item_match = db.exists().where(
+            db.and_(
+                AdvanceItem.advance_id == Advance.id,
+                db.extract('year', AdvanceItem.date) == report_year,
+            )
+        )
+        advance_no_items = db.not_(
+            db.exists().where(AdvanceItem.advance_id == Advance.id)
+        )
+        advance_year_match = db.extract('year', Advance.created_at) == report_year
+        query = query.filter(
+            db.or_(
+                item_match,
+                db.and_(advance_no_items, advance_year_match),
+            )
+        ).distinct()
 
     search_query = request.args.get('search', '').strip()
     if search_query:
@@ -322,6 +337,11 @@ def add_advance_item(advance_id):
             raise ValueError()
     except (ValueError, TypeError):
         return jsonify({'error': 'Jumlah harus angka positif'}), 400
+
+    if advance.advance_type == 'single':
+        revision_items = _items_for_revision(advance, editable_revision_no or 0)
+        if revision_items:
+            return jsonify({'error': 'Kasbon single hanya boleh memiliki 1 item'}), 400
 
     item_date = None
     if date_str:

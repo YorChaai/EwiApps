@@ -325,14 +325,19 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
 
     logger.debug(f'Report tags: has={has_report_tags}, revenue_ids={len(tagged_revenue_ids)}, tax_ids={len(tagged_tax_ids)}')
 
+    def revenue_sort_key(r):
+        rtype = str(getattr(r, 'revenue_type', '') or 'pendapatan_langsung').strip().lower()
+        weight = 1 if rtype == 'pendapatan_lain_lain' else 0
+        return (weight, r.receive_date or r.invoice_date or datetime.min.date(), r.id)
+
     if has_report_tags:
         if tagged_revenue_ids:
             revenues_raw = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
             # ✅ Filter tagged revenue by year too - handle None invoice_date
             revenues_raw = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
             logger.debug(f'Filtered {len(revenues_raw)} tagged revenues for year {year}')
-            # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
-            revenues = sorted(revenues_raw, key=lambda r: (r.receive_date or datetime.min.date(), r.id))
+            # ✅ Urutkan berdasarkan tipe (langsung vs lain-lain) dan receive_date
+            revenues = sorted(revenues_raw, key=revenue_sort_key)
         else:
             revenues = []
     elif tagged_revenue_ids:
@@ -340,14 +345,14 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         # ✅ Filter tagged revenue by year too - handle None invoice_date
         revenues = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
         logger.debug(f'Filtered {len(revenues)} tagged revenues from {len(revenues_raw)} for year {year}')
-        # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
-        revenues.sort(key=lambda r: (r.receive_date or datetime.min.date(), r.id))
+        # ✅ Urutkan berdasarkan tipe dan receive_date
+        revenues.sort(key=revenue_sort_key)
     else:
-        # ✅ FIX: Use Python filter for consistent year filtering
-        # ✅ Urutkan berdasarkan receive_date agar konsisten dengan UI dan combine groups
-        all_revenues = Revenue.query.order_by(Revenue.receive_date.asc(), Revenue.id.asc()).all()
+        # ✅ FIX: Use Python filter for consistent year filtering and sort in memory
+        all_revenues = Revenue.query.all()
         revenues = [r for r in all_revenues if (r.invoice_date and r.invoice_date.year == year)]
         logger.debug(f'Filtered {len(revenues)} revenues from {len(all_revenues)} for year {year}')
+        revenues.sort(key=revenue_sort_key)
 
     logger.debug(f'Loaded {len(revenues)} revenues for year {year}')
     if revenues:
@@ -1714,16 +1719,23 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
 
-        # ✅ REVENUE TOTALS BY TYPE - Calculate from grouped revenues
-        # Get revenue totals by type from payload
-        revenue_direct_total = sum(_idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
-                                   for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung') == 'pendapatan_langsung')
-        revenue_other_total = sum(_idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
-                                  for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung') == 'pendapatan_lain_lain')
+        # ✅ REVENUE TOTALS BY TYPE - Hitung dengan SUM langsung ke baris sesuai tipe
+        direct_count = sum(1 for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung').strip().lower() != 'pendapatan_lain_lain')
+        other_count = len(revenues) - direct_count
+        col_letter = get_column_letter(COL_AMOUNT_RECEIVED)
+        start_row = REVENUE_START_ROW
+        
+        if direct_count > 0:
+            ws_lr['E9'] = f'=SUM({main_ref}!{col_letter}{start_row}:{col_letter}{start_row + direct_count - 1})'
+        else:
+            ws_lr['E9'] = 0
+            
+        if other_count > 0:
+            other_start = start_row + direct_count
+            ws_lr['E10'] = f'=SUM({main_ref}!{col_letter}{other_start}:{col_letter}{other_start + other_count - 1})'
+        else:
+            ws_lr['E10'] = 0
 
-        # Write direct values (not formulas) since we can't use SUMIF across sheets easily
-        ws_lr['E9'] = revenue_direct_total
-        ws_lr['E10'] = revenue_other_total
         ws_lr['E12'] = '=SUM(E9:E11)'
 
         # ✅ Expense totals: reference dynamic cost_totals_row (columns 9-17)
