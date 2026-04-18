@@ -424,8 +424,23 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
     expense_data = []
     for e in expenses:
         d = e.to_dict()
-        root_name, _ = _root_category_info(e.category_id, category_by_id)
+
+        # Ambil kode kategori asli (misal: A1, B2)
+        full_code = '-'
+        curr_cat = category_by_id.get(e.category_id)
+        if curr_cat:
+            full_code = curr_cat.code or '-'
+
+            # Cari nama kategori akar untuk header tabel (tetap perlu root_name)
+            temp_cat = curr_cat
+            while temp_cat.parent_id and category_by_id.get(temp_cat.parent_id):
+                temp_cat = category_by_id[temp_cat.parent_id]
+            root_name = temp_cat.name or '-'
+        else:
+            root_name = '-'
+
         d['category_name'] = root_name
+        d['category_code'] = full_code # Sekarang berisi kode lengkap (misal: A3)
         d['subcategory_name'] = e.combined_subcategory_label
         d['settlement_id'] = e.settlement_id
         d['settlement_title'] = _clean_settlement_title(e.settlement.title if e.settlement else '-')
@@ -656,8 +671,8 @@ def _build_annual_pdf_bytes(payload):
         elements.append(t_div); elements.append(Spacer(1, 15))
     # tabel expense
     elements.append(Paragraph("PENGELUARAN & OPERATION COST", styles['Heading3']))
-    # Fetch root categories dynamically from DB
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.id).all()
+    # Fetch root categories dynamically from DB using sort_order to match UI
+    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order, Category.id).all()
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns # for mapping
 
@@ -890,7 +905,6 @@ def _expense_subcategory_label(expense):
 
     return ''
 
-
 def _group_expenses_by_subcategory(expenses):
     """
     Group expenses by subcategory, same as frontend Flutter logic.
@@ -1023,10 +1037,10 @@ def _render_expense_section_from_data(
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
-                
+
                 # ✅ FIX: Merged Detail/Description for expense items
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-                
+
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1069,7 +1083,7 @@ def _render_expense_section_from_data(
             # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
             ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
-            
+
             # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
             _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
@@ -1212,7 +1226,7 @@ def _render_expense_section_from_data(
                     # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                     ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                     _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-                    
+
                     # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
@@ -1258,10 +1272,10 @@ def _render_expense_section_from_data(
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                 _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-                
+
                 # ✅ FIX: Merged Detail/Description for expense items
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-                
+
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1295,7 +1309,7 @@ def _render_expense_section_from_data(
 
         # ✅ FIX: Explicitly split for empty state
         _safe_set_cell(ws, row_cursor, 4, 'Belum ada data batch pengeluaran')
-        
+
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
@@ -1319,6 +1333,14 @@ def _render_expense_section_from_data(
     _safe_set_cell(ws, total_row, 2, 'TOTAL')
     ws.cell(row=total_row, column=2).font = Font(bold=True)
     ws.cell(row=total_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
+
+    # ✅ FIX: Render dynamic SUM formulas for each category column (Column I onwards)
+    for col in range(9, last_category_col + 1):
+        col_letter = get_column_letter(col)
+        # Formula: =SUM(I{start_row}:I{total_row-1})
+        formula = f'=SUM({col_letter}{start_row}:{col_letter}{total_row-1})'
+        _safe_set_number(ws, total_row, col, formula)
+        ws.cell(row=total_row, column=col).font = Font(bold=True)
 
     # ✅ Apply border to TOTAL row
     for col in range(2, last_category_col + 1):
@@ -1744,12 +1766,12 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         other_count = len(revenues) - direct_count
         col_letter = get_column_letter(COL_AMOUNT_RECEIVED)
         start_row = REVENUE_START_ROW
-        
+
         if direct_count > 0:
             ws_lr['E9'] = f'=SUM({main_ref}!{col_letter}{start_row}:{col_letter}{start_row + direct_count - 1})'
         else:
             ws_lr['E9'] = 0
-            
+
         if other_count > 0:
             other_start = start_row + direct_count
             ws_lr['E10'] = f'=SUM({main_ref}!{col_letter}{other_start}:{col_letter}{other_start + other_count - 1})'
@@ -2234,18 +2256,18 @@ def get_annual_report_excel():
     _copy_template_row(ws, TAX_TITLE_TEMPLATE_ROW, tax_title_row, start_col=2, end_col=17, include_values=True)
     _copy_template_row(ws, TAX_HEADER_TOP_TEMPLATE_ROW, tax_header_top_row, start_col=2, end_col=17, include_values=True)
     _copy_template_row(ws, TAX_HEADER_BOTTOM_TEMPLATE_ROW, tax_header_row, start_col=2, end_col=17, include_values=True)
-    
+
     # ✅ FIX: Explicitly merge headers vertically (B, C, D:E)
     # This ensures headers like "Detail/Description" are correctly joined
-    for col_range in [f'B{tax_header_top_row}:B{tax_header_row}', 
-                      f'C{tax_header_top_row}:C{tax_header_row}', 
+    for col_range in [f'B{tax_header_top_row}:B{tax_header_row}',
+                      f'C{tax_header_top_row}:C{tax_header_row}',
                       f'D{tax_header_top_row}:E{tax_header_row}']:
         try:
             ws.unmerge_cells(col_range)
         except Exception:
             pass
         ws.merge_cells(col_range)
-        
+
         # Center align headers
         top_cell_ref = col_range.split(':')[0]
         ws[top_cell_ref].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)

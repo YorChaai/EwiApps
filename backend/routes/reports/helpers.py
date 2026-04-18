@@ -459,9 +459,32 @@ def _shorten(text, size):
 
 
 def _map_expense_column(category_name, cat_names):
-    if not category_name or category_name not in cat_names:
+    if not category_name:
         return 0
-    return cat_names.index(category_name)
+
+    # Clean input name
+    name = str(category_name).strip().lower()
+
+    # Clean category names list for matching
+    clean_cat_names = [str(c).strip().lower() for c in cat_names]
+
+    # 1. Exact match (case-insensitive)
+    if name in clean_cat_names:
+        return clean_cat_names.index(name)
+
+    # 2. Multi-category match (e.g., "A , B" matches column "A" or "B")
+    if " , " in category_name:
+        parts = [p.strip().lower() for p in category_name.split(",")]
+        for p in parts:
+            if p in clean_cat_names:
+                return clean_cat_names.index(p)
+
+    # 3. Partial match (induk kategori)
+    for i, cat in enumerate(clean_cat_names):
+        if cat in name or name in cat:
+            return i
+
+    return 0
 
 
 def _extract_batch_number(text):
@@ -495,60 +518,70 @@ def _clean_settlement_title(title):
     return text or _safe_text(title).strip() or 'Tanpa Settlement'
 
 
+def _expense_subcategory_label(expense):
+    """
+    Extract subcategory from expense and append Parent Code.
+    Example: "Allowance (A)"
+    """
+    label = ""
+
+    # 1. Database value
+    subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
+    if subcategory_name:
+        label = subcategory_name
+    else:
+        raw_desc = _safe_text(expense.get('description')).strip()
+        # 2. Check [SubCategory] prefix
+        prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
+        if prefixed:
+            label = _safe_text(prefixed.group(1)).strip()
+        else:
+            # 3. Keyword matching (fallback)
+            desc = raw_desc.lower()
+            if 'rental tool' in desc: label = 'Rental Tool'
+            elif 'sales' in desc: label = 'Sales'
+            elif 'gaji' in desc or 'bonus' in desc: label = 'Gaji'
+            elif 'pembuatan alat' in desc or 'mesin retort' in desc: label = 'Pembuatan Alat'
+            elif 'thr' in desc or 'allowance' in desc: label = 'Allowance'
+            elif 'data processing' in desc: label = 'Data Processing'
+            elif 'moving slickline' in desc or 'project lampu' in desc: label = 'Project Operation'
+            elif 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: label = 'Sparepart'
+            elif 'repair esor' in desc: label = 'Maintenance'
+            elif 'licence' in desc or 'license' in desc: label = 'Software License'
+            elif 'handphone operational' in desc: label = 'Operation'
+            elif 'sewa ruangan' in desc or 'virtual office' in desc: label = 'Sewa Ruangan'
+            elif 'modal kerja' in desc: label = 'Modal Kerja'
+            elif 'team building' in desc: label = 'Team Building'
+            elif 'biaya transaksi bank' in desc: label = 'Biaya Bank'
+
+    if not label:
+        return ''
+
+    # APPEND PARENT CODE (A, B, C...)
+    parent_code = _safe_text(expense.get('category_code')).strip()
+    if parent_code and parent_code != '-' and parent_code != 'None':
+        return f"{label} ({parent_code})"
+
+    return label
+
+
 def _group_annual_expenses(expenses, year):
     def _date_key(item):
         return _parse_iso_date(item.get('date')) or datetime(year, 1, 1).date()
 
-    def _expense_subcategory_label(expense):
-        """
-        Extract subcategory from expense.
-        Priority:
-        1. subcategory_name field from database (set in payload as combined_subcategory_label)
-        2. [SubCategory] prefix in description
-        3. 'Subcategory: X' in notes
-        4. Keyword matching from description (fallback)
-        """
-        # ✅ PRIORITY 1: Database value (populated as combined_subcategory_label in payload)
-        subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
-        if subcategory_name:
-            return subcategory_name
+    grouped = {}
+    for e in expenses:
+        # PENTING: Update label subkategori langsung di dictionary agar UI Flutter membacanya
+        subcat_label = _expense_subcategory_label(e)
+        if subcat_label:
+            e['subcategory_name'] = subcat_label
 
-        raw_desc = _safe_text(expense.get('description')).strip()
-
-        # ✅ PRIORITY 2: Check [SubCategory] prefix in description (same as Flutter)
-        prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
-        if prefixed:
-            prefix = _safe_text(prefixed.group(1)).strip()
-            if prefix:
-                return prefix
-
-        # ✅ PRIORITY 3: Check notes for "Subcategory: X" pattern (same as Flutter)
-        notes = _safe_text(expense.get('notes')).strip()
-        note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
-        if note_match:
-            note_subcategory = _safe_text(note_match.group(1)).strip()
-            if note_subcategory:
-                return note_subcategory
-
-        # ✅ PRIORITY 4: Keyword matching from description (fallback)
-        desc = raw_desc.lower()
-        if 'rental tool' in desc: return 'Rental Tool'
-        if 'sales' in desc: return 'Sales'
-        if 'gaji' in desc or 'bonus' in desc: return 'Gaji'
-        if 'pembuatan alat' in desc or 'mesin retort' in desc: return 'Pembuatan Alat'
-        if 'thr' in desc or 'allowance' in desc: return 'Allowance'
-        if 'data processing' in desc: return 'Data Processing'
-        if 'moving slickline' in desc or 'project lampu' in desc: return 'Project Operation'
-        if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: return 'Sparepart'
-        if 'repair esor' in desc: return 'Maintenance'
-        if 'licence' in desc or 'license' in desc: return 'Software License'
-        if 'handphone operational' in desc: return 'Operation'
-        if 'sewa ruangan' in desc or 'virtual office' in desc: return 'Sewa Ruangan'
-        if 'modal kerja' in desc: return 'Modal Kerja'
-        if 'team building' in desc: return 'Team Building'
-        if 'biaya transaksi bank' in desc: return 'Biaya Bank'
-
-        return ''
+        sid = e.get('settlement_id')
+        if sid is None:
+            key = f"title::{_safe_text(e.get('settlement_title'))}::{subcat_label}"
+        else:
+            key = f"sid::{sid}::{subcat_label}"
+        grouped.setdefault(key, []).append(e)
 
     def _group_sort_key(items):
         first = items[0] if items else {}
@@ -567,16 +600,6 @@ def _group_annual_expenses(expenses, year):
                 return (subcat_name, 1, batch_no, settlement_id, min_date)
             return (subcat_name, 1, settlement_id, min_date)
         return (subcat_name, 0, min_date, settlement_id)
-
-    grouped = {}
-    for e in expenses:
-        subcat_label = _expense_subcategory_label(e)
-        sid = e.get('settlement_id')
-        if sid is None:
-            key = f"title::{_safe_text(e.get('settlement_title'))}::{subcat_label}"
-        else:
-            key = f"sid::{sid}::{subcat_label}"
-        grouped.setdefault(key, []).append(e)
 
     groups = list(grouped.values())
     for items in groups:
