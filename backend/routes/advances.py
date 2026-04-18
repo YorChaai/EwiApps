@@ -263,16 +263,24 @@ def update_advance(advance_id):
 @jwt_required()
 def delete_advance(advance_id):
     user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
     advance = Advance.query.get_or_404(advance_id)
+    is_manager = user.role == 'manager'
 
-    if advance.user_id != user_id:
+    if not is_manager and advance.user_id != user_id:
         return jsonify({'error': 'Akses ditolak'}), 403
-    if advance.status not in ('draft',):
-        return jsonify({'error': 'Hanya draft yang bisa dihapus'}), 400
+
+    if not is_manager:
+        if advance.status not in ('draft',):
+            return jsonify({'error': 'Hanya draft yang bisa dihapus'}), 400
+
+    # Jika advance mempunyai settlement, hapus juga settlement-nya
+    if advance.settlement:
+        db.session.delete(advance.settlement)
 
     db.session.delete(advance)
     db.session.commit()
-    return jsonify({'message': 'Kasbon dihapus'}), 200
+    return jsonify({'message': 'Kasbon (dan settlement jika ada) dihapus'}), 200
 
 
 @advances_bp.route('/<int:advance_id>/start_revision', methods=['POST'])
@@ -687,13 +695,16 @@ def create_settlement_from_advance(advance_id):
         revision_no = item.revision_no or 0
         if revision_no > (advance.approved_revision_no or 0):
             continue
+            
+        expense_date = item.date if item.date else today
+            
         db.session.add(
             Expense(
                 settlement_id=settlement.id,
                 category_id=item.category_id,
                 description=item.description,
                 amount=item.estimated_amount,
-                date=today,
+                date=expense_date,
                 source=f'Advance Revisi {revision_no}' if revision_no > 0 else 'Advance',
                 advance_item_id=item.id,
                 revision_no=revision_no,

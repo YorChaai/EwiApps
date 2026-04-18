@@ -11,8 +11,8 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{os.path.join(BASE_DIR, "database.db")}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'jwt-settlement-secret-key-2026-min-32-char')
-    # default directory
-    UPLOAD_FOLDER = os.environ.get('UPLOAD_DIR', r'D:\2. Organize\1. Projects\MiniProjectKPI_EWI\data')
+    # default directory - use relative path from backend folder
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_DIR', os.path.join(BASE_DIR, '..', 'data'))
     EXPORT_FOLDER = os.path.join(BASE_DIR, 'exports')
     REPORT_DEFAULT_YEAR = int(os.environ.get('REPORT_DEFAULT_YEAR', '2024'))
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16mb max upload

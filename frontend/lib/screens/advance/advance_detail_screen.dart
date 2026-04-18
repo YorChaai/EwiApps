@@ -747,7 +747,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     String? selectedSource = item?['source'];
     String selectedCurrency = item?['currency'] ?? 'IDR';
     final exchangeRateCtrl = TextEditingController(
-      text: (item?['currency_exchange'] ?? 1.0).toString(),
+      text: item?['currency_exchange'] != null
+          ? NumberFormat('#,##0', 'id_ID').format(item!['currency_exchange'])
+          : '1',
     );
     final dateCtrl = TextEditingController(
       text: item?['date'] ?? DateFormat('yyyy-MM-dd').format(defaultDate),
@@ -1041,6 +1043,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 color: AppTheme.textPrimary,
                               ),
                               keyboardType: TextInputType.number,
+                              inputFormatters: [CurrencyInputFormatter()],
                             ),
                           ),
                         ],
@@ -1050,11 +1053,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
                     TextField(
                       controller: amountCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Amount (IDR)',
+                      decoration: InputDecoration(
+                        labelText: 'Amount ($selectedCurrency)',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
                         hintText: '10.000',
-                        hintStyle: TextStyle(color: AppTheme.textSecondary),
+                        hintStyle: const TextStyle(color: AppTheme.textSecondary),
                       ),
                       style: const TextStyle(color: AppTheme.textPrimary),
                       keyboardType: TextInputType.number,
@@ -1177,10 +1180,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           );
                           return;
                         }
-                        if (amount <= 100) {
+                        final rateForValidation = double.tryParse(exchangeRateCtrl.text.replaceAll('.', '').replaceAll(',', '')) ?? 1.0;
+                        final totalIdrValidation = amount * rateForValidation;
+
+                        if (totalIdrValidation <= 100) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Nominal harus lebih dari Rp 100'),
+                              content: Text('Nominal ekuivalen Rupiah harus lebih dari Rp 100'),
                               backgroundColor: AppTheme.danger,
                             ),
                           );
@@ -1194,8 +1200,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           final prov = context.read<AdvanceProvider>();
                           final finalCatId =
                               selectedSubCategoryId ?? selectedParentId!;
-                          final rate =
-                              double.tryParse(exchangeRateCtrl.text) ?? 1.0;
+                          final rate = rateForValidation;
 
                           bool success;
 
@@ -1418,8 +1423,14 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                 onNavTap: (index) {
                   // Navigate sesuai index
                   if (index == 1) {
-                    // Klik Kasbon → Back ke Kasbon List
-                    Navigator.pop(context);
+                    // Klik Kasbon → Ke Kasbon List (tab 1 di Dashboard)
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            DashboardScreen(initialTabIndex: 1),
+                      ),
+                      (route) => false,
+                    );
                   } else if (index == 0) {
                     // Klik Settlement → Ke Settlement List (tab 0 di Dashboard)
                     Navigator.of(context).pushAndRemoveUntil(

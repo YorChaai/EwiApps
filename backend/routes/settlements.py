@@ -306,22 +306,19 @@ def delete_settlement(settlement_id):
 
     is_manager = user.role == 'manager'
 
-    # Manager bisa hapus yang belum approved (draft, submitted, rejected)
-    # Staf hanya bisa hapus miliknya yang draft
-    if is_manager:
-        if settlement.status in ('approved', 'completed'):
-            return jsonify({'error': 'Settlement yang sudah approved tidak bisa dihapus'}), 400
-    else:
+    if not is_manager:
         if settlement.user_id != user_id:
             return jsonify({'error': 'Akses ditolak'}), 403
         if settlement.status not in ('draft',):
             return jsonify({'error': 'Hanya draft yang bisa dihapus'}), 400
 
     if settlement.advance:
-        settlement.advance.status = 'approved'
+        # Jika settlement dihapus, hapus juga original kasbon-nya (sesuai request)
+        db.session.delete(settlement.advance)
+        
     db.session.delete(settlement)
     db.session.commit()
-    return jsonify({'message': 'Settlement dihapus'}), 200
+    return jsonify({'message': 'Settlement (dan kasbon jika ada) berhasil dihapus'}), 200
 
 
 @settlements_bp.route('/<int:settlement_id>/submit', methods=['POST'])
