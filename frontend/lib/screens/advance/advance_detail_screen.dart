@@ -10,6 +10,7 @@ import '../../providers/settlement_provider.dart';
 import '../settlement/settlement_detail_screen.dart';
 import '../dashboard_screen.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/category_preview_dialog.dart';
 import '../../utils/currency_formatter.dart';
 import '../../utils/file_helper.dart';
 import '../../services/api_service.dart';
@@ -899,35 +900,42 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     ),
 
                     const SizedBox(height: 4),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: () => _showAddCategoryDialog(
-                          ctx,
-                          setDialogState,
-                          (newCat) {
-                            final parentID = newCat['parent_id'];
-                            final catID = newCat['id'] as int;
-                            setDialogState(() {
-                              if (parentID != null) {
-                                selectedParentId = parentID;
-                                selectedSubCategoryId = catID;
-                              } else {
-                                selectedParentId = catID;
-                                selectedSubCategoryId = null;
-                              }
-                            });
-                          },
-                          parentId: selectedParentId,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton.icon(
+                          onPressed: () => _showAddCategoryDialog(
+                            ctx,
+                            setDialogState,
+                            (newCat) {
+                              final parentID = newCat['parent_id'];
+                              final catID = newCat['id'] as int;
+                              setDialogState(() {
+                                if (parentID != null) {
+                                  selectedParentId = parentID;
+                                  selectedSubCategoryId = catID;
+                                } else {
+                                  selectedParentId = catID;
+                                  selectedSubCategoryId = null;
+                                }
+                              });
+                            },
+                            parentId: selectedParentId,
+                          ),
+                          icon: const Icon(Icons.add_circle_outline, size: 16),
+                          label: Text(
+                            selectedParentId != null
+                                ? 'Tambah Sub-Kategori Baru'
+                                : 'Tambah Kategori Baru',
+                            style: const TextStyle(fontSize: 12),
+                          ),
                         ),
-                        icon: const Icon(Icons.add_circle_outline, size: 16),
-                        label: Text(
-                          selectedParentId != null
-                              ? 'Tambah Sub-Kategori Baru'
-                              : 'Tambah Kategori Baru',
-                          style: const TextStyle(fontSize: 12),
+                        IconButton(
+                          icon: const Icon(Icons.category_rounded, color: AppTheme.primary, size: 20),
+                          tooltip: 'Pratinjau Struktur Kategori',
+                          onPressed: () => showCategoryPreviewDialog(context, context.read<SettlementProvider>().categories),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 12),
 
