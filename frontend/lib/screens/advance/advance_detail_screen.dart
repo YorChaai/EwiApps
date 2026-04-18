@@ -30,6 +30,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
   final _itemTableHorizontalCtrl = ScrollController();
   final _itemTableVerticalCtrl = ScrollController();
+  final _mainScrollController = ScrollController();
   final Set<int> _selectedItemIds = {}; // for bulk delete (staf)
   final Set<int> _checkedItemIds = {}; // Checklist manager (approval)
   bool _isManager = false;
@@ -77,6 +78,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     _itemTableVerticalCtrl.removeListener(() {});
     _itemTableHorizontalCtrl.dispose();
     _itemTableVerticalCtrl.dispose();
+    _mainScrollController.dispose();
     super.dispose();
   }
 
@@ -1701,8 +1703,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           'revision_rejected',
         ].contains(adv['status']);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+    return Scrollbar(
+      controller: _mainScrollController,
+      thumbVisibility: true,
+      thickness: 8,
+      interactive: true,
+      radius: const Radius.circular(4),
+      child: SingleChildScrollView(
+        controller: _mainScrollController,
+        padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1855,8 +1864,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           const SizedBox(height: 100), // Padding extra agar tidak tertabrak FAB
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptyState(bool canEditItems) {
     return Container(

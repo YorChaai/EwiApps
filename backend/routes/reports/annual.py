@@ -1156,6 +1156,7 @@ def _render_expense_section_from_data(
             _safe_set_cell(ws, batch_header_row, 4, settlement_title)
             ws.cell(row=batch_header_row, column=2).font = Font(bold=True)
             ws.cell(row=batch_header_row, column=4).font = Font(bold=True)
+            ws.cell(row=batch_header_row, column=4).alignment = Alignment(wrap_text=False, vertical='center')
             row_cursor += 1
 
             # Group batch items by subcategory
@@ -1176,6 +1177,7 @@ def _render_expense_section_from_data(
 
                 _safe_set_cell(ws, row_cursor, 4, subcat)
                 ws.cell(row=row_cursor, column=4).font = Font(bold=True)
+                ws.cell(row=row_cursor, column=4).alignment = Alignment(wrap_text=False, vertical='center')
                 row_cursor += 1
 
                 # Render expense items
