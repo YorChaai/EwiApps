@@ -313,13 +313,20 @@ def delete_settlement(settlement_id):
             return jsonify({'error': 'Hanya draft yang bisa dihapus'}), 400
 
     if settlement.advance:
-        # Jika settlement dihapus, hapus juga original kasbon-nya (sesuai request)
-        db.session.delete(settlement.advance)
-        
+        # Jika settlement dihapus, kembalikan status kasbon aslinya
+        # agar bisa disalin (copy) lagi nantinya.
+        adv = settlement.advance
+        adv.status = 'approved'
+        adv.settlement_id = None
+        # Biarkan kasbon tetap ada, jangan di-delete
+
+    # Hapus semua expenses terkait secara eksplisit (opsional tapi aman)
+    for exp in settlement.expenses:
+        db.session.delete(exp)
+
     db.session.delete(settlement)
     db.session.commit()
-    return jsonify({'message': 'Settlement (dan kasbon jika ada) berhasil dihapus'}), 200
-
+    return jsonify({'message': 'Settlement berhasil dihapus. Kasbon asal tetap tersedia.'}), 200
 
 @settlements_bp.route('/<int:settlement_id>/submit', methods=['POST'])
 @jwt_required()

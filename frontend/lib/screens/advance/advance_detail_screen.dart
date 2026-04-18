@@ -460,18 +460,14 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Draft settlement berhasil dibuat')),
     );
-    Navigator.push(
+    // Gunakan pushReplacement agar tidak kembali ke halaman Kasbon ini saat di-pop
+    Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => SettlementDetailScreen(settlementId: settlement['id']),
       ),
-    ).then((_) {
-      if (mounted) {
-        context.read<AdvanceProvider>().loadAdvance(widget.advanceId);
-      }
-    });
-  }
-
+    );
+    }
   Future<void> _viewSettlement(int settlementId) async {
     await Navigator.push(
       context,
@@ -745,7 +741,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
     int? selectedParentId;
     Set<int> selectedSubCategoryIds = {};
-    
+
     final existingSubIds = item?['subcategory_ids'] as List?;
     if (existingSubIds != null) {
       selectedSubCategoryIds = Set<int>.from(existingSubIds.cast<int>());
@@ -2105,7 +2101,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               final kurs = (item['currency_exchange'] ?? 1.0) as num;
                               final idrStr = item['idr_amount'];
                               final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
-                              
+
                               if (currency == 'IDR') {
                                 return Text('Rp ${_currencyFormat.format(estimated)}');
                               }
@@ -2266,7 +2262,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    if (item['status'] != 'approved')
+                                    if (itemStatus == 'pending')
                                       IconButton(
                                         icon: const Icon(
                                           Icons.check_rounded,
@@ -2276,18 +2272,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                         tooltip: 'Approve Item',
                                         onPressed: () => _approveItem(itemId),
                                       ),
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.close_rounded,
-                                        size: 18,
-                                        color: AppTheme.danger,
+                                    if (itemStatus == 'pending' || itemStatus == 'approved')
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.close_rounded,
+                                          size: 18,
+                                          color: AppTheme.danger,
+                                        ),
+                                        tooltip: 'Reject Item',
+                                        onPressed: () => _rejectItem(itemId),
                                       ),
-                                      tooltip: 'Reject Item',
-                                      onPressed: () => _rejectItem(itemId),
-                                    ),
                                   ],
-                                )
-                              : const Text('-'),
+                                )                              : const Text('-'),
                         ),
                       ],
                     );
@@ -2892,17 +2888,31 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       dynamic parsed = checklist is String ? jsonDecode(checklist) : checklist;
       if (parsed is List) {
         for (final e in parsed) {
+          String text = '';
+          bool checked = false;
+
           if (e is Map) {
-            local.add(Map<String, dynamic>.from(e));
+            text = (e['text'] ?? '').toString();
+            checked = e['checked'] == true;
           } else if (e is String) {
-            local.add({'text': e, 'checked': false});
+            text = e;
+          }
+
+          // FILTER: Jangan tampilkan pesan default manager
+          final lowerText = text.toLowerCase();
+          if (lowerText.contains('disetujui') ||
+              lowerText.contains('disetujui oleh manager')) {
+            continue;
+          }
+
+          if (text.isNotEmpty) {
+            local.add({'text': text, 'checked': checked});
           }
         }
       }
     } catch (_) {}
     return local;
   }
-
   Widget _buildChecklistTile(
     Map<String, dynamic> item,
     bool canEdit,

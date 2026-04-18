@@ -56,7 +56,7 @@ def create_expense():
             pass
     if not category_ids and category_id:
         category_ids = [category_id]
- 
+
     description = request.form.get('description', '').strip()
     amount = request.form.get('amount', type=float)
     date_str = request.form.get('date', '')
@@ -88,7 +88,7 @@ def create_expense():
     categories = Category.query.filter(Category.id.in_(category_ids)).all()
     if len(categories) != len(category_ids):
         return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
- 
+
     parent_ids = {c.parent_id for c in categories}
     if len(parent_ids) > 1:
         return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
@@ -96,7 +96,7 @@ def create_expense():
         # Jika salah satu kategori adalah parent, pastikan dia sendirian atau logic lain
         # Tapi biasanya user pilih sub-kategori (yang punya parent)
         pass
- 
+
     # Gunakan ID pertama sebagai legacy category_id
     primary_category_id = category_ids[0]
 
@@ -187,17 +187,17 @@ def update_expense(expense_id):
                 cat_ids = json.loads(cat_ids)
             except:
                 cat_ids = [int(data['category_id'])] if 'category_id' in data else []
- 
+
         if cat_ids:
             new_cats = Category.query.filter(Category.id.in_(cat_ids)).all()
             if len(new_cats) != len(cat_ids):
                 return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
- 
+
             # Validasi parent sama
             p_ids = {c.parent_id for c in new_cats}
             if len(p_ids) > 1:
                 return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
- 
+
             expense.category_id = cat_ids[0]
             expense.subcategories = new_cats
     if 'description' in data:
@@ -340,7 +340,6 @@ def approve_expense(expense_id):
         }), 400
 
     expense.status = 'approved'
-    expense.notes = 'Disetujui oleh manager.'
     db.session.commit()
 
     # Notify staff about expense approval

@@ -336,7 +336,7 @@ def add_advance_item(advance_id):
             pass
     if not category_ids and category_id:
         category_ids = [int(category_id)]
- 
+
     description = request.form.get('description', '').strip()
     estimated_amount = request.form.get('estimated_amount')
     date_str = request.form.get('date')
@@ -346,16 +346,16 @@ def add_advance_item(advance_id):
 
     if not all([category_ids, description, estimated_amount]):
         return jsonify({'error': 'Semua field wajib diisi (termasuk sub-kategori)'}), 400
- 
+
     # Validasi kategori: semua harus di bawah parent yang sama
     categories = Category.query.filter(Category.id.in_(category_ids)).all()
     if len(categories) != len(category_ids):
         return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
- 
+
     parent_ids = {c.parent_id for c in categories}
     if len(parent_ids) > 1:
         return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
- 
+
     primary_category_id = category_ids[0]
 
     try:
@@ -469,17 +469,17 @@ def update_advance_item(item_id):
                 cat_ids = json.loads(cat_ids)
             except:
                 cat_ids = [int(data['category_id'])] if 'category_id' in data else []
- 
+
         if cat_ids:
             new_cats = Category.query.filter(Category.id.in_(cat_ids)).all()
             if len(new_cats) != len(cat_ids):
                 return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
- 
+
             # Validasi parent sama
             p_ids = {c.parent_id for c in new_cats}
             if len(p_ids) > 1:
                 return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
- 
+
             item.category_id = cat_ids[0]
             item.subcategories = new_cats
     if 'description' in data:
@@ -614,7 +614,7 @@ def approve_advance(advance_id):
 
     # Support both JSON and Form data
     data = request.get_json(silent=True) or request.form.to_dict()
-    notes = data.get('notes', 'Disetujui oleh manager')
+    notes = data.get('notes', '').strip()
 
     if advance.status == 'submitted':
         # Validasi checklist: semua item harus disetujui
@@ -649,7 +649,9 @@ def approve_advance(advance_id):
         advance.active_revision_no = None
         advance.status = _status_after_approval(advance)
 
-    advance.notes = notes
+    if notes:
+        advance.notes = _merge_rejection_notes_advance(advance.notes or '', notes)
+
     advance.approved_at = datetime.now(timezone.utc)
     db.session.commit()
 
@@ -692,7 +694,7 @@ def reject_advance(advance_id):
             item.status = 'rejected'
             item.notes = _merge_rejection_notes_advance(item.notes or '', notes)
 
-    advance.notes = notes
+    advance.notes = _merge_rejection_notes_advance(advance.notes or '', notes)
     db.session.commit()
 
     # Notify staff
@@ -734,9 +736,9 @@ def create_settlement_from_advance(advance_id):
         revision_no = item.revision_no or 0
         if revision_no > (advance.approved_revision_no or 0):
             continue
-            
+
         expense_date = item.date if item.date else today
-            
+
         exp = Expense(
                 settlement_id=settlement.id,
                 category_id=item.category_id,
@@ -774,7 +776,6 @@ def approve_advance_item(item_id):
         return jsonify({'error': 'Kasbon ini tidak sedang menunggu approval'}), 400
 
     item.status = 'approved'
-    item.notes = 'Disetujui oleh manager'
     db.session.commit()
 
     # Notify staff about item approval
