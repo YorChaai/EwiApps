@@ -1020,7 +1020,7 @@ def _render_expense_section_from_data(
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
                 
                 # ✅ FIX: Merged Detail/Description for expense items
-                _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                 
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
@@ -1065,9 +1065,8 @@ def _render_expense_section_from_data(
             ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
             
-            # ✅ FIX: Merged Detail/Description for expense items
-            _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
-            
+            # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
+            _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
             _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
             _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1160,10 +1159,11 @@ def _render_expense_section_from_data(
             _safe_set_cell(ws, batch_header_row, 2, f'Expense#{batch_counter}')
             _safe_set_cell(ws, batch_header_row, 3, ':')
             _safe_set_cell(ws, batch_header_row, 4, settlement_title)
-            ws.cell(row=batch_header_row, column=2).font = Font(bold=True)
-            ws.cell(row=batch_header_row, column=4).font = Font(bold=True)
+            ws.cell(row=batch_header_row, column=2).font = Font(bold=True, color='000000')
+            ws.cell(row=batch_header_row, column=4).font = Font(bold=True, color='000000')
             ws.cell(row=batch_header_row, column=4).alignment = Alignment(wrap_text=False, vertical='center')
             row_cursor += 1
+
 
             # Group batch items by subcategory
             batch_grouped = _group_expenses_by_subcategory(batch_items)
@@ -1208,9 +1208,8 @@ def _render_expense_section_from_data(
                     ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                     _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
                     
-                    # ✅ FIX: Merged Detail/Description for expense items
-                    _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
-                    
+                    # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
+                    _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                     _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                     _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1256,7 +1255,7 @@ def _render_expense_section_from_data(
                 _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
                 
                 # ✅ FIX: Merged Detail/Description for expense items
-                _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                 
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
@@ -1289,8 +1288,8 @@ def _render_expense_section_from_data(
             if not isinstance(cell, MergedCell):
                 cell.border = THIN_BORDER
 
-        # ✅ FIX: Merged Detail/Description for empty state
-        _merge_description_cell(ws, row_cursor, 'Belum ada data batch pengeluaran', col_start=4, col_end=5)
+        # ✅ FIX: Explicitly split for empty state
+        _safe_set_cell(ws, row_cursor, 4, 'Belum ada data batch pengeluaran')
         
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
