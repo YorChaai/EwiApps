@@ -1018,7 +1018,10 @@ def _render_expense_section_from_data(
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
-                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+                
+                # ✅ FIX: Merged Detail/Description for expense items
+                _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+                
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1061,7 +1064,10 @@ def _render_expense_section_from_data(
             # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
             ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
-            _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+            
+            # ✅ FIX: Merged Detail/Description for expense items
+            _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+            
             _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
             _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1201,7 +1207,10 @@ def _render_expense_section_from_data(
                     # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                     ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                     _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-                    _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+                    
+                    # ✅ FIX: Merged Detail/Description for expense items
+                    _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+                    
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                     _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                     _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1245,7 +1254,10 @@ def _render_expense_section_from_data(
                 # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                 _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+                
+                # ✅ FIX: Merged Detail/Description for expense items
+                _merge_description_cell(ws, row_cursor, clean_desc or '-', col_start=4, col_end=5)
+                
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1277,7 +1289,9 @@ def _render_expense_section_from_data(
             if not isinstance(cell, MergedCell):
                 cell.border = THIN_BORDER
 
-        _safe_set_cell(ws, row_cursor, 4, 'Belum ada data batch pengeluaran')
+        # ✅ FIX: Merged Detail/Description for empty state
+        _merge_description_cell(ws, row_cursor, 'Belum ada data batch pengeluaran', col_start=4, col_end=5)
+        
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
@@ -2168,8 +2182,9 @@ def get_annual_report_excel():
 
     # ✅ Calculate last & total row - SIMPLE
     # CEGAH RUMUS TERBALIK SAAT DATA KOSONG
-    last_revenue_row = max(REVENUE_START_ROW, row_cursor - 1)
-    total_revenue_row = row_cursor
+    visible_revenue_rows = max(1, len(revenues))
+    total_revenue_row = REVENUE_START_ROW + visible_revenue_rows
+    last_revenue_row = total_revenue_row - 1
 
     # ✅ MERGE B8:E8 UNTUK TEKS REVENUE (IDR)
     merge_range_revenue = f'B{total_revenue_row}:E{total_revenue_row}'
@@ -2180,36 +2195,33 @@ def get_annual_report_excel():
     ws.merge_cells(merge_range_revenue)
 
     _safe_set_cell(ws, total_revenue_row, 2, 'REVENUE (IDR)')
-    # Opsional: Bikin rata kanan dan bold agar rapi
     ws.cell(row=total_revenue_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
     ws.cell(row=total_revenue_row, column=2).font = Font(bold=True)
 
-    # ✅ Set total row with Excel formulas - sum from REVENUE_START_ROW to last_revenue_row
-    # This includes all data rows (group headers don't have values in numeric columns)
+    # ✅ Set total row with Excel formulas
     _set_formula_with_format(ws, total_revenue_row, COL_INVOICE_VALUE, f'=SUM(F{REVENUE_START_ROW}:F{last_revenue_row})')
     _set_formula_with_format(ws, total_revenue_row, COL_AMOUNT_RECEIVED, f'=SUM(L{REVENUE_START_ROW}:L{last_revenue_row})')
     _set_formula_with_format(ws, total_revenue_row, COL_PPN, f'=SUM(M{REVENUE_START_ROW}:M{last_revenue_row})')
     _set_formula_with_format(ws, total_revenue_row, COL_PPH_23, f'=SUM(N{REVENUE_START_ROW}:N{last_revenue_row})')
     _set_formula_with_format(ws, total_revenue_row, COL_TRANSFER_FEE, f'=SUM(O{REVENUE_START_ROW}:O{last_revenue_row})')
-    _safe_set_cell(ws, total_revenue_row, COL_REMARK, '')  # ✅ Remark column = empty text
 
-    # ✅ STYLE KOLOM KUNING (I sampai N)
+    # ✅ Style yellow for total row
     yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
-    for col_idx in range(9, 15):  # Kolom I(9) sampai N(14)
+    for col_idx in range(9, 15):
         ws.cell(row=total_revenue_row, column=col_idx).fill = yellow_fill
 
-    # ✅ Hide remaining template rows (clean, no duplicate calls!)
-    # Keep one row visible as separator between Table 1 and Table 2
+    # ✅ Hide unused rows between total and template end
     if total_revenue_row < REVENUE_TEMPLATE_END:
         _set_rows_hidden(ws, total_revenue_row + 1, REVENUE_TEMPLATE_END, True)
 
-    logger.debug(f'Revenue: {len(revenues)} rows, last_data={last_revenue_row}, total_row={total_revenue_row}')
-
+    # ✅ TABLE 2: PAJAK PENGELUARAN - ANCHOR TO STATC ROW 24
+    # Calculate starting row for Table 2. If Table 1 is huge, we shift down.
+    # Otherwise, we stay at TAX_TITLE_TEMPLATE_ROW (24).
     revenue_gap_row = total_revenue_row + 1
-    tax_title_row = total_revenue_row + 2
-    tax_header_top_row = total_revenue_row + 3
-    tax_header_row = total_revenue_row + 4
-    tax_start_row = total_revenue_row + 5
+    tax_title_row = max(TAX_TITLE_TEMPLATE_ROW, total_revenue_row + 2)
+    tax_header_top_row = tax_title_row + 1
+    tax_header_row = tax_title_row + 2
+    tax_start_row = tax_title_row + 3
 
     _copy_template_row(ws, REVENUE_SEPARATOR_TEMPLATE_ROW, revenue_gap_row, start_col=2, end_col=17, include_values=True)
     _clear_range(ws, revenue_gap_row, revenue_gap_row, 2, 17)
@@ -2218,26 +2230,24 @@ def get_annual_report_excel():
     _copy_template_row(ws, TAX_TITLE_TEMPLATE_ROW, tax_title_row, start_col=2, end_col=17, include_values=True)
     _copy_template_row(ws, TAX_HEADER_TOP_TEMPLATE_ROW, tax_header_top_row, start_col=2, end_col=17, include_values=True)
     _copy_template_row(ws, TAX_HEADER_BOTTOM_TEMPLATE_ROW, tax_header_row, start_col=2, end_col=17, include_values=True)
+    
+    # ✅ FIX: Explicitly merge headers vertically (B, C, D:E)
+    # This ensures headers like "Detail/Description" are correctly joined
+    for col_range in [f'B{tax_header_top_row}:B{tax_header_row}', 
+                      f'C{tax_header_top_row}:C{tax_header_row}', 
+                      f'D{tax_header_top_row}:E{tax_header_row}']:
+        try:
+            ws.unmerge_cells(col_range)
+        except Exception:
+            pass
+        ws.merge_cells(col_range)
+        
+        # Center align headers
+        top_cell_ref = col_range.split(':')[0]
+        ws[top_cell_ref].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
     _safe_set_cell(ws, tax_title_row, 2, 'PAJAK PENGELUARAN')
     _set_rows_hidden(ws, tax_title_row, tax_header_row, False)
-
-    visible_tax_rows = max(1, min(len(taxes), 10))
-
-    # ✅ TABLE 2: PAJAK PENGELUARAN - DYNAMIC ROWS (NO EMPTY ROWS!)
-    # Revenue total row is followed by:
-    # +1 blank separator
-    # +2 section title
-    # +3 header top
-    # +4 header bottom
-    # +5 tax data
-    try:
-        ws.unmerge_cells(f'D{tax_header_row}:E{tax_header_row}')
-    except Exception:
-        pass
-    try:
-        ws.merge_cells(f'D{tax_header_row}:E{tax_header_row}')
-    except Exception as e:
-        logger.warning(f'Failed to merge tax header: {e}')
 
     # ✅ Clear data area - UNMERGE D:E FIRST (from template), then clear values
     # This is CRITICAL to remove existing merge from template before rendering
@@ -2255,6 +2265,8 @@ def get_annual_report_excel():
             cell = ws.cell(row=row, column=col)
             if not isinstance(cell, MergedCell):
                 cell.value = None
+
+    visible_tax_rows = max(1, min(len(taxes), 10))
 
     # Render tax rows dynamically with merged D:E columns
     for idx, t in enumerate(taxes[:10]):
@@ -2357,19 +2369,15 @@ def get_annual_report_excel():
     for col in range(2, 18):
         ws.cell(row=total_tax_row, column=col).font = Font(bold=True)
 
-    # ✅ HIDE unused template rows (MUST BE AFTER total row written!)
-    # Show data rows: TAX_START_ROW to TAX_START_ROW + visible_tax_rows - 1
-    # Show total row: TAX_START_ROW + visible_tax_rows
-    # Hide: rows after total row
-    if visible_tax_rows > 0:
-        _set_rows_hidden(ws, tax_start_row, tax_start_row + visible_tax_rows - 1, False)
-    else:
-        _set_rows_hidden(ws, tax_start_row, tax_start_row, False)
+    if total_tax_row < TAX_TEMPLATE_END:
+        _set_rows_hidden(ws, total_tax_row + 1, TAX_TEMPLATE_END, True)
 
-    expense_gap_row = total_tax_row + 1
-    expense_title_row = total_tax_row + 2
-    expense_header_row = total_tax_row + 3
-    expense_start_row = total_tax_row + 4
+    # ✅ TABLE 3: PENGELUARAN - ANCHOR TO STATIC ROW 39
+    expense_title_row = max(EXPENSE_TITLE_TEMPLATE_ROW, total_tax_row + 2)
+    expense_header_row = expense_title_row + 1
+    expense_start_row = expense_title_row + 2
+    # Define gap row for Table 3
+    expense_gap_row = expense_title_row - 1
 
     _copy_template_row(ws, EXPENSE_GAP_TEMPLATE_ROW, expense_gap_row, start_col=2, end_col=17, include_values=True)
     _clear_range(ws, expense_gap_row, expense_gap_row, 2, 17)
