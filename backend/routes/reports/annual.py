@@ -424,9 +424,9 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
     expense_data = []
     for e in expenses:
         d = e.to_dict()
-        root_name, subcat_name = _root_category_info(e.category_id, category_by_id)
+        root_name, _ = _root_category_info(e.category_id, category_by_id)
         d['category_name'] = root_name
-        d['subcategory_name'] = subcat_name
+        d['subcategory_name'] = e.combined_subcategory_label
         d['settlement_id'] = e.settlement_id
         d['settlement_title'] = _clean_settlement_title(e.settlement.title if e.settlement else '-')
         d['settlement_type'] = e.settlement.settlement_type if e.settlement else 'single'
@@ -824,23 +824,28 @@ def _expense_amount_for_display(expense):
 
 def _expense_subcategory_label(expense):
     """
-    Extract subcategory from expense - SAME LOGIC AS FLUTTER APP!
+    Extract subcategory from expense.
     Priority:
-    1. [SubCategory] prefix in description
-    2. 'Subcategory: X' in notes
-    3. Keyword matching from description (like Flutter)
-    4. subcategory_name field from database (fallback)
+    1. subcategory_name field from database (set in payload as combined_subcategory_label)
+    2. [SubCategory] prefix in description
+    3. 'Subcategory: X' in notes
+    4. Keyword matching from description (fallback)
     """
+    # ✅ PRIORITY 1: Database value (populated as combined_subcategory_label in payload)
+    subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
+    if subcategory_name:
+        return subcategory_name
+
     raw_desc = _safe_text(expense.get('description')).strip()
 
-    # ✅ PRIORITY 1: Check [SubCategory] prefix in description (same as Flutter)
+    # ✅ PRIORITY 2: Check [SubCategory] prefix in description (same as Flutter)
     prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
     if prefixed:
         prefix = _safe_text(prefixed.group(1)).strip()
         if prefix:
             return prefix
 
-    # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern (same as Flutter)
+    # ✅ PRIORITY 3: Check notes for "Subcategory: X" pattern (same as Flutter)
     notes = _safe_text(expense.get('notes')).strip()
     note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
     if note_match:
@@ -848,7 +853,7 @@ def _expense_subcategory_label(expense):
         if note_subcategory:
             return note_subcategory
 
-    # ✅ PRIORITY 3: Keyword matching from description (EXACTLY LIKE FLUTTER)
+    # ✅ PRIORITY 4: Keyword matching from description (EXACTLY LIKE FLUTTER)
     desc = raw_desc.lower()
 
     # Match Flutter's keyword order exactly
@@ -882,11 +887,6 @@ def _expense_subcategory_label(expense):
         return 'Team Building'
     if 'biaya transaksi bank' in desc:
         return 'Biaya Bank'
-
-    # ✅ PRIORITY 4: Fallback to subcategory_name field (last resort, like Flutter)
-    subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
-    if subcategory_name:
-        return subcategory_name
 
     return ''
 

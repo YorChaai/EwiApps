@@ -744,7 +744,12 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     );
 
     int? selectedParentId;
-    int? selectedSubCategoryId;
+    Set<int> selectedSubCategoryIds = {};
+    
+    final existingSubIds = item?['subcategory_ids'] as List?;
+    if (existingSubIds != null) {
+      selectedSubCategoryIds = Set<int>.from(existingSubIds.cast<int>());
+    }
     String? selectedFilePath;
     String? selectedFileName;
     String? selectedSource = item?['source'];
@@ -771,9 +776,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         }
         final children = _asMapList(p['children'] as List?);
         for (final c in children) {
-          if (c['id'] == catId) {
+          if (c['id'] == catId || selectedSubCategoryIds.contains(c['id'])) {
             selectedParentId = p['id'];
-            selectedSubCategoryId = c['id'];
+            if (selectedSubCategoryIds.isEmpty) {
+              selectedSubCategoryIds.add(c['id']);
+            }
             break;
           }
         }
@@ -809,10 +816,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               .map((c) => c['id'])
               .whereType<int>()
               .toSet();
-          final effectiveSubCategoryId =
-              childIds.contains(selectedSubCategoryId)
-              ? selectedSubCategoryId
-              : null;
+          // Filter out subcategory IDs that no longer belong to selected parent
+          selectedSubCategoryIds = selectedSubCategoryIds.intersection(childIds);
 
           return AlertDialog(
             backgroundColor: _cardColor(ctx),
@@ -849,55 +854,79 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       }).toList(),
                       onChanged: (v) => setDialogState(() {
                         selectedParentId = v;
-                        selectedSubCategoryId = null; // reset sub
+                        selectedSubCategoryIds = {}; // reset sub
                       }),
                     ),
                     const SizedBox(height: 12),
 
-                    // dropdown sub kategori
-                    Builder(
-                      builder: (context) {
-                        final isEnabled = effectiveParentId != null;
-                        return DropdownButtonFormField<int>(
-                          decoration: const InputDecoration(
-                            labelText: 'Sub-Kategori',
+                    // Checklist Sub Kategori
+                    if (effectiveParentId != null) ...[
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          children.isNotEmpty ? 'Pilih Sub Kategori:' : 'Hanya Kategori Utama',
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                          dropdownColor: AppTheme.card,
-                          style: const TextStyle(color: AppTheme.textPrimary),
-                          initialValue: effectiveSubCategoryId,
-                          hint: isEnabled && children.isEmpty
-                              ? const Text(
-                                  'Buat Sub Kategori (+)',
-                                  style: TextStyle(color: AppTheme.warning),
-                                )
-                              : null,
-                          disabledHint: const Text('Pilih Kategori Utama dulu'),
-                          items: isEnabled && children.isNotEmpty
-                              ? children.map((c) {
-                                  final isPending = c['status'] == 'pending';
-                                  return DropdownMenuItem<int>(
-                                    value: c['id'] as int,
-                                    child: Text(
-                                      isPending
-                                          ? '${c['name']} (Pending)'
-                                          : c['name'],
-                                      style: TextStyle(
-                                        color: isPending
-                                            ? AppTheme.warning
-                                            : null,
-                                      ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (children.isNotEmpty)
+                        Container(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.divider),
+                          ),
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: children.map((c) {
+                                final subId = c['id'] as int;
+                                final isPending = c['status'] == 'pending';
+                                final isSelected = selectedSubCategoryIds.contains(subId);
+
+                                return CheckboxListTile(
+                                  value: isSelected,
+                                  activeColor: AppTheme.primary,
+                                  checkColor: Colors.white,
+                                  dense: true,
+                                  title: Text(
+                                    isPending ? '${c['name']} (Pending)' : c['name'],
+                                    style: TextStyle(
+                                      color: isSelected
+                                          ? AppTheme.primary
+                                          : (isPending ? AppTheme.warning : AppTheme.textPrimary),
+                                      fontSize: 13,
                                     ),
-                                  );
-                                }).toList()
-                              : [],
-                          onChanged: isEnabled && children.isNotEmpty
-                              ? (v) => setDialogState(
-                                  () => selectedSubCategoryId = v,
-                                )
-                              : null,
-                        );
-                      },
-                    ),
+                                  ),
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      if (val == true) {
+                                        selectedSubCategoryIds.add(subId);
+                                      } else {
+                                        selectedSubCategoryIds.remove(subId);
+                                      }
+                                    });
+                                  },
+                                  controlAffinity: ListTileControlAffinity.leading,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        )
+                      else
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            'Kategori ini tidak memiliki sub-kategori.',
+                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                          ),
+                        ),
+                    ],
 
                     const SizedBox(height: 4),
                     Row(
@@ -913,10 +942,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               setDialogState(() {
                                 if (parentID != null) {
                                   selectedParentId = parentID;
-                                  selectedSubCategoryId = catID;
+                                  selectedSubCategoryIds.add(catID);
                                 } else {
                                   selectedParentId = catID;
-                                  selectedSubCategoryId = null;
+                                  selectedSubCategoryIds = {};
                                 }
                               });
                             },
@@ -946,26 +975,20 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       onChanged: (val) {
                         final lower = val.toLowerCase();
                         for (final p in categories) {
-                          if (lower.contains(
-                            p['name'].toString().toLowerCase(),
-                          )) {
+                          final pName = p['name'].toString().toLowerCase();
+                          if (lower.contains(pName)) {
                             setDialogState(() {
                               selectedParentId = p['id'];
-                              selectedSubCategoryId = null;
                             });
                           }
-                          final childrenList = _asMapList(
-                            p['children'] as List?,
-                          );
+                          final childrenList = _asMapList(p['children'] as List?);
                           for (final c in childrenList) {
-                            if (lower.contains(
-                              c['name'].toString().toLowerCase(),
-                            )) {
+                            final cName = c['name'].toString().toLowerCase();
+                            if (lower.contains(cName)) {
                               setDialogState(() {
                                 selectedParentId = p['id'];
-                                selectedSubCategoryId = c['id'];
+                                selectedSubCategoryIds.add(c['id'] as int);
                               });
-                              return;
                             }
                           }
                         }
@@ -1151,11 +1174,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         final children = _asMapList(
                           parent['children'] as List?,
                         );
-                        if (children.isNotEmpty &&
-                            selectedSubCategoryId == null) {
+                        if (children.isNotEmpty && selectedSubCategoryIds.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Pilih Sub Kategori'),
+                              content: Text('Pilih minimal satu Sub-Kategori'),
                               backgroundColor: AppTheme.danger,
                             ),
                           );
@@ -1207,61 +1229,57 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         setState(() => _isSaving = true);
 
                         try {
+                          final firstSubId = selectedSubCategoryIds.isNotEmpty ? selectedSubCategoryIds.first : null;
+                          final finalCatId = firstSubId ?? selectedParentId!;
+                          final subcatIds = selectedSubCategoryIds.toList();
                           final prov = context.read<AdvanceProvider>();
-                          final finalCatId =
-                              selectedSubCategoryId ?? selectedParentId!;
-                          final rate = rateForValidation;
 
                           bool success;
-
-                          if (isEditing) {
-                            // Edit mode - update item existing
-                            success = await prov.updateAdvanceItem(
-                              item['id'],
-                              finalCatId,
-                              descCtrl.text.trim(),
-                              amount,
-                              filePath: selectedFilePath,
-                              date: dateCtrl.text,
-                              source: selectedSource,
-                              currency: selectedCurrency,
-                              currencyExchange: rate,
-                            );
-                          } else {
-                            // Add mode - cek apakah ini item pertama
-                            final currentAdvance = prov.currentAdvance;
-                            final items =
-                                currentAdvance?['items'] as List? ?? [];
+                          if (item == null) {
+                            final items = prov.currentAdvance?['items'] as List? ?? [];
                             final isFirstItem = items.isEmpty;
 
                             if (isFirstItem) {
-                              // ITEM PERTAMA - Auto-save Kasbon + Item
-                              success = await prov
-                                  .saveFirstItemAndCommitAdvance(
-                                    advanceId: widget.advanceId,
-                                    categoryId: finalCatId,
-                                    desc: descCtrl.text.trim(),
-                                    amount: amount,
-                                    filePath: selectedFilePath,
-                                    date: dateCtrl.text,
-                                    source: selectedSource,
-                                    currency: selectedCurrency,
-                                    currencyExchange: rate,
-                                  );
+                              success = await prov.saveFirstItemAndCommitAdvance(
+                                advanceId: widget.advanceId,
+                                categoryId: finalCatId,
+                                categoryIds: subcatIds,
+                                desc: descCtrl.text.trim(),
+                                amount: amount,
+                                date: dateCtrl.text,
+                                source: selectedSource,
+                                currency: selectedCurrency,
+                                currencyExchange: rateForValidation,
+                                filePath: selectedFilePath,
+                              );
                             } else {
-                              // Item selanjutnya - save item saja
                               success = await prov.addAdvanceItem(
                                 widget.advanceId,
                                 finalCatId,
                                 descCtrl.text.trim(),
                                 amount,
-                                filePath: selectedFilePath,
+                                categoryIds: subcatIds,
                                 date: dateCtrl.text,
                                 source: selectedSource,
                                 currency: selectedCurrency,
-                                currencyExchange: rate,
+                                currencyExchange: rateForValidation,
+                                filePath: selectedFilePath,
                               );
                             }
+                          } else {
+                            success = await prov.updateAdvanceItem(
+                              item['id'],
+                              finalCatId,
+                              descCtrl.text.trim(),
+                              amount,
+                              categoryIds: subcatIds,
+                              date: dateCtrl.text,
+                              source: selectedSource,
+                              currency: selectedCurrency,
+                              currencyExchange: rateForValidation,
+                              filePath: selectedFilePath,
+                              status: item['status'],
+                            );
                           }
 
                           if (ctx.mounted) Navigator.pop(ctx);
@@ -2401,6 +2419,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                       color: AppTheme.cream,
                                       fontSize: 14,
                                     ),
+                                    maxLines: null,
+                                    minLines: 1,
+                                    keyboardType: TextInputType.multiline,
                                   ),
                                 ),
                                 if (controllers.length > 1)

@@ -45,7 +45,18 @@ def create_expense():
     user_id = int(get_jwt_identity())
 
     settlement_id = request.form.get('settlement_id', type=int)
+    # Support both category_id (legacy) and category_ids (list)
     category_id = request.form.get('category_id', type=int)
+    category_ids_raw = request.form.get('category_ids')
+    category_ids = []
+    if category_ids_raw:
+        try:
+            category_ids = json.loads(category_ids_raw)
+        except:
+            pass
+    if not category_ids and category_id:
+        category_ids = [category_id]
+ 
     description = request.form.get('description', '').strip()
     amount = request.form.get('amount', type=float)
     date_str = request.form.get('date', '')
@@ -53,8 +64,8 @@ def create_expense():
     currency = request.form.get('currency', 'IDR').strip()
     currency_exchange = request.form.get('currency_exchange', type=float) or 1
 
-    if not all([settlement_id, category_id, description, amount, date_str]):
-        return jsonify({'error': 'Semua field wajib diisi'}), 400
+    if not all([settlement_id, category_ids, description, amount, date_str]):
+        return jsonify({'error': 'Semua field wajib diisi (termasuk sub-kategori)'}), 400
 
     # Validasi nominal minimal 100 (dalam ekuivalen Rupiah)
     idr_equivalent = amount * (currency_exchange if currency_exchange else 1)
@@ -73,9 +84,21 @@ def create_expense():
     if settlement.settlement_type == 'single' and len(settlement.expenses) >= 1:
         return jsonify({'error': 'Settlement sendiri hanya boleh memiliki 1 expense'}), 400
 
-    category = Category.query.get(category_id)
-    if not category:
-        return jsonify({'error': 'Kategori tidak ditemukan'}), 404
+    # Validasi kategori: semua harus di bawah parent yang sama
+    categories = Category.query.filter(Category.id.in_(category_ids)).all()
+    if len(categories) != len(category_ids):
+        return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
+ 
+    parent_ids = {c.parent_id for c in categories}
+    if len(parent_ids) > 1:
+        return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
+    if None in parent_ids:
+        # Jika salah satu kategori adalah parent, pastikan dia sendirian atau logic lain
+        # Tapi biasanya user pilih sub-kategori (yang punya parent)
+        pass
+ 
+    # Gunakan ID pertama sebagai legacy category_id
+    primary_category_id = category_ids[0]
 
     try:
         expense_date = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -105,7 +128,7 @@ def create_expense():
 
     expense = Expense(
         settlement_id=settlement_id,
-        category_id=category_id,
+        category_id=primary_category_id,
         description=description,
         amount=amount,
         date=expense_date,
@@ -116,6 +139,8 @@ def create_expense():
         evidence_filename=evidence_filename,
         status='pending'
     )
+    if categories:
+        expense.subcategories = categories
     db.session.add(expense)
     db.session.commit()
 
@@ -154,8 +179,27 @@ def update_expense(expense_id):
         if any(k in data_keys for k in ['category_id', 'description', 'amount', 'date', 'source', 'currency', 'currency_exchange']):
             return jsonify({'error': 'saat rejected hanya boleh mengubah checklist, tidak bisa mengubah data utama'}), 400
 
-    if 'category_id' in data:
-        expense.category_id = int(data['category_id'])
+    if 'category_ids' in data or 'category_id' in data:
+        cat_ids = data.get('category_ids')
+        if not isinstance(cat_ids, list):
+            # Coba parse jika string
+            try:
+                cat_ids = json.loads(cat_ids)
+            except:
+                cat_ids = [int(data['category_id'])] if 'category_id' in data else []
+ 
+        if cat_ids:
+            new_cats = Category.query.filter(Category.id.in_(cat_ids)).all()
+            if len(new_cats) != len(cat_ids):
+                return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
+ 
+            # Validasi parent sama
+            p_ids = {c.parent_id for c in new_cats}
+            if len(p_ids) > 1:
+                return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
+ 
+            expense.category_id = cat_ids[0]
+            expense.subcategories = new_cats
     if 'description' in data:
         expense.description = str(data['description']).strip()
     if 'amount' in data:

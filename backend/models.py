@@ -5,6 +5,19 @@ from sqlalchemy.ext.hybrid import hybrid_property
 
 db = SQLAlchemy()
 
+# Association tables for Multi-Subcategory support
+expense_subcategories = db.Table(
+    'expense_subcategories',
+    db.Column('expense_id', db.Integer, db.ForeignKey('expenses.id'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('categories.id'), primary_key=True)
+)
+
+advance_item_subcategories = db.Table(
+    'advance_item_subcategories',
+    db.Column('advance_item_id', db.Integer, db.ForeignKey('advance_items.id'), primary_key=True),
+    db.Column('category_id', db.Integer, db.ForeignKey('categories.id'), primary_key=True)
+)
+
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -213,6 +226,15 @@ class AdvanceItem(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     category = db.relationship('Category')
+    subcategories = db.relationship('Category', secondary=advance_item_subcategories, backref='advance_items', lazy='subquery')
+
+    @property
+    def combined_subcategory_label(self):
+        """Returns alphabetically sorted comma separated names of subcategories."""
+        if not self.subcategories:
+            return self.category.name if self.category else None
+        names = sorted([c.name for c in self.subcategories])
+        return " , ".join(names)
 
     @hybrid_property
     def idr_amount(self):
@@ -239,7 +261,9 @@ class AdvanceItem(db.Model):
             'id': self.id,
             'advance_id': self.advance_id,
             'category_id': self.category_id,
-            'category_name': self.category.full_name if self.category else (self.category.name if self.category else None),
+            'subcategory_ids': [c.id for c in self.subcategories],
+            'subcategory_name': self.combined_subcategory_label,
+            'category_name': self.combined_subcategory_label or (self.category.name if self.category else None),
             'category_code': self.category.code if self.category else None,
             'description': self.description,
             'estimated_amount': self.estimated_amount,
@@ -359,6 +383,15 @@ class Expense(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     advance_item = db.relationship('AdvanceItem')
+    subcategories = db.relationship('Category', secondary=expense_subcategories, backref='expense_items', lazy='subquery')
+
+    @property
+    def combined_subcategory_label(self):
+        """Returns alphabetically sorted comma separated names of subcategories."""
+        if not self.subcategories:
+            return self.category.name if self.category else None
+        names = sorted([c.name for c in self.subcategories])
+        return " , ".join(names)
 
     @hybrid_property
     def idr_amount(self):
@@ -386,7 +419,9 @@ class Expense(db.Model):
             'id': self.id,
             'settlement_id': self.settlement_id,
             'category_id': self.category_id,
-            'category_name': self.category.full_name if self.category else (self.category.name if self.category else None),
+            'subcategory_ids': [c.id for c in self.subcategories],
+            'subcategory_name': self.combined_subcategory_label,
+            'category_name': self.combined_subcategory_label or (self.category.name if self.category else None),
             'category_code': self.category.code if self.category else None,
             'description': self.description,
             'amount': self.amount,

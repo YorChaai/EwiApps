@@ -496,35 +496,33 @@ def _clean_settlement_title(title):
 
 
 def _group_annual_expenses(expenses, year):
-    grouped = {}
-    for e in expenses:
-        key = e.get('settlement_id')
-        if key is None:
-            key = f"title::{_safe_text(e.get('settlement_title'))}"
-        grouped.setdefault(key, []).append(e)
-
     def _date_key(item):
         return _parse_iso_date(item.get('date')) or datetime(year, 1, 1).date()
 
     def _expense_subcategory_label(expense):
         """
-        Extract subcategory from expense - SAME LOGIC AS FLUTTER APP!
+        Extract subcategory from expense.
         Priority:
-        1. [SubCategory] prefix in description
-        2. 'Subcategory: X' in notes
-        3. Keyword matching from description (like Flutter)
-        4. subcategory_name field from database (fallback)
+        1. subcategory_name field from database (set in payload as combined_subcategory_label)
+        2. [SubCategory] prefix in description
+        3. 'Subcategory: X' in notes
+        4. Keyword matching from description (fallback)
         """
+        # ✅ PRIORITY 1: Database value (populated as combined_subcategory_label in payload)
+        subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
+        if subcategory_name:
+            return subcategory_name
+
         raw_desc = _safe_text(expense.get('description')).strip()
 
-        # ✅ PRIORITY 1: Check [SubCategory] prefix in description (same as Flutter)
+        # ✅ PRIORITY 2: Check [SubCategory] prefix in description (same as Flutter)
         prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
         if prefixed:
             prefix = _safe_text(prefixed.group(1)).strip()
             if prefix:
                 return prefix
 
-        # ✅ PRIORITY 2: Check notes for "Subcategory: X" pattern (same as Flutter)
+        # ✅ PRIORITY 3: Check notes for "Subcategory: X" pattern (same as Flutter)
         notes = _safe_text(expense.get('notes')).strip()
         note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
         if note_match:
@@ -532,47 +530,25 @@ def _group_annual_expenses(expenses, year):
             if note_subcategory:
                 return note_subcategory
 
-        # ✅ PRIORITY 3: Keyword matching from description (EXACTLY LIKE FLUTTER)
+        # ✅ PRIORITY 4: Keyword matching from description (fallback)
         desc = raw_desc.lower()
+        if 'rental tool' in desc: return 'Rental Tool'
+        if 'sales' in desc: return 'Sales'
+        if 'gaji' in desc or 'bonus' in desc: return 'Gaji'
+        if 'pembuatan alat' in desc or 'mesin retort' in desc: return 'Pembuatan Alat'
+        if 'thr' in desc or 'allowance' in desc: return 'Allowance'
+        if 'data processing' in desc: return 'Data Processing'
+        if 'moving slickline' in desc or 'project lampu' in desc: return 'Project Operation'
+        if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: return 'Sparepart'
+        if 'repair esor' in desc: return 'Maintenance'
+        if 'licence' in desc or 'license' in desc: return 'Software License'
+        if 'handphone operational' in desc: return 'Operation'
+        if 'sewa ruangan' in desc or 'virtual office' in desc: return 'Sewa Ruangan'
+        if 'modal kerja' in desc: return 'Modal Kerja'
+        if 'team building' in desc: return 'Team Building'
+        if 'biaya transaksi bank' in desc: return 'Biaya Bank'
 
-        # Match Flutter's keyword order exactly
-        if 'rental tool' in desc:
-            return 'Rental Tool'
-        if 'sales' in desc:
-            return 'Sales'
-        if 'gaji' in desc or 'bonus' in desc:
-            return 'Gaji'
-        if 'pembuatan alat' in desc or 'mesin retort' in desc:
-            return 'Pembuatan Alat'
-        if 'thr' in desc or 'allowance' in desc:
-            return 'Allowance'
-        if 'data processing' in desc:
-            return 'Data Processing'
-        if 'moving slickline' in desc or 'project lampu' in desc:
-            return 'Project Operation'
-        if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc:
-            return 'Sparepart'
-        if 'repair esor' in desc:
-            return 'Maintenance'
-        if 'licence' in desc or 'license' in desc:
-            return 'Software License'
-        if 'handphone operational' in desc:
-            return 'Operation'
-        if 'sewa ruangan' in desc or 'virtual office' in desc:
-            return 'Sewa Ruangan'
-        if 'modal kerja' in desc:
-            return 'Modal Kerja'
-        if 'team building' in desc:
-            return 'Team Building'
-        if 'biaya transaksi bank' in desc:
-            return 'Biaya Bank'
-
-        # ✅ PRIORITY 4: Fallback to subcategory_name field (last resort, like Flutter)
-        subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
-        if subcategory_name:
-            return subcategory_name
-
-        return ''  # Return empty if no subcategory found
+        return ''
 
     def _group_sort_key(items):
         first = items[0] if items else {}
@@ -591,6 +567,16 @@ def _group_annual_expenses(expenses, year):
                 return (subcat_name, 1, batch_no, settlement_id, min_date)
             return (subcat_name, 1, settlement_id, min_date)
         return (subcat_name, 0, min_date, settlement_id)
+
+    grouped = {}
+    for e in expenses:
+        subcat_label = _expense_subcategory_label(e)
+        sid = e.get('settlement_id')
+        if sid is None:
+            key = f"title::{_safe_text(e.get('settlement_title'))}::{subcat_label}"
+        else:
+            key = f"sid::{sid}::{subcat_label}"
+        grouped.setdefault(key, []).append(e)
 
     groups = list(grouped.values())
     for items in groups:

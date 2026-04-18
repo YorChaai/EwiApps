@@ -88,59 +88,9 @@ def _expense_amount_for_summary(expense: Expense) -> float:
     return expense.idr_amount or 0.0
 
 
-def _infer_summary_subcategory(
-    expense: Expense,
-    root_name: str,
-    raw_subcategory_name: str
-) -> str:
-    """Infer subcategory from expense description."""
-    desc = (expense.description or '').strip()
-    match = None
-    try:
-        match = re.match(r'^\[(.*?)\]\s*(.*)$', desc)
-    except Exception:
-        match = None
-    if match:
-        prefix = (match.group(1) or '').strip()
-        if prefix:
-            return prefix
-
-    desc_lower = desc.lower()
-    if 'rental tool' in desc_lower:
-        return 'Rental Tool'
-    if 'sales' in desc_lower:
-        return 'Sales'
-    if 'gaji' in desc_lower or 'bonus' in desc_lower:
-        return 'Gaji'
-    if 'pembuatan alat' in desc_lower or 'mesin retort' in desc_lower:
-        return 'Pembuatan Alat'
-    if 'thr' in desc_lower or 'allowance' in desc_lower:
-        return 'Allowance'
-    if 'data processing' in desc_lower:
-        return 'Data Processing'
-    if 'moving slickline' in desc_lower or 'project lampu' in desc_lower:
-        return 'Project Operation'
-    if 'sampling tool' in desc_lower or 'sparepart' in desc_lower or 'ups biaya import' in desc_lower:
-        return 'Sparepart'
-    if 'repair esor' in desc_lower:
-        return 'Maintenance'
-    if 'licence' in desc_lower or 'license' in desc_lower:
-        return 'Software License'
-    if 'handphone operational' in desc_lower:
-        return 'Operation'
-    if 'sewa ruangan' in desc_lower or 'virtual office' in desc_lower:
-        return 'Sewa Ruangan'
-    if 'modal kerja' in desc_lower:
-        return 'Modal Kerja'
-    if 'team building' in desc_lower:
-        return 'Team Building'
-    if 'biaya transaksi bank' in desc_lower:
-        return 'Biaya Bank'
-
-    sub = (raw_subcategory_name or '').strip()
-    if sub and sub != root_name:
-        return sub
-    return ''
+def _get_display_subcategory(expense: Expense) -> str:
+    """Get the consolidated subcategory label from the Expense model."""
+    return (expense.combined_subcategory_label or '').strip()
 
 
 def _summary_display_category(expense, category_by_id, children_by_parent_name):
@@ -154,11 +104,7 @@ def _summary_display_category(expense, category_by_id, children_by_parent_name):
 
     root_name = root.name or '-'
     raw_subcategory_name = category.name or '-'
-    inferred_subcategory = _infer_summary_subcategory(
-        expense,
-        root_name,
-        raw_subcategory_name,
-    )
+    inferred_subcategory = _get_display_subcategory(expense)
 
     children_map = children_by_parent_name.get(root_name, {})
     if inferred_subcategory and inferred_subcategory in children_map:

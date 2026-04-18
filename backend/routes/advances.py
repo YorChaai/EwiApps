@@ -63,23 +63,24 @@ def _sync_revision_items_to_settlement(advance, revision_no):
         if item.id in existing_advance_item_ids:
             continue
         expense_date = item.date or datetime.now(timezone.utc).date()
-        db.session.add(
-            Expense(
-                settlement_id=settlement.id,
-                category_id=item.category_id,
-                description=item.description,
-                amount=item.estimated_amount,
-                date=expense_date,
-                source=f'Advance Revisi {revision_no}' if revision_no > 0 else 'Advance',
-                advance_item_id=item.id,
-                revision_no=revision_no,
-                currency=item.currency or 'IDR',
-                currency_exchange=item.currency_exchange or 1,
-                evidence_path=item.evidence_path,
-                evidence_filename=item.evidence_filename,
-                status='pending',
-            )
+        exp = Expense(
+            settlement_id=settlement.id,
+            category_id=item.category_id,
+            description=item.description,
+            amount=item.estimated_amount,
+            date=expense_date,
+            source=f'Advance Revisi {revision_no}' if revision_no > 0 else 'Advance',
+            advance_item_id=item.id,
+            revision_no=revision_no,
+            currency=item.currency or 'IDR',
+            currency_exchange=item.currency_exchange or 1,
+            evidence_path=item.evidence_path,
+            evidence_filename=item.evidence_filename,
+            status='pending',
         )
+        if item.subcategories:
+            exp.subcategories = item.subcategories
+        db.session.add(exp)
 
 
 def _next_revision_no(advance):
@@ -324,7 +325,18 @@ def add_advance_item(advance_id):
     if editable_revision_no is None:
         return jsonify({'error': 'Kasbon saat ini tidak dalam mode edit'}), 400
 
+    # Support both category_id (legacy) and category_ids (list)
     category_id = request.form.get('category_id')
+    category_ids_raw = request.form.get('category_ids')
+    category_ids = []
+    if category_ids_raw:
+        try:
+            category_ids = json.loads(category_ids_raw)
+        except:
+            pass
+    if not category_ids and category_id:
+        category_ids = [int(category_id)]
+ 
     description = request.form.get('description', '').strip()
     estimated_amount = request.form.get('estimated_amount')
     date_str = request.form.get('date')
@@ -332,12 +344,19 @@ def add_advance_item(advance_id):
     currency = request.form.get('currency', 'IDR').strip().upper() or 'IDR'
     currency_exchange_str = request.form.get('currency_exchange', '1')
 
-    if not all([category_id, description, estimated_amount]):
-        return jsonify({'error': 'Semua field wajib diisi'}), 400
-
-    category = Category.query.get(category_id)
-    if not category:
-        return jsonify({'error': 'Kategori tidak ditemukan'}), 404
+    if not all([category_ids, description, estimated_amount]):
+        return jsonify({'error': 'Semua field wajib diisi (termasuk sub-kategori)'}), 400
+ 
+    # Validasi kategori: semua harus di bawah parent yang sama
+    categories = Category.query.filter(Category.id.in_(category_ids)).all()
+    if len(categories) != len(category_ids):
+        return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
+ 
+    parent_ids = {c.parent_id for c in categories}
+    if len(parent_ids) > 1:
+        return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
+ 
+    primary_category_id = category_ids[0]
 
     try:
         estimated_amount = float(estimated_amount)
@@ -386,7 +405,7 @@ def add_advance_item(advance_id):
 
     item = AdvanceItem(
         advance_id=advance.id,
-        category_id=category_id,
+        category_id=primary_category_id,
         description=description,
         estimated_amount=estimated_amount,
         revision_no=editable_revision_no or 0,
@@ -397,6 +416,8 @@ def add_advance_item(advance_id):
         currency=currency,
         currency_exchange=currency_exchange,
     )
+    if categories:
+        item.subcategories = categories
     db.session.add(item)
 
     # Auto-sync title for single type
@@ -441,8 +462,26 @@ def update_advance_item(item_id):
         if any(k in data.keys() for k in ['category_id', 'description', 'estimated_amount', 'date', 'source', 'currency', 'currency_exchange']):
             return jsonify({'error': 'saat rejected hanya boleh mengubah checklist, tidak bisa mengubah data utama'}), 400
 
-    if 'category_id' in data:
-        item.category_id = data['category_id']
+    if 'category_ids' in data or 'category_id' in data:
+        cat_ids = data.get('category_ids')
+        if not isinstance(cat_ids, list):
+            try:
+                cat_ids = json.loads(cat_ids)
+            except:
+                cat_ids = [int(data['category_id'])] if 'category_id' in data else []
+ 
+        if cat_ids:
+            new_cats = Category.query.filter(Category.id.in_(cat_ids)).all()
+            if len(new_cats) != len(cat_ids):
+                return jsonify({'error': 'Salah satu kategori tidak ditemukan'}), 404
+ 
+            # Validasi parent sama
+            p_ids = {c.parent_id for c in new_cats}
+            if len(p_ids) > 1:
+                return jsonify({'error': 'Semua sub-kategori harus berada di bawah kategori utama yang sama'}), 400
+ 
+            item.category_id = cat_ids[0]
+            item.subcategories = new_cats
     if 'description' in data:
         item.description = data['description'].strip()
     if 'estimated_amount' in data:
@@ -698,8 +737,7 @@ def create_settlement_from_advance(advance_id):
             
         expense_date = item.date if item.date else today
             
-        db.session.add(
-            Expense(
+        exp = Expense(
                 settlement_id=settlement.id,
                 category_id=item.category_id,
                 description=item.description,
@@ -714,7 +752,9 @@ def create_settlement_from_advance(advance_id):
                 evidence_filename=item.evidence_filename,
                 status='pending',
             )
-        )
+        if item.subcategories:
+            exp.subcategories = item.subcategories
+        db.session.add(exp)
 
     advance.status = 'in_settlement'
     db.session.commit()
