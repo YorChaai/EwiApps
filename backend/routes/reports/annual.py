@@ -908,8 +908,13 @@ def _group_expenses_by_subcategory(expenses):
                 groups[subcat] = []
             groups[subcat].append(e)
 
-    # Sort subcategories A-Z (case-insensitive)
-    sorted_subcats = sorted(groups.keys(), key=lambda x: x.lower())
+    # ✅ FIX: Sort subcategories - Multi-categories (with comma) FIRST, then alphabetical
+    def _subcategory_sort_key(s):
+        is_multiple = ',' in s
+        seniority = 0 if is_multiple else 1
+        return (seniority, s.lower())
+
+    sorted_subcats = sorted(groups.keys(), key=_subcategory_sort_key)
 
     return {
         'groups': {subcat: groups[subcat] for subcat in sorted_subcats},
