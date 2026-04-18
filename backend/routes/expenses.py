@@ -56,9 +56,10 @@ def create_expense():
     if not all([settlement_id, category_id, description, amount, date_str]):
         return jsonify({'error': 'Semua field wajib diisi'}), 400
 
-    # Validasi nominal minimal 100
-    if amount <= 100:
-        return jsonify({'error': 'Nominal minimal Rp 100'}), 400
+    # Validasi nominal minimal 100 (dalam ekuivalen Rupiah)
+    idr_equivalent = amount * (currency_exchange if currency_exchange else 1)
+    if idr_equivalent <= 100:
+        return jsonify({'error': 'Nominal ekuivalen Rupiah harus lebih dari Rp 100'}), 400
 
     settlement = Settlement.query.get(settlement_id)
     if not settlement:

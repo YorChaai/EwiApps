@@ -1727,7 +1727,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               final isNarrow = constraints.maxWidth < 650;
               final currentTotal = items.fold(
                 0.0,
-                (sum, item) => sum + (item['estimated_amount'] ?? 0),
+                (sum, item) {
+                  final estimated = (item['estimated_amount'] ?? 0) as num;
+                  final kurs = (item['currency_exchange'] ?? 1.0) as num;
+                  final idrStr = item['idr_amount'];
+                  final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
+                  return sum + idr.toDouble();
+                },
               );
 
               final cards = [
@@ -1914,6 +1920,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                 controller: _itemTableHorizontalCtrl,
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
+                  dataRowMaxHeight: double.infinity,
                   headingRowColor: WidgetStateProperty.all(_surfaceColor(context)),
                   dataRowColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.hovered)) {
@@ -2055,8 +2062,22 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           ),
                         ),
                         DataCell(
-                          Text(
-                            'Rp ${_currencyFormat.format(item['estimated_amount'])}',
+                          Builder(
+                            builder: (context) {
+                              final currency = (item['currency'] ?? 'IDR').toString().toUpperCase();
+                              final estimated = (item['estimated_amount'] ?? 0) as num;
+                              final kurs = (item['currency_exchange'] ?? 1.0) as num;
+                              final idrStr = item['idr_amount'];
+                              final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
+                              
+                              if (currency == 'IDR') {
+                                return Text('Rp ${_currencyFormat.format(estimated)}');
+                              }
+                              final foreignFormat = NumberFormat('#,##0.##', 'en_US');
+                              return Text(
+                                '$currency ${foreignFormat.format(estimated)}\n(Rp ${_currencyFormat.format(idr)})',
+                              );
+                            },
                           ),
                         ),
                         DataCell(

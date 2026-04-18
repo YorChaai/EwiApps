@@ -447,7 +447,7 @@ def generate_excel_advance_report():
         cat_sums = {}
         for item in advance.items:
             cn = category_map[item.category_id].name if item.category_id in category_map else None
-            if cn: cat_sums[cn] = cat_sums.get(cn, 0) + item.estimated_amount
+            if cn: cat_sums[cn] = cat_sums.get(cn, 0) + (item.idr_amount or 0)
         for cn, amt in cat_sums.items():
             if cn in cat_col_map: row_data[cat_col_map[cn]] = amt
         ws.append(row_data)
@@ -479,11 +479,22 @@ def generate_pdf_advance_report(advance_id):
     elements.append(Paragraph(f"<b>Total Estimasi:</b> Rp {advance.total_amount:,.0f}", styles['Normal']))
     elements.append(Paragraph(f"<b>Disetujui:</b> Rp {advance.approved_amount:,.0f}", styles['Normal']))
     elements.append(Spacer(1, 12))
-    data = [["Kategori", "Deskripsi", "Estimasi (Rp)"]]
+    data = [["Kategori", "Deskripsi", "Mata Uang", "Amount", "Kurs", "Estimasi (IDR)"]]
     for item in advance.items:
-        data.append([item.category.name if item.category else "-", item.description, f"{item.estimated_amount:,.0f}"])
-    t = Table(data, colWidths=[150, 250, 100])
-    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.grey),('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),('ALIGN',(0,0),(-1,-1),'LEFT'),('ALIGN',(2,0),(2,-1),'RIGHT'),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('BOTTOMPADDING',(0,0),(-1,0),12),('BACKGROUND',(0,1),(-1,-1),colors.beige),('GRID',(0,0),(-1,-1),1,colors.black)]))
+        currency = item.currency or 'IDR'
+        amount = item.estimated_amount or 0
+        kurs = item.currency_exchange or 1
+        idr = item.idr_amount or 0
+        data.append([
+            item.category.name if item.category else "-",
+            item.description,
+            currency,
+            f"{amount:,.0f}",
+            f"{kurs:,.0f}",
+            f"{idr:,.0f}",
+        ])
+    t = Table(data, colWidths=[120, 180, 40, 60, 50, 80])
+    t.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.grey),('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),('ALIGN',(0,0),(-1,-1),'LEFT'),('ALIGN',(3,0),(5,-1),'RIGHT'),('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,0),12),('BACKGROUND',(0,1),(-1,-1),colors.beige),('GRID',(0,0),(-1,-1),1,colors.black)]))
     elements.append(t); doc.build(elements); buffer.seek(0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     return send_file(buffer, as_attachment=True, download_name=f"kasbon_{advance_id}_{timestamp}.pdf", mimetype='application/pdf')

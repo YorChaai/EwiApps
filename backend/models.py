@@ -91,12 +91,12 @@ class Advance(db.Model):
 
     @property
     def total_amount(self):
-        return sum(item.estimated_amount for item in self.items)
+        return sum((item.idr_amount or 0) for item in self.items)
 
     @property
     def approved_amount(self):
         return sum(
-            item.estimated_amount
+            (item.idr_amount or 0)
             for item in self.items
             if (item.revision_no or 0) <= (self.approved_revision_no or 0)
         )
@@ -104,7 +104,7 @@ class Advance(db.Model):
     @property
     def base_amount(self):
         return sum(
-            item.estimated_amount
+            (item.idr_amount or 0)
             for item in self.items
             if (item.revision_no or 0) == 0
         )
@@ -133,7 +133,7 @@ class Advance(db.Model):
                 'revision_no': revision_no,
                 'label': 'Pengajuan Awal' if revision_no == 0 else f'Revisi {revision_no}',
                 'item_count': len(revision_items),
-                'total_amount': sum(item.estimated_amount for item in revision_items),
+                'total_amount': sum((item.idr_amount or 0) for item in revision_items),
                 'is_approved': revision_no <= (self.approved_revision_no or 0),
                 'is_active': revision_no == self.active_revision_no,
             })
@@ -214,6 +214,19 @@ class AdvanceItem(db.Model):
 
     category = db.relationship('Category')
 
+    @hybrid_property
+    def idr_amount(self):
+        if self.currency != 'IDR' and self.currency_exchange:
+            return self.estimated_amount * self.currency_exchange
+        return self.estimated_amount
+
+    @idr_amount.expression
+    def idr_amount(cls):
+        return db.case(
+            (db.and_(cls.currency != 'IDR', cls.currency_exchange.isnot(None)), cls.estimated_amount * cls.currency_exchange),
+            else_=cls.estimated_amount
+        )
+
     def to_dict(self):
         d_val = None
         if self.date:
@@ -237,6 +250,7 @@ class AdvanceItem(db.Model):
             'source': self.source,
             'currency': self.currency or 'IDR',
             'currency_exchange': self.currency_exchange or 1.0,
+            'idr_amount': self.idr_amount,
             'status': self.status or 'pending',
             'notes': self.notes,
             'created_at': self.created_at.isoformat() if self.created_at else None
