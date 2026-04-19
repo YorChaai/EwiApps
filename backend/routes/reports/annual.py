@@ -1794,8 +1794,8 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             s_none = Side(style=None)
             s_double = Side(style='double')
 
-            # ✅ FIX: Set consistent row height for a professional look
-            ws_lr.row_dimensions[r].height = 20
+            # ✅ FIX: Set standard row height to match Sheet 1
+            ws_lr.row_dimensions[r].height = 15
 
             # Determine Top/Bottom style
             top_s = s_thin if style_type in ('total', 'final') else s_none
