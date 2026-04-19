@@ -769,11 +769,16 @@ def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name, expense_
     ws_bs = _get_or_create('Business Summary')
     _safe_set_cell_with_merge(ws_bs, 1, 1, f'Business Summary {year}')
     ws_bs['A1'].font = Font(bold=True, size=14)
-    # ✅ UNIFIED FORMULA APPROACH: Always use SUM range with column constants
+    # Fetch root categories dynamically from DB
+    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+    cat_names = [c.name for c in root_cats]
+    last_cat_col_letter = get_column_letter(9 + len(cat_names) - 1)
+
+    # ✅ FIX: Use dynamic category range instead of hardcoded :Q
     rows = [
         ('Total Revenue (IDR)', _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)),
         ('Total Tax Out (IDR)', _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)),
-        ('Total Operation Cost (IDR)', f'=SUM({main_ref}!I{cost_totals_row}:Q{cost_totals_row})'),
+        ('Total Operation Cost (IDR)', f'=SUM({main_ref}!I{cost_totals_row}:{last_cat_col_letter}{cost_totals_row})'),
         ('Net Profit/Loss (IDR)', '=B4-B5-B6'),
     ]
     ws_bs['A3'] = 'Keterangan'; ws_bs['B3'] = 'Nilai'
@@ -1771,10 +1776,54 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
     lr_name = f'Laba rugi -{year}'
     if lr_name in wb.sheetnames:
         ws_lr = wb[lr_name]
-        # ✅ DO NOT REBUILD - Template has proper layout
-        # Just clean up old data if any
+
+        # ✅ DISABLE GRIDLINES for a clean look
+        ws_lr.sheet_view.showGridLines = False
+
+        # ✅ CRITICAL: PRE-CLEAR ONLY LABA RUGI SIDE
+        # We only clear columns A to E (1-5) to preserve NERACA on the right (G-J)
+        max_lr_row = max(ws_lr.max_row, 150)
+        _clear_range_force(ws_lr, 8, max_lr_row, 1, 5, reset_style=True)
+
+        # Surgically clear old signatures area on BOTH sides to prevent duplicates
+        # Clear more columns (1 to 8) to ensure stray "Direktur" from template are removed
+        _clear_range_force(ws_lr, 48, max_lr_row, 1, 8, reset_style=True)
+        # Helper to apply clean border style to a row (B to E)
+        def _apply_pl_row_style(r, style_type='data'):
+            s_thin = Side(style='thin')
+            s_none = Side(style=None)
+            s_double = Side(style='double')
+
+            # ✅ FIX: Set consistent row height for a professional look
+            ws_lr.row_dimensions[r].height = 20
+
+            # Determine Top/Bottom style
+            top_s = s_thin if style_type in ('total', 'final') else s_none
+            bottom_s = s_thin if style_type == 'total' else (s_double if style_type == 'final' else s_none)
+            # Apply borders to columns B to E
+            # Column B (2): Left border + Top/Bottom
+            ws_lr.cell(row=r, column=2).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
+            # Column C (3): Right border + Top/Bottom
+            ws_lr.cell(row=r, column=3).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+            # Column D (4): Top/Bottom ONLY (Explicitly NO Right border)
+            ws_lr.cell(row=r, column=4).border = Border(left=s_none, right=s_none, top=top_s, bottom=bottom_s)
+            # Column E (5): Right border + Top/Bottom (Explicitly NO Left border)
+            ws_lr.cell(row=r, column=5).border = Border(left=s_none, right=s_thin, top=top_s, bottom=bottom_s)
+
+            # Alignment and Number Format
+            ws_lr.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=3).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=4).alignment = Alignment(horizontal='left', vertical='center') # Rp to the left
+            ws_lr.cell(row=r, column=5).alignment = Alignment(horizontal='right', vertical='center')
+
+            # Thousand separator for value column
+            if ws_lr.cell(row=r, column=5).value is not None:
+                ws_lr.cell(row=r, column=5).number_format = '#,##0'
+
+        # Just clean up old metadata values if they somehow persist
         ws_lr['A3'] = None
         ws_lr['F3'] = None
+
         # bersihkan nilai template dummy spesifik di neraca
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
@@ -1783,43 +1832,182 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         direct_count = sum(1 for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung').strip().lower() != 'pendapatan_lain_lain')
         other_count = len(revenues) - direct_count
         col_letter = get_column_letter(COL_AMOUNT_RECEIVED)
-        start_row = REVENUE_START_ROW
+        start_row_ref = REVENUE_START_ROW
 
+        # PENDAPATAN SECTION
+        ws_lr['B8'] = 'PENDAPATAN'; ws_lr['B8'].font = Font(bold=True)
+        _apply_pl_row_style(8, 'header')
+
+        ws_lr['C9'] = '    PENDAPATAN LANGSUNG' # Indented
+        ws_lr['D9'] = 'Rp'
         if direct_count > 0:
-            ws_lr['E9'] = f'=SUM({main_ref}!{col_letter}{start_row}:{col_letter}{start_row + direct_count - 1})'
+            ws_lr['E9'] = f'=SUM({main_ref}!{col_letter}{start_row_ref}:{col_letter}{start_row_ref + direct_count - 1})'
         else:
             ws_lr['E9'] = 0
+        _apply_pl_row_style(9, 'data')
 
+        ws_lr['C10'] = '    PENDAPATAN LAIN LAIN' # Indented
+        ws_lr['D10'] = 'Rp'
         if other_count > 0:
-            other_start = start_row + direct_count
+            other_start = start_row_ref + direct_count
             ws_lr['E10'] = f'=SUM({main_ref}!{col_letter}{other_start}:{col_letter}{other_start + other_count - 1})'
         else:
             ws_lr['E10'] = 0
+        _apply_pl_row_style(10, 'data')
 
+        _apply_pl_row_style(11, 'data') # Gap baris 11
+
+        ws_lr['B12'] = 'TOTAL PENDAPATAN'; ws_lr['B12'].font = Font(bold=True)
+        ws_lr['D12'] = 'Rp'
         ws_lr['E12'] = '=SUM(E9:E11)'
+        _apply_pl_row_style(12, 'total')
 
-        # ✅ Expense totals: reference dynamic cost_totals_row (columns 9-17)
-        ws_lr['E15'] = f'={main_ref}!I{cost_totals_row}'
-        ws_lr['E16'] = f'={main_ref}!J{cost_totals_row}'
-        ws_lr['E17'] = f'={main_ref}!K{cost_totals_row}'
-        ws_lr['E18'] = f'={main_ref}!L{cost_totals_row}'
-        ws_lr['E21'] = '=SUM(E15:E20)'
-        ws_lr['E23'] = f'={main_ref}!Q{cost_totals_row}'
-        ws_lr['E27'] = '=SUM(E22:E26)'
-        ws_lr['E30'] = f'={main_ref}!M{cost_totals_row}'
-        ws_lr['E31'] = f'={main_ref}!N{cost_totals_row}'
-        ws_lr['E32'] = f'={main_ref}!O{cost_totals_row}'
-        ws_lr['E33'] = f'={main_ref}!P{cost_totals_row}'
-        ws_lr['E35'] = '=SUM(E30:E34)'
-        ws_lr['E37'] = '=E35+E21+E27'
-        ws_lr['E40'] = 0
-        ws_lr['E42'] = '=E12-E37'
-        ws_lr['E44'] = 0
-        ws_lr['E46'] = '=E42-E44'
+        _apply_pl_row_style(13, 'data') # Gap baris 13
+
+        # ✅ Expense totals: Dynamic Generation
+        direct_keywords = ['operasi', 'research', 'r&d', 'r & d', 'sewa peralatan', 'interpretasi', 'log data', 'project']
+        langsung_cats = []
+        admin_cats = []
+        for idx, cat_name in enumerate(cat_names):
+            col_letter = get_column_letter(9 + idx)
+            is_direct = any(k in str(cat_name).lower() for k in direct_keywords)
+            if is_direct:
+                langsung_cats.append((cat_name, col_letter))
+            else:
+                admin_cats.append((cat_name, col_letter))
+
+        # Clear old Laba Rugi area (A14 - E max_row) - ensure full cleanup of previous dynamic data
+        max_lr_row = max(ws_lr.max_row, 150) # Increased buffer for safety
+        # ✅ FIX: Use _clear_range_force to handle merged cells (e.g. from previous runs or template)
+        # Clear columns A to E (1 to 5) to ensure Column A is also cleaned
+        _clear_range_force(ws_lr, 14, max_lr_row, 1, 5, reset_style=True)
+
+        row = 14
+        ws_lr[f'B{row}'] = 'BEBAN LANGSUNG'; ws_lr[f'B{row}'].font = Font(bold=True)
+        _apply_pl_row_style(row, 'header')
+        row += 1
+
+        start_bl = row
+        for name, col_l in langsung_cats:
+            ws_lr[f'C{row}'] = f'    {name.upper()}' # Indented
+            ws_lr[f'D{row}'] = 'Rp'
+            ws_lr[f'E{row}'] = f'={main_ref}!{col_l}{cost_totals_row}'
+            _apply_pl_row_style(row, 'data')
+            row += 1
+        end_bl = row - 1
+
+        if end_bl < start_bl: end_bl = start_bl
+
+        ws_lr[f'B{row}'] = 'TOTAL BIAYA LANGSUNG'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=SUM(E{start_bl}:E{end_bl})'
+        _apply_pl_row_style(row, 'total')
+        tot_bl_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'BEBAN TIDAK LANGSUNG'; ws_lr[f'B{row}'].font = Font(bold=True)
+        _apply_pl_row_style(row, 'header')
+        row += 1
+        start_btl = row
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = 0
+        _apply_pl_row_style(row, 'data')
+        end_btl = row
+
+        row += 1
+        ws_lr[f'B{row}'] = 'TOTAL BIAYA TIDAK LANGSUNG'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=SUM(E{start_btl}:E{end_btl})'
+        _apply_pl_row_style(row, 'total')
+        tot_btl_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'BIAYA ADMINISTRASI DAN UMUM'; ws_lr[f'B{row}'].font = Font(bold=True)
+        _apply_pl_row_style(row, 'header')
+        row += 1
+        start_ba = row
+        for name, col_l in admin_cats:
+            ws_lr[f'C{row}'] = f'    {name.upper()}' # Indented
+            ws_lr[f'D{row}'] = 'Rp'
+            ws_lr[f'E{row}'] = f'={main_ref}!{col_l}{cost_totals_row}'
+            _apply_pl_row_style(row, 'data')
+            row += 1
+        end_ba = row - 1
+
+        if end_ba < start_ba: end_ba = start_ba
+
+        ws_lr[f'B{row}'] = 'TOTAL BIAYA ADMINISTRASI DAN UMUM'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=SUM(E{start_ba}:E{end_ba})'
+        _apply_pl_row_style(row, 'total')
+        tot_ba_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'TOTAL BIAYA'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=E{tot_bl_row}+E{tot_btl_row}+E{tot_ba_row}'
+        _apply_pl_row_style(row, 'total')
+        tot_biaya_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'PENDAPATAN/BEBAN LAIN LAIN'; ws_lr[f'B{row}'].font = Font(bold=True)
+        _apply_pl_row_style(row, 'header')
+        row += 1
+        ws_lr[f'C{row}'] = '    PENDAPATAN LAINNYA' # Indented
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = 0
+        _apply_pl_row_style(row, 'data')
+        pend_lain_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'LABA RUGI SEBELUM PAJAK'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=E12-E{tot_biaya_row}'
+        _apply_pl_row_style(row, 'total')
+        laba_sblum_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'CORPORATE TAX (PPh 29)'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = 0
+        _apply_pl_row_style(row, 'total')
+        tax_row = row
+        row += 1
+        _apply_pl_row_style(row, 'data') # Gap row bergaris vertikal
+        row += 1
+
+        ws_lr[f'B{row}'] = 'LABA / RUGI BERSIH'; ws_lr[f'B{row}'].font = Font(bold=True)
+        ws_lr[f'D{row}'] = 'Rp'
+        ws_lr[f'E{row}'] = f'=E{laba_sblum_row}-E{tax_row}'
+        _apply_pl_row_style(row, 'final')
+        laba_bersih_row = row
+
+        # Place signature below the table
+        last_row = max(row + 4, 52)
+
+        ws_lr[f'C{last_row}'] = 'Direktur'
+        ws_lr[f'C{last_row}'].font = Font(bold=True)
+        ws_lr[f'C{last_row}'].alignment = Alignment(horizontal='center')
+
+        ws_lr[f'H{last_row}'] = 'Direktur'
+        ws_lr[f'H{last_row}'].font = Font(bold=True)
+        ws_lr[f'H{last_row}'].alignment = Alignment(horizontal='center')
 
         # input dan formula neraca
         ws_lr['J10'] = opening_cash_balance
-        ws_lr['J11'] = "=E46-'Business Summary'!E13"
+        ws_lr['J11'] = f"=E{laba_bersih_row}-'Business Summary'!E13"
         ws_lr['J12'] = accounts_receivable
         ws_lr['J13'] = prepaid_tax_pph23
         ws_lr['J14'] = prepaid_expenses
@@ -1847,16 +2035,19 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_bs['B4'] = f'BUSINESS SUMMARY | TAHUN {year}'
 
         # FIX: Set consistent row height for main table (rows 6-16)
-        for row in range(6, 17):
-            ws_bs.row_dimensions[row].height = ROW_HEIGHT_DIVIDEND
+        for row_idx in range(6, 17):
+            ws_bs.row_dimensions[row_idx].height = ROW_HEIGHT_DIVIDEND
 
         # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
-        # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 11)
-        # PPh23 total: SUM of all revenue tax rows (COL_PPH_23 = 13)
+        # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 12)
+        # PPh23 total: SUM of all revenue tax rows (COL_PPH_23 = 14)
         ws_bs['E7'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)
         ws_bs['E8'] = f'=E7-{_sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)[1:]}'
-        # ✅ Use dynamic cost_totals_row instead of hardcoded 750
-        ws_bs['E9'] = f'=SUM({main_ref}!I{cost_totals_row}:Q{cost_totals_row})'
+
+        # ✅ FIX: Use dynamic category range instead of hardcoded :Q
+        last_cat_col_letter_sync = get_column_letter(9 + len(cat_names) - 1)
+        ws_bs['E9'] = f'=SUM({main_ref}!I{cost_totals_row}:{last_cat_col_letter_sync}{cost_totals_row})'
+
         ws_bs['E10'] = '=E7-E9'
         ws_bs['E11'] = '=E10*22%*50%'
         ws_bs['E12'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)  # PPh23 total
@@ -2147,9 +2338,9 @@ def get_annual_report_excel():
         except Exception as e:
             logger.warning(f'Failed to set Q7 example: {e}')
 
-        # Clear data area
-        _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 17)
-        _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 17)
+        # Clear data area - PRESERVE STYLE (Borders) for Sheet 1
+        _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 17, reset_style=False)
+        _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 17, reset_style=False)
 
         # Render revenue data
         row_cursor = REVENUE_START_ROW
@@ -2208,7 +2399,7 @@ def get_annual_report_excel():
         # ✅ FIX: Clone style FIRST, then clear and write
         _clone_row_format(ws, REVENUE_START_ROW, row_cursor, start_col=2, end_col=17)
 
-        _clear_range_force(ws, row_cursor, row_cursor, 2, 17)
+        _clear_range_force(ws, row_cursor, row_cursor, 2, 17, reset_style=False)
 
         # ✅ MERGE D:E for empty state message (same as data rows)
         merge_range = f'D{row_cursor}:E{row_cursor}'

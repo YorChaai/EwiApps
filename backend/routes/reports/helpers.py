@@ -7,6 +7,7 @@ from typing import Optional, Any, List, Dict, Tuple
 from copy import copy
 from flask import current_app
 from openpyxl.cell.cell import MergedCell
+from openpyxl.styles import Border, Side, Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter as openpyxl_get_column_letter
 
 # Setup logging
@@ -164,10 +165,10 @@ def _clear_data_keep_formulas(ws, start_row, end_row, start_col=2, end_col=17):
             cell.value = None
 
 
-def _clear_range_force(ws, start_row, end_row, start_col=2, end_col=17):
+def _clear_range_force(ws, start_row, end_row, start_col=2, end_col=17, reset_style=True):
     """
     ✅ FORCE CLEAR: Clear range including handling merged cells.
-    Use this when _clear_range fails to clear merged cells.
+    If reset_style=True, also resets all styles (borders, fonts, etc).
     """
     # Step 1: Unmerge all cells in this range first
     ranges_to_unmerge = []
@@ -186,12 +187,22 @@ def _clear_range_force(ws, start_row, end_row, start_col=2, end_col=17):
         except Exception:
             pass
 
-    # Step 2: Clear all values and reset format
+    # Step 2: Clear all values and optionally reset ALL formatting
+    if reset_style:
+        empty_border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+        empty_font = Font(bold=False, italic=False, color='000000', size=11, name='Calibri')
+        empty_fill = PatternFill(fill_type=None)
+
     for r in range(start_row, end_row + 1):
         for c in range(start_col, end_col + 1):
             cell = ws.cell(row=r, column=c)
             cell.value = None
-            cell.number_format = 'General'
+            if reset_style:
+                cell.number_format = 'General'
+                cell.border = empty_border
+                cell.font = empty_font
+                cell.fill = empty_fill
+                cell.alignment = Alignment(horizontal='general', vertical='bottom', wrap_text=False)
 
 
 def _set_rows_hidden(ws, start_row, end_row, hidden):
