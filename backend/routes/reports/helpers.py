@@ -298,9 +298,13 @@ def _map_expense_category_index(expense, cat_names):
 
 
 def _map_expense_category_index_from_name(category_name, cat_names):
-    if not category_name or category_name not in cat_names:
-        return 0
-    return cat_names.index(category_name)
+    if not category_name:
+        return None
+    name = str(category_name).strip().lower()
+    for i, cn in enumerate(cat_names):
+        if str(cn).strip().lower() == name:
+            return i
+    return None
 
 
 def _pick_template_formula_col(ws, row_num, start_col=9, end_col=17):

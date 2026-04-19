@@ -1057,9 +1057,11 @@ def _render_expense_section_from_data(
                 ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
                 root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-                fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-                nominal_idr = _expense_amount_for_display(expense)
-                _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
+                if cat_idx is not None:
+                    fallback_col = 9 + cat_idx
+                    nominal_idr = _expense_amount_for_display(expense)
+                    _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
 
                 row_cursor += 1
                 seq_counter += 1
@@ -1102,9 +1104,11 @@ def _render_expense_section_from_data(
             ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
             root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-            fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-            nominal_idr = _expense_amount_for_display(expense)
-            _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+            cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
+            if cat_idx is not None:
+                fallback_col = 9 + cat_idx
+                nominal_idr = _expense_amount_for_display(expense)
+                _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
 
             row_cursor += 1
             seq_counter += 1
@@ -1246,9 +1250,11 @@ def _render_expense_section_from_data(
 
                     # Map to category column
                     root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-                    fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-                    nominal_idr = _expense_amount_for_display(expense)
-                    _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                    cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
+                    if cat_idx is not None:
+                        fallback_col = 9 + cat_idx
+                        nominal_idr = _expense_amount_for_display(expense)
+                        _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
 
                     row_cursor += 1
                     batch_item_counter += 1
@@ -1292,9 +1298,11 @@ def _render_expense_section_from_data(
                 ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
                 root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-                fallback_col = 9 + _map_expense_category_index_from_name(root_name, cat_names)
-                nominal_idr = _expense_amount_for_display(expense)
-                _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
+                if cat_idx is not None:
+                    fallback_col = 9 + cat_idx
+                    nominal_idr = _expense_amount_for_display(expense)
+                    _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
 
                 row_cursor += 1
                 batch_item_counter += 1
@@ -1329,6 +1337,10 @@ def _render_expense_section_from_data(
     # ✅ FIX: Merge columns B to H (Date to Amount) for TOTAL row
     # Column B=2, H=8, so merge B{total_row}:H{total_row}
     merge_range = f'B{total_row}:H{total_row}'
+    try:
+        ws.unmerge_cells(merge_range)
+    except Exception:
+        pass
     ws.merge_cells(merge_range)
 
     # Place TOTAL label in merged cell (starts at column B)
@@ -1336,12 +1348,11 @@ def _render_expense_section_from_data(
     ws.cell(row=total_row, column=2).font = Font(bold=True)
     ws.cell(row=total_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
 
-    # ✅ FIX: Render dynamic SUM formulas for each category column (Column I onwards)
-    for col in range(9, last_category_col + 1):
-        col_letter = get_column_letter(col)
-        # Formula: =SUM(I{start_row}:I{total_row-1})
-        formula = f'=SUM({col_letter}{start_row}:{col_letter}{total_row-1})'
-        _safe_set_number(ws, total_row, col, formula)
+    # ✅ FIX: Use pre-calculated cost totals to ensure accuracy across all columns
+    cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
+    for i, total_val in enumerate(cost_totals):
+        col = 9 + i
+        _safe_set_number(ws, total_row, col, total_val)
         ws.cell(row=total_row, column=col).font = Font(bold=True)
 
     # ✅ Apply border to TOTAL row
@@ -1542,7 +1553,8 @@ def _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map=Non
             _expense_column_mapping_name(expense, category_by_id_map),
             cat_names
         )
-        totals[col_idx] += nominal_idr
+        if col_idx is not None:
+            totals[col_idx] += nominal_idr
     return totals
 
 
@@ -1717,7 +1729,11 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
     # Fetch root categories dynamically from DB
     root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     cat_names = [c.name for c in root_cats]
-    category_by_id_map = {c.id: c for c in root_cats}
+
+    # ✅ FIX: Map MUST contain ALL categories (roots & children) so _operation_cost_totals_by_column can traverse up
+    all_cats_sync = Category.query.all()
+    category_by_id_map = {c.id: c for c in all_cats_sync}
+
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
     total_cost = sum(cost_totals)
 
@@ -2419,8 +2435,10 @@ def get_annual_report_excel():
     root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns # for mapping
-    # Build category map for consistent lookup (id -> category object)
-    category_by_id_map = {c.id: c for c in root_cats}
+
+    # ✅ FIX: Map MUST contain ALL categories (roots & children) so _root_category_info can traverse up
+    all_cats = Category.query.all()
+    category_by_id_map = {c.id: c for c in all_cats}
     _write_dynamic_category_headers(ws, root_cats, header_row=expense_header_row)
 
     # SET UNIFORM COLUMN WIDTH FOR ALL CATEGORIES
