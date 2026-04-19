@@ -58,6 +58,7 @@ class Category(db.Model):
     status = db.Column(db.String(20), default='approved')  # approved, pending
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)  # For manual category ordering
+    main_group = db.Column(db.String(50), nullable=True)  # BEBAN LANGSUNG or BIAYA ADMINISTRASI DAN UMUM
 
     children = db.relationship('Category', backref=db.backref('parent', remote_side=[id]), lazy=True)
     expenses = db.relationship('Expense', backref='category', lazy=True)
@@ -77,7 +78,8 @@ class Category(db.Model):
             'parent_id': self.parent_id,
             'status': self.status,
             'created_by': self.created_by,
-            'sort_order': self.sort_order
+            'sort_order': self.sort_order,
+            'main_group': self.main_group
         }
         if include_children:
             data['children'] = [c.to_dict() for c in self.children]

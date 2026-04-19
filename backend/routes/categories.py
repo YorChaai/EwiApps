@@ -31,7 +31,7 @@ def list_categories():
 def reorder_categories():
     """
     Reorder categories (manager only).
-    Expects: {'categories': [{'id': 1, 'sort_order': 1}, {'id': 2, 'sort_order': 2}, ...]}
+    Expects: {'categories': [{'id': 1, 'sort_order': 1, 'main_group': '...'}, ...]}
     """
     user = User.query.get(int(get_jwt_identity()))
     if user.role != 'manager':
@@ -47,20 +47,24 @@ def reorder_categories():
         for cat_data in categories_data:
             cat_id = cat_data.get('id')
             sort_order = cat_data.get('sort_order')
+            main_group = cat_data.get('main_group')
 
-            if cat_id is None or sort_order is None:
+            if cat_id is None:
                 continue
 
             category = Category.query.get(cat_id)
             if category:
-                category.sort_order = sort_order
+                if sort_order is not None:
+                    category.sort_order = sort_order
+                if main_group is not None:
+                    category.main_group = main_group
 
         db.session.commit()
 
         # Return updated categories
         updated_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
         return jsonify({
-            'message': 'Urutan kategori berhasil disimpan',
+            'message': 'Urutan dan grup kategori berhasil disimpan',
             'categories': [c.to_dict() for c in updated_cats]
         }), 200
 
@@ -121,12 +125,21 @@ def create_category():
     # All new categories start as 'pending' to follow the strict approval flow, even if created by manager
     status = 'pending'
 
+    # Set default main_group for top-level categories
+    default_group = 'BIAYA ADMINISTRASI DAN UMUM'
+    if not parent_id:
+        # Check if name suggests BEBAN LANGSUNG (optional but helpful)
+        direct_keywords = ['operasi', 'research', 'r&d', 'r & d', 'sewa peralatan', 'interpretasi', 'log data', 'project']
+        if any(k in name.lower() for k in direct_keywords):
+            default_group = 'BEBAN LANGSUNG'
+
     cat = Category(
         name=name,
         code=code,
         parent_id=parent_id,
         status=status,
-        created_by=user.id
+        created_by=user.id,
+        main_group=default_group if not parent_id else None
     )
     db.session.add(cat)
     db.session.flush()  # Get ID before commit
@@ -167,6 +180,8 @@ def update_category(cat_id):
         cat.name = data['name'].strip()
     if 'parent_id' in data:
         cat.parent_id = data['parent_id']
+    if 'main_group' in data:
+        cat.main_group = data['main_group']
 
     db.session.commit()
     return jsonify({'category': cat.to_dict()}), 200

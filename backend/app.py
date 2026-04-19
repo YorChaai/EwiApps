@@ -820,7 +820,6 @@ def seed_data():
             ],
             "Bisnis Dev": [],
         }
-
         # generate kode dinamis (a, b, c...)
         import string
         letters = string.ascii_uppercase

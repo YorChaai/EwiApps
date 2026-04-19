@@ -1864,13 +1864,26 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         _apply_pl_row_style(13, 'data') # Gap baris 13
 
-        # ✅ Expense totals: Dynamic Generation
-        direct_keywords = ['operasi', 'research', 'r&d', 'r & d', 'sewa peralatan', 'interpretasi', 'log data', 'project']
+        # ✅ Expense totals: Dynamic Generation based on Category.main_group
         langsung_cats = []
         admin_cats = []
+
+        # We need the Category objects to check main_group
+        category_obj_by_name = {c.name: c for c in root_cats}
+
         for idx, cat_name in enumerate(cat_names):
             col_letter = get_column_letter(9 + idx)
-            is_direct = any(k in str(cat_name).lower() for k in direct_keywords)
+            cat_obj = category_obj_by_name.get(cat_name)
+
+            # If main_group is 'BEBAN LANGSUNG', or if it's not set but matches keywords (fallback)
+            is_direct = False
+            if cat_obj and cat_obj.main_group:
+                is_direct = (cat_obj.main_group == 'BEBAN LANGSUNG')
+            else:
+                # Fallback to keywords if main_group is missing
+                direct_keywords = ['operasi', 'research', 'r&d', 'r & d', 'sewa peralatan', 'interpretasi', 'log data', 'project']
+                is_direct = any(k in str(cat_name).lower() for k in direct_keywords)
+
             if is_direct:
                 langsung_cats.append((cat_name, col_letter))
             else:
