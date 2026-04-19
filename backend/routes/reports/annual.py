@@ -431,16 +431,18 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         if curr_cat:
             full_code = curr_cat.code or '-'
 
-            # Cari nama kategori akar untuk header tabel (tetap perlu root_name)
+            # Cari nama & kode kategori akar untuk header tabel (tetap perlu root_name)
             temp_cat = curr_cat
             while temp_cat.parent_id and category_by_id.get(temp_cat.parent_id):
                 temp_cat = category_by_id[temp_cat.parent_id]
             root_name = temp_cat.name or '-'
+            root_code = temp_cat.code or '-'
         else:
             root_name = '-'
+            root_code = '-'
 
         d['category_name'] = root_name
-        d['category_code'] = full_code # Sekarang berisi kode lengkap (misal: A3)
+        d['category_code'] = root_code # ✅ FIX: Gunakan kode root (A, B) bukan kode detail (A1, B1)
         d['subcategory_name'] = e.combined_subcategory_label
         d['settlement_id'] = e.settlement_id
         d['settlement_title'] = _clean_settlement_title(e.settlement.title if e.settlement else '-')

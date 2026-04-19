@@ -518,6 +518,17 @@ def _clean_settlement_title(title):
     return text or _safe_text(title).strip() or 'Tanpa Settlement'
 
 
+def _extract_note_subcategory(notes):
+    """Extract subcategory from notes like 'Subcategory: Value |'"""
+    text = _safe_text(notes).strip()
+    if not text:
+        return ''
+    match = re.search(r'\bSubcategory:\s*([^|]+)', text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return ''
+
+
 def _expense_subcategory_label(expense):
     """
     Extract subcategory from expense and append Parent Code.
@@ -527,7 +538,7 @@ def _expense_subcategory_label(expense):
 
     # 1. Database value
     subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
-    if subcategory_name:
+    if subcategory_name and subcategory_name != '-':
         label = subcategory_name
     else:
         raw_desc = _safe_text(expense.get('description')).strip()
@@ -536,23 +547,28 @@ def _expense_subcategory_label(expense):
         if prefixed:
             label = _safe_text(prefixed.group(1)).strip()
         else:
-            # 3. Keyword matching (fallback)
-            desc = raw_desc.lower()
-            if 'rental tool' in desc: label = 'Rental Tool'
-            elif 'sales' in desc: label = 'Sales'
-            elif 'gaji' in desc or 'bonus' in desc: label = 'Gaji'
-            elif 'pembuatan alat' in desc or 'mesin retort' in desc: label = 'Pembuatan Alat'
-            elif 'thr' in desc or 'allowance' in desc: label = 'Allowance'
-            elif 'data processing' in desc: label = 'Data Processing'
-            elif 'moving slickline' in desc or 'project lampu' in desc: label = 'Project Operation'
-            elif 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: label = 'Sparepart'
-            elif 'repair esor' in desc: label = 'Maintenance'
-            elif 'licence' in desc or 'license' in desc: label = 'Software License'
-            elif 'handphone operational' in desc: label = 'Operation'
-            elif 'sewa ruangan' in desc or 'virtual office' in desc: label = 'Sewa Ruangan'
-            elif 'modal kerja' in desc: label = 'Modal Kerja'
-            elif 'team building' in desc: label = 'Team Building'
-            elif 'biaya transaksi bank' in desc: label = 'Biaya Bank'
+            # 3. Check notes for subcategory (matching frontend)
+            notes_sub = _extract_note_subcategory(expense.get('notes'))
+            if notes_sub:
+                label = notes_sub
+            else:
+                # 4. Keyword matching (fallback)
+                desc = raw_desc.lower()
+                if 'rental tool' in desc: label = 'Rental Tool'
+                elif 'sales' in desc: label = 'Sales'
+                elif 'gaji' in desc or 'bonus' in desc: label = 'Gaji'
+                elif 'pembuatan alat' in desc or 'mesin retort' in desc: label = 'Pembuatan Alat'
+                elif 'thr' in desc or 'allowance' in desc: label = 'Allowance'
+                elif 'data processing' in desc: label = 'Data Processing'
+                elif 'moving slickline' in desc or 'project lampu' in desc: label = 'Project Operation'
+                elif 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: label = 'Sparepart'
+                elif 'repair esor' in desc: label = 'Maintenance'
+                elif 'licence' in desc or 'license' in desc: label = 'Software License'
+                elif 'handphone operational' in desc: label = 'Operation'
+                elif 'sewa ruangan' in desc or 'virtual office' in desc: label = 'Sewa Ruangan'
+                elif 'modal kerja' in desc: label = 'Modal Kerja'
+                elif 'team building' in desc: label = 'Team Building'
+                elif 'biaya transaksi bank' in desc: label = 'Biaya Bank'
 
     if not label:
         return ''
