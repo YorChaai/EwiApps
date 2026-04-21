@@ -102,10 +102,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     try {
-      if (mounted)
+      if (mounted) {
         context.read<NotificationProvider>().removeListener(
           _onNotificationUpdate,
         );
+      }
     } catch (_) {}
     super.dispose();
   }
@@ -140,22 +141,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final id = _extractIdFromPath(path);
     if (path.contains('/settlements')) {
       setState(() => _navIndex = 0);
-      if (id != null)
+      if (id != null) {
         await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => SettlementDetailScreen(settlementId: id),
           ),
         );
+      }
       return;
     }
     if (path.contains('/advances')) {
       setState(() => _navIndex = 1);
-      if (id != null)
+      if (id != null) {
         await Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: id)),
         );
+      }
       return;
     }
     if (path.contains('/categories')) {
@@ -209,8 +212,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   setState(() {
                     _navIndex = i;
                     if (i == 2) _reportPageKey = UniqueKey();
-                    if (i == (auth.isManager ? 4 : 2))
+                    if (i == (auth.isManager ? 4 : 2)) {
                       _settingsPageKey = UniqueKey();
+                    }
                   });
                 },
                 onLogout: () => auth.logout(),
@@ -359,8 +363,9 @@ class _SettlementListViewState extends State<_SettlementListView> {
   void _handleListScroll() {
     if (!_listScrollController.hasClients) return;
     final shouldShow = _listScrollController.offset > 320;
-    if (shouldShow != _showScrollToTop && mounted)
+    if (shouldShow != _showScrollToTop && mounted) {
       setState(() => _showScrollToTop = shouldShow);
+    }
   }
 
   Future<void> _scrollToTop() async {
@@ -431,11 +436,12 @@ class _SettlementListViewState extends State<_SettlementListView> {
       final data = await prov.getSummary(
         year: prov.reportYear == 0 ? DateTime.now().year : prov.reportYear,
       );
-      if (mounted)
+      if (mounted) {
         setState(
           () => _annualSettlementTotal = ((data['grand_total'] ?? 0) as num)
               .toDouble(),
         );
+      }
     } catch (e) {
       debugPrint('ERROR annual summary: $e');
     }
@@ -815,18 +821,20 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                                 i,
                                               ) {
                                                 final item = items[i];
-                                                if (item == '__header_single__')
+                                                if (item == '__header_single__') {
                                                   return _buildGroupHeader(
                                                     Icons.receipt_long_rounded,
                                                     'Pengeluaran Sendiri (${singles.length})',
                                                     AppTheme.primary,
                                                   );
-                                                if (item == '__header_batch__')
+                                                }
+                                                if (item == '__header_batch__') {
                                                   return _buildGroupHeader(
                                                     Icons.folder_rounded,
                                                     'Pengeluaran Batch (${batches.length})',
                                                     AppTheme.warning,
                                                   );
+                                                }
                                                 final s =
                                                     item
                                                         as Map<String, dynamic>;
