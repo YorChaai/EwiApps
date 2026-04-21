@@ -17,6 +17,7 @@ import '../../services/api_service.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
 import '../widgets/sidebar.dart';
+import '../widgets/settlement_detail_widgets.dart';
 
 class AdvanceDetailScreen extends StatefulWidget {
   final int advanceId;
@@ -728,6 +729,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
   }
 
   void _showAddItemDialog(BuildContext context, [Map<String, dynamic>? item]) {
+    final screenWidth = MediaQuery.of(context).size.width;
     final isEditing = item != null;
     final reportYear = context.read<AdvanceProvider>().reportYear;
     final now = DateTime.now();
@@ -825,9 +827,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
-              width: 500,
-              child: SingleChildScrollView(
-                child: Column(
+              width: screenWidth > 600 ? 500 : screenWidth * 0.9,
+              child: SingleChildScrollView(                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // dropdown kategori utama
@@ -1327,8 +1328,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final advanceStatus = (adv?['status'] ?? '').toString().toLowerCase();
     final isAndroid = _isAndroid(context);
 
-    // PAKSA: Sidebar TIDAK muncul di Android
-    final showSidebar = !isAndroid;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 600 || isAndroid;
+    final showSidebar = !useCompact;
     final canShowDownloadButtons = [
       'approved',
       'in_settlement',
@@ -1515,7 +1517,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               child: Scaffold(
                 appBar: isAndroid
                     ? AppBar(
-                        toolbarHeight: 64,
                         elevation: 0,
                         backgroundColor: _surfaceColor(context),
                         centerTitle: false,
@@ -1534,9 +1535,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               child: Text(
                                 auth.fullName.isNotEmpty
                                     ? auth.fullName[0].toUpperCase()
-                                    : 'M',
-                                style: const TextStyle(
-                                  color: Colors.white,
+                                    : 'U',
+                                style: const TextStyle(                                  color: Colors.white,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                 ),
@@ -1725,6 +1725,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           'revision_rejected',
         ].contains(adv['status']);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 600 || Theme.of(context).platform == TargetPlatform.android;
+
     return Scrollbar(
       controller: _mainScrollController,
       thumbVisibility: true,
@@ -1733,26 +1736,28 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       radius: const Radius.circular(4),
       child: SingleChildScrollView(
         controller: _mainScrollController,
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(useCompact ? 16 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.cream,
-            ),
-          ),
-          if ((adv['description'] ?? '').toString().trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
+          if (!useCompact) ...[
             Text(
-              adv['description'],
-              style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
+              title,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.cream,
+              ),
             ),
+            if ((adv['description'] ?? '').toString().trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                adv['description'],
+                style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 20),
           ],
-          const SizedBox(height: 20),
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 650;
@@ -1768,19 +1773,19 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               );
 
               final cards = [
-                _SummaryCard(
+                SummaryCard(
                   icon: Icons.receipt_long_rounded,
                   label: 'Total Pengajuan',
                   value: 'Rp ${_currencyFormat.format(currentTotal)}',
                   color: AppTheme.primary,
                 ),
-                _SummaryCard(
+                SummaryCard(
                   icon: Icons.verified_rounded,
                   label: 'Approved Amount',
                   value: 'Rp ${_currencyFormat.format(approved)}',
                   color: AppTheme.success,
                 ),
-                _SummaryCard(
+                SummaryCard(
                   icon: Icons.list_alt_rounded,
                   label: 'Total Item',
                   value: '${items.length} item',
@@ -1792,9 +1797,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                 return Column(
                   children: [
                     cards[0],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     cards[1],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     cards[2],
                   ],
                 );
@@ -1803,15 +1808,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               return Row(
                 children: [
                   Expanded(child: cards[0]),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(child: cards[1]),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(child: cards[2]),
                 ],
               );
             },
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Row(
             children: [
               Icon(
@@ -1883,7 +1888,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             _buildEmptyState(canEditItems)
           else
             _buildItemsTable(items, adv, auth),
-          const SizedBox(height: 100), // Padding extra agar tidak tertabrak FAB
+          SizedBox(height: useCompact ? 80 : 100), // Padding extra agar tidak tertabrak FAB
         ],
       ),
     ),
@@ -2222,7 +2227,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                     size: 20,
                                   ),
                                   tooltip: 'Lihat Berkas',
-                                  onPressed: () => _displayEvidence(
+                                  onPressed: () => _showEvidence(
                                     item['evidence_path'],
                                     item['evidence_filename'],
                                   ),
@@ -2522,7 +2527,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     }
   }
 
-  void _displayEvidence(String path, String filename) {
+  void _showEvidence(String path, String filename) {
+    final screenWidth = MediaQuery.of(context).size.width;
     final isPdf = path.toLowerCase().endsWith('.pdf');
     final url = '${ApiService.baseUrl}/uploads/$path';
 
@@ -2536,7 +2542,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           style: TextStyle(color: _creamColor(ctx), fontSize: 16),
         ),
         content: SizedBox(
-          width: 600,
+          width: screenWidth > 700 ? 600 : screenWidth * 0.9,
           height: 400,
           child: isPdf
               ? Center(
@@ -3004,64 +3010,5 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
     }
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _SummaryCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppTheme.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.divider),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(color: AppTheme.textSecondary),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

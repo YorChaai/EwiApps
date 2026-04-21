@@ -1,0 +1,300 @@
+diff --git a/backend/routes/reports/annual.py b/backend/routes/reports/annual.py
+index f285f37..2a375a2 100644
+--- a/backend/routes/reports/annual.py
++++ b/backend/routes/reports/annual.py
+@@ -431,19 +431,84 @@ def _build_annual_pdf_bytes(payload):
+     # tabel revenue & tax
+     elements.append(Paragraph("REVENUE & TAX", styles['Heading3']))
+     t1_headers = ['Invoice Date','#','Detail/Description','INVOICE VALUE','Curr','Rate','INVOICE Num','Client','Receive Date','AMT RECEIVED','PPn','PPH 23','TransferFee','Remark']
+-    t1_data = [t1_headers]; total_inv_value = 0; total_received = 0; total_ppn = 0; total_pph = 0
+-    for idx, r in enumerate(revenues, 1):
+-        inv_val = _idr_from_currency(r.get('invoice_value'), r.get('currency'), r.get('currency_exchange'))
+-        amt_rec = _idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
+-        ppn = _to_float(r.get('ppn')); pph23 = _to_float(r.get('pph_23')); transfer = _to_float(r.get('transfer_fee'))
+-        total_inv_value += inv_val; total_received += amt_rec; total_ppn += ppn; total_pph += pph23
+-        t1_data.append([_as_iso_date(r.get('invoice_date')),str(idx),_shorten(r.get('description'),30),
+-            f"{inv_val:,.0f}" if inv_val else '-',_safe_text(r.get('currency')) or 'IDR',
+-            f"{_to_float(r.get('currency_exchange'),1):,.0f}" if r.get('currency_exchange') else '-',
+-            _safe_text(r.get('invoice_number')),_safe_text(r.get('client')),_as_iso_date(r.get('receive_date')),
+-            f"{amt_rec:,.0f}" if amt_rec else '-',f"{ppn:,.0f}" if ppn else '-',f"{pph23:,.0f}" if pph23 else '-',
+-            f"{transfer:,.0f}" if transfer else '-',_safe_text(r.get('remark'))])
+-    t1_data.append(["REVENUE (IDR)","","",f"{total_inv_value:,.0f}","","","","","",f"{total_received:,.0f}",f"{total_ppn:,.0f}",f"{total_pph:,.0f}","-","-"])
++
++    # Group revenues by type
++    grouped_revenues = _group_revenues_by_type(revenues)
++
++    t1_data = [t1_headers]
++    total_inv_value = 0
++    total_received = 0
++    total_ppn = 0
++    total_pph = 0
++    row_idx = 1
++
++    for group_name, group_revenues in grouped_revenues.items():
++        if not group_revenues:
++            continue
++
++        # Add group header row
++        t1_data.append([f'=== {group_name.upper().replace("_", " ")} ===', '', '', '', '', '', '', '', '', '', '', '', '', ''])
++
++        # Add revenue items for this group
++        for idx, r in enumerate(group_revenues, 1):
++            inv_val = _idr_from_currency(r.get('invoice_value'), r.get('currency'), r.get('currency_exchange'))
++            amt_rec = _idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange'))
++            ppn = _to_float(r.get('ppn'))
++            pph23 = _to_float(r.get('pph_23'))
++            transfer = _to_float(r.get('transfer_fee'))
++
++            total_inv_value += inv_val
++            total_received += amt_rec
++            total_ppn += ppn
++            total_pph += pph23
++
++            t1_data.append([
++                _as_iso_date(r.get('invoice_date')),
++                str(row_idx),
++                _shorten(r.get('description'), 30),
++                f"{inv_val:,.0f}" if inv_val else '-',
++                _safe_text(r.get('currency')) or 'IDR',
++                f"{_to_float(r.get('currency_exchange'), 1):,.0f}" if r.get('currency_exchange') else '-',
++                _safe_text(r.get('invoice_number')),
++                _safe_text(r.get('client')),
++                _as_iso_date(r.get('receive_date')),
++                f"{amt_rec:,.0f}" if amt_rec else '-',
++                f"{ppn:,.0f}" if ppn else '-',
++                f"{pph23:,.0f}" if pph23 else '-',
++                f"{transfer:,.0f}" if transfer else '-',
++                _safe_text(r.get('remark'))
++            ])
++            row_idx += 1
++
++        # Add subtotal row for this group
++        group_total_inv = sum(_idr_from_currency(r.get('invoice_value'), r.get('currency'), r.get('currency_exchange')) for r in group_revenues)
++        group_total_rec = sum(_idr_from_currency(r.get('amount_received'), r.get('currency'), r.get('currency_exchange')) for r in group_revenues)
++        group_total_ppn = sum(_to_float(r.get('ppn')) for r in group_revenues)
++        group_total_pph = sum(_to_float(r.get('pph_23')) for r in group_revenues)
++
++        t1_data.append([
++            f"Subtotal {group_name.replace('_', ' ').title()}",
++            '',
++            '',
++            f"{group_total_inv:,.0f}",
++            '',
++            '',
++            '',
++            '',
++            '',
++            f"{group_total_rec:,.0f}",
++            f"{group_total_ppn:,.0f}",
++            f"{group_total_pph:,.0f}",
++            '',
++            ''
++        ])
++
++        # Add blank row between groups
++        if group_name == 'pendapatan_langsung' and grouped_revenues['pendapatan_lain_lain']:
++            t1_data.append(['', '', '', '', '', '', '', '', '', '', '', '', '', ''])
++
++    # Add grand total row
++    t1_data.append(["REVENUE (IDR)", "", "", f"{total_inv_value:,.0f}", "", "", "", "", "", f"{total_received:,.0f}", f"{total_ppn:,.0f}", f"{total_pph:,.0f}", "-", "-"])
+     t1 = Table(t1_data, colWidths=[60,20,120,70,30,35,60,60,60,70,50,50,50,50])
+     t1.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#2E7D32')),('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
+         ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),7),('ALIGN',(3,1),(5,-1),'RIGHT'),
+@@ -1425,6 +1490,26 @@ def _get_revenue_bounds(revenues):
+     return last_revenue_row, total_revenue_row
+ 
+ 
++def _group_revenues_by_type(revenues):
++    """
++    Group revenues by revenue_type (pendapatan_langsung vs pendapatan_lain_lain).
++    Returns dict with 'pendapatan_langsung' and 'pendapatan_lain_lain' keys.
++    """
++    grouped = {
++        'pendapatan_langsung': [],
++        'pendapatan_lain_lain': []
++    }
++
++    for r in revenues:
++        r_type = (r.get('revenue_type') or 'pendapatan_langsung').strip().lower()
++        if r_type == 'pendapatan_lain_lain':
++            grouped['pendapatan_lain_lain'].append(r)
++        else:
++            grouped['pendapatan_langsung'].append(r)
++
++    return grouped
++
++
+ def _validate_revenue_data(revenues):
+     """✅ VALIDATION LAYER: Prevent type bugs before render"""
+     for r in revenues:
+@@ -1890,66 +1975,113 @@ def get_annual_report_excel():
+         raise
+ 
+     if has_revenue_data:
+-        for idx, r in enumerate(revenues, 1):
+-            # ✅ CLONE style from template row 8 (first data row)
++        # Group revenues by type
++        grouped_revenues = _group_revenues_by_type(revenues)
++
++        for group_name, group_revenues in grouped_revenues.items():
++            if not group_revenues:
++                continue
++
++            # Add group header row
+             _clone_row_format(ws, REVENUE_START_ROW, row_cursor, start_col=2, end_col=17)
++            _safe_set_cell(ws, row_cursor, 4, f'=== {group_name.upper().replace("_", " ")} ===')
++            header_cell = ws.cell(row=row_cursor, column=4)
++            header_cell.font = Font(bold=True, size=12)
++            header_cell.alignment = Alignment(horizontal='left', vertical='center')
++            row_cursor += 1
++
++            # Track the first data row for this group (for subtotal formula)
++            first_data_row = row_cursor
++
++            # Render revenue data for this group
++            for idx, r in enumerate(group_revenues, 1):
++                # ✅ CLONE style from template row 8 (first data row)
++                _clone_row_format(ws, REVENUE_START_ROW, row_cursor, start_col=2, end_col=17)
++
++                # ✅ EXTRACT DATA WITH EXPLICIT MAPPING
++                invoice_value = _to_float(r.get('invoice_value'))
++                currency = r.get('currency') or 'IDR'
++                exchange = _to_float(r.get('currency_exchange'), 1) or 1
++                amount_received = _to_float(r.get('amount_received'))
++                p_ppn = _to_float(r.get('ppn'))
++                p_pph23 = _to_float(r.get('pph_23'))
++
++                # ✅ CRITICAL: Extract transfer_fee and remark separately
++                transfer_fee = _to_float(r.get('transfer_fee'), 0)
++                # ✅ Filter remark: only remove "inc.PPN11%" template example, keep "Pemungut"
++                remark_from_db = _safe_text(r.get('remark'))
++                if 'inc.PPN11%' in remark_from_db or 'inc. PPN11%' in remark_from_db:
++                    remark = ''  # Remove template example
++                else:
++                    remark = remark_from_db  # Keep "Pemungut" and other remarks
++
++                # ✅ Write Date and Seq columns (B and C)
++                _safe_set_cell(ws, row_cursor, COL_DATE, _format_date_dd_mmm_yy(r.get('invoice_date')))
++                _safe_set_cell(ws, row_cursor, COL_SEQ, idx)
++
++                # ✅ MERGE D:E for description using helper (col_start=4, col_end=5)
++                description = r.get('description') or ''
++                source = r.get('source') or ''
++                if source and source.strip():
++                    combined_desc = f'{description} ({source})'
++                else:
++                    combined_desc = description
++
++                _merge_description_cell(ws, row_cursor, combined_desc, col_start=4, col_end=5)
++
++                # ✅ Continue with remaining columns (F onwards)
++                _safe_set_number(ws, row_cursor, COL_INVOICE_VALUE, invoice_value)
++                _safe_set_cell(ws, row_cursor, COL_CURRENCY, currency)
++                _safe_set_number(ws, row_cursor, COL_EXCHANGE_RATE, exchange)
++
++                # ✅ INVOICE NUMBER - use empty string fallback, NOT 'IDR'!
++                invoice_num = r.get('invoice_number')
++                if invoice_num and str(invoice_num).strip():
++                    _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, str(invoice_num))
++                else:
++                    _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, '')
++
++                _safe_set_cell(ws, row_cursor, COL_CLIENT, r.get('client') or '')
++                _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _format_date_dd_mmm_yy(r.get('receive_date')))
++                # Format receive date as dd-mmm-yy
++                ws.cell(row=row_cursor, column=COL_RECEIVE_DATE).number_format = 'dd-mmm-yy'
++                # Format numeric columns with thousand separator
++                _safe_set_number(ws, row_cursor, COL_AMOUNT_RECEIVED, amount_received)
++                _safe_set_number(ws, row_cursor, COL_PPN, p_ppn)
++                _safe_set_number(ws, row_cursor, COL_PPH_23, p_pph23)
++
++                # ✅ Column N (14) = transfer_fee (number), Column O (15) = remark (text)
++                _safe_set_number(ws, row_cursor, COL_TRANSFER_FEE, transfer_fee)
++                _safe_set_cell(ws, row_cursor, COL_REMARK, remark)
++                row_cursor += 1
++
++            # Add subtotal row for this group
++            subtotal_row = row_cursor
++            _clone_row_format(ws, REVENUE_START_ROW, subtotal_row, start_col=2, end_col=17)
++            _safe_set_cell(ws, subtotal_row, 2, f'Subtotal {group_name.replace("_", " ").title()}')
++            subtotal_label_cell = ws.cell(row=subtotal_row, column=2)
++            subtotal_label_cell.alignment = Alignment(horizontal='right', vertical='center')
++            subtotal_label_cell.font = Font(bold=True)
++
++            # Set formulas for subtotal (last_data_row is the row before subtotal)
++            last_data_row = subtotal_row - 1
++            _set_formula_with_format(ws, subtotal_row, COL_INVOICE_VALUE, f'=SUM(F{first_data_row}:F{last_data_row})')
++            _set_formula_with_format(ws, subtotal_row, COL_AMOUNT_RECEIVED, f'=SUM(L{first_data_row}:L{last_data_row})')
++            _set_formula_with_format(ws, subtotal_row, COL_PPN, f'=SUM(M{first_data_row}:M{last_data_row})')
++            _set_formula_with_format(ws, subtotal_row, COL_PPH_23, f'=SUM(N{first_data_row}:N{last_data_row})')
++            _set_formula_with_format(ws, subtotal_row, COL_TRANSFER_FEE, f'=SUM(O{first_data_row}:O{last_data_row})')
++            _safe_set_cell(ws, subtotal_row, COL_REMARK, '')
++
++            # Yellow fill for subtotal row
++            yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
++            for col_idx in range(9, 15):
++                ws.cell(row=subtotal_row, column=col_idx).fill = yellow_fill
+ 
+-            # ✅ EXTRACT DATA WITH EXPLICIT MAPPING
+-            invoice_value = _to_float(r.get('invoice_value'))
+-            currency = r.get('currency') or 'IDR'
+-            exchange = _to_float(r.get('currency_exchange'), 1) or 1
+-            amount_received = _to_float(r.get('amount_received'))
+-            p_ppn = _to_float(r.get('ppn'))
+-            p_pph23 = _to_float(r.get('pph_23'))
+-
+-            # ✅ CRITICAL: Extract transfer_fee and remark separately
+-            transfer_fee = _to_float(r.get('transfer_fee'), 0)
+-            # ✅ Filter remark: only remove "inc.PPN11%" template example, keep "Pemungut"
+-            remark_from_db = _safe_text(r.get('remark'))
+-            if 'inc.PPN11%' in remark_from_db or 'inc. PPN11%' in remark_from_db:
+-                remark = ''  # Remove template example
+-            else:
+-                remark = remark_from_db  # Keep "Pemungut" and other remarks
+-
+-            # ✅ Write Date and Seq columns (B and C)
+-            _safe_set_cell(ws, row_cursor, COL_DATE, _format_date_dd_mmm_yy(r.get('invoice_date')))
+-            _safe_set_cell(ws, row_cursor, COL_SEQ, idx)
+-
+-            # ✅ MERGE D:E for description using helper (col_start=4, col_end=5)
+-            description = r.get('description') or ''
+-            source = r.get('source') or ''
+-            if source and source.strip():
+-                combined_desc = f'{description} ({source})'
+-            else:
+-                combined_desc = description
+-
+-            _merge_description_cell(ws, row_cursor, combined_desc, col_start=4, col_end=5)
+-
+-            # ✅ Continue with remaining columns (F onwards)
+-            _safe_set_number(ws, row_cursor, COL_INVOICE_VALUE, invoice_value)
+-            _safe_set_cell(ws, row_cursor, COL_CURRENCY, currency)
+-            _safe_set_number(ws, row_cursor, COL_EXCHANGE_RATE, exchange)
+-
+-            # ✅ INVOICE NUMBER - use empty string fallback, NOT 'IDR'!
+-            invoice_num = r.get('invoice_number')
+-            if invoice_num and str(invoice_num).strip():
+-                _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, str(invoice_num))
+-            else:
+-                _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, '')
+-
+-            _safe_set_cell(ws, row_cursor, COL_CLIENT, r.get('client') or '')
+-            _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _format_date_dd_mmm_yy(r.get('receive_date')))
+-            # Format receive date as dd-mmm-yy
+-            ws.cell(row=row_cursor, column=COL_RECEIVE_DATE).number_format = 'dd-mmm-yy'
+-            # Format numeric columns with thousand separator
+-            _safe_set_number(ws, row_cursor, COL_AMOUNT_RECEIVED, amount_received)
+-            _safe_set_number(ws, row_cursor, COL_PPN, p_ppn)
+-            _safe_set_number(ws, row_cursor, COL_PPH_23, p_pph23)
+-
+-            # ✅ Column N (14) = transfer_fee (number), Column O (15) = remark (text)
+-            _safe_set_number(ws, row_cursor, COL_TRANSFER_FEE, transfer_fee)
+-            _safe_set_cell(ws, row_cursor, COL_REMARK, remark)
+             row_cursor += 1
++
++            # Add blank row between groups
++            if group_name == 'pendapatan_langsung' and grouped_revenues['pendapatan_lain_lain']:
++                row_cursor += 1
+     else:
+         # ✅ No revenue data - show empty state message at row 8
+         # ✅ FIX: Clone style FIRST, then clear and write

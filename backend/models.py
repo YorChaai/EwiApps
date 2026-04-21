@@ -25,6 +25,8 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     full_name = db.Column(db.String(150), nullable=False)
+    phone_number = db.Column(db.String(20), nullable=True, default='-')
+    workplace = db.Column(db.String(100), nullable=True, default='-')
     role = db.Column(db.String(20), nullable=False, default='staff')  # staff, manager, mitra_eks
     last_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -43,6 +45,8 @@ class User(db.Model):
             'id': self.id,
             'username': self.username,
             'full_name': self.full_name,
+            'phone_number': self.phone_number or '-',
+            'workplace': self.workplace or '-',
             'role': self.role,
             'last_login': self.last_login.isoformat() if self.last_login else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
@@ -54,8 +58,8 @@ class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     code = db.Column(db.String(10), unique=True, nullable=False)  # a, b, c...
-    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True)
-    status = db.Column(db.String(20), default='approved')  # approved, pending
+    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=True, index=True)
+    status = db.Column(db.String(20), default='approved', index=True)  # approved, pending
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     sort_order = db.Column(db.Integer, default=0)  # For manual category ordering
     main_group = db.Column(db.String(50), nullable=True)  # BEBAN LANGSUNG or BIAYA ADMINISTRASI DAN UMUM
@@ -92,8 +96,8 @@ class Advance(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)  # Format: [Kategori] Vendor - Barang - Keperluan
     advance_type = db.Column(db.String(10), default='single')  # 'single' or 'batch'
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    status = db.Column(db.String(30), default='draft')  # draft, submitted, approved, rejected, revision_draft, revision_submitted, revision_rejected, in_settlement, completed(legacy)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    status = db.Column(db.String(30), default='draft', index=True)  # draft, submitted, approved, rejected, revision_draft, revision_submitted, revision_rejected, in_settlement, completed(legacy)
     notes = db.Column(db.Text, nullable=True)  # notes approval mgr
     approved_revision_no = db.Column(db.Integer, default=0)
     active_revision_no = db.Column(db.Integer, nullable=True)
@@ -132,6 +136,10 @@ class Advance(db.Model):
     def max_revision_no(self):
         revision_numbers = [item.revision_no or 0 for item in self.items]
         return max(revision_numbers, default=0)
+
+    @property
+    def rejected_count(self):
+        return sum(1 for item in self.items if item.status == 'rejected')
 
     def to_dict(self, include_items=False):
         settlement_total = self.settlement.total_amount if self.settlement else 0
@@ -184,7 +192,8 @@ class Advance(db.Model):
             'notes': self.notes,
             'total_amount': self.total_amount,
             'approved_amount': self.approved_amount,
-            'base_amount': self.base_amount,
+            'rejected_count': self.rejected_count,
+            'item_count': len(self.items),
             'revision_amount': self.revision_amount,
             'item_count': len(self.items),
             'approved_revision_no': self.approved_revision_no or 0,
@@ -288,15 +297,15 @@ class Settlement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     settlement_type = db.Column(db.String(10), default='single')  # 'single' or 'batch'
-    status = db.Column(db.String(20), default='draft')  # draft, submitted, approved, rejected, completed(legacy)
+    status = db.Column(db.String(20), default='draft', index=True)  # draft, submitted, approved, rejected, completed(legacy)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
     completed_at = db.Column(db.DateTime, nullable=True)
 
-    advance_id = db.Column(db.Integer, db.ForeignKey('advances.id'), nullable=True)
+    advance_id = db.Column(db.Integer, db.ForeignKey('advances.id'), nullable=True, index=True)
 
     expenses = db.relationship('Expense', backref='settlement', lazy=True,
                                cascade='all, delete-orphan')
@@ -308,6 +317,10 @@ class Settlement(db.Model):
     @property
     def approved_amount(self):
         return sum((e.idr_amount or 0) for e in self.expenses if e.status == 'approved')
+
+    @property
+    def rejected_count(self):
+        return sum(1 for e in self.expenses if e.status == 'rejected')
 
     def to_dict(self, include_expenses=False):
         advance = self.advance
@@ -338,6 +351,7 @@ class Settlement(db.Model):
             'status': self.status,
             'total_amount': self.total_amount,
             'approved_amount': self.approved_amount,
+            'rejected_count': self.rejected_count,
             'expense_count': len(self.expenses),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
@@ -368,8 +382,8 @@ class Settlement(db.Model):
 class Expense(db.Model):
     __tablename__ = 'expenses'
     id = db.Column(db.Integer, primary_key=True)
-    settlement_id = db.Column(db.Integer, db.ForeignKey('settlements.id'), nullable=False)
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
+    settlement_id = db.Column(db.Integer, db.ForeignKey('settlements.id'), nullable=False, index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False, index=True)
     description = db.Column(db.String(300), nullable=False)  # Format: [Kategori] Vendor - Barang - Keperluan
     amount = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, nullable=False)

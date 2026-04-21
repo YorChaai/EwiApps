@@ -137,11 +137,16 @@ def register():
     username = data.get('username', '').strip()
     password = data.get('password', '')
     full_name = data.get('full_name', '').strip()
+    phone_number = data.get('phone_number', '').strip() or '-'
+    workplace = data.get('workplace', '').strip() or '-'
     role = data.get('role', 'staff')
 
     # Validasi input
     if not username or not password or not full_name:
         return jsonify({'error': 'Username, password, dan nama lengkap wajib diisi'}), 400
+
+    if phone_number != '-' and not phone_number.isdigit():
+        return jsonify({'error': 'Nomor HP harus berupa angka'}), 400
 
     if len(password) < 6:
         return jsonify({'error': 'Password minimal 6 karakter'}), 400
@@ -155,7 +160,13 @@ def register():
         role = 'staff'
 
     # Buat user baru
-    user = User(username=username, full_name=full_name, role=role)
+    user = User(
+        username=username,
+        full_name=full_name,
+        phone_number=phone_number,
+        workplace=workplace,
+        role=role
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -189,16 +200,41 @@ def update_profile():
         return jsonify({'error': 'User tidak ditemukan'}), 404
 
     data = request.get_json()
-    full_name = data.get('full_name', '').strip() if data else ''
+    if not data:
+        return jsonify({'error': 'Data tidak valid'}), 400
 
-    if not full_name:
-        return jsonify({'error': 'Nama lengkap harus diisi'}), 400
+    full_name = data.get('full_name', '').strip()
+    phone_number = data.get('phone_number', '').strip()
+    workplace = data.get('workplace', '').strip()
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
 
-    user.full_name = full_name
+    if full_name:
+        user.full_name = full_name
+
+    if phone_number:
+        if phone_number != '-' and not phone_number.isdigit():
+            return jsonify({'error': 'Nomor HP harus berupa angka'}), 400
+        user.phone_number = phone_number
+
+    if workplace:
+        user.workplace = workplace
+
+    # Ganti Password logic
+    if new_password:
+        if not old_password:
+            return jsonify({'error': 'Password lama wajib diisi untuk mengganti password'}), 400
+        if not user.check_password(old_password):
+            return jsonify({'error': 'Password lama salah'}), 401
+        if len(new_password) < 6:
+            return jsonify({'error': 'Password baru minimal 6 karakter'}), 400
+        user.set_password(new_password)
+
     db.session.commit()
 
     return jsonify({
         'success': True,
+        'message': 'Profil berhasil diperbarui',
         'user': user.to_dict()
     }), 200
 
@@ -217,6 +253,8 @@ def list_users():
             'id': u.id,
             'username': u.username,
             'full_name': u.full_name,
+            'phone_number': u.phone_number or '-',
+            'workplace': u.workplace or '-',
             'role': u.role,
             'last_login': u.last_login.isoformat() if u.last_login else None,
             'last_login_formatted': format_last_login(u.last_login),
@@ -239,17 +277,77 @@ def create_user():
     username = data.get('username', '').strip()
     password = data.get('password', '')
     full_name = data.get('full_name', '').strip()
+    phone_number = data.get('phone_number', '').strip() or '-'
+    workplace = data.get('workplace', '').strip() or '-'
     role = data.get('role', 'staff')
 
     if not username or not password or not full_name:
         return jsonify({'error': 'Semua field wajib diisi'}), 400
 
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Username sudah dipakai'}), 409
+    if phone_number != '-' and not phone_number.isdigit():
+        return jsonify({'error': 'Nomor HP harus berupa angka'}), 400
 
-    user = User(username=username, full_name=full_name, role=role)
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username sudah terdaftar'}), 409
+
+    if role not in ['staff', 'manager', 'mitra_eks']:
+        role = 'staff'
+
+    user = User(
+        username=username,
+        full_name=full_name,
+        phone_number=phone_number,
+        workplace=workplace,
+        role=role
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
 
     return jsonify({'user': user.to_dict()}), 201
+
+
+@auth_bp.route('/users/<int:user_id>', methods=['PUT'])
+@jwt_required()
+def update_user_by_manager(user_id):
+    current_user = User.query.get(int(get_jwt_identity()))
+    if current_user.role != 'manager':
+        return jsonify({'error': 'Akses ditolak'}), 403
+
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Data tidak valid'}), 400
+
+    full_name = data.get('full_name', '').strip()
+    phone_number = data.get('phone_number', '').strip()
+    workplace = data.get('workplace', '').strip()
+    role = data.get('role')
+    password = data.get('password')
+
+    if full_name:
+        user.full_name = full_name
+
+    if phone_number:
+        if phone_number != '-' and not phone_number.isdigit():
+            return jsonify({'error': 'Nomor HP harus berupa angka'}), 400
+        user.phone_number = phone_number
+
+    if workplace:
+        user.workplace = workplace
+
+    if role and role in ['staff', 'manager', 'mitra_eks']:
+        user.role = role
+
+    if password:
+        if len(password) < 6:
+            return jsonify({'error': 'Password minimal 6 karakter'}), 400
+        user.set_password(password)
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Data user berhasil diperbarui oleh manager',
+        'user': user.to_dict()
+    }), 200

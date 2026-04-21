@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import db, Expense, Settlement, Category, User
 from datetime import datetime
+from utils.storage import delete_evidence_file
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/api/expenses')
 
@@ -39,15 +40,10 @@ def _parse_checklist_notes(notes_value):
     return [item for item in normalized if item['text']]
 
 
-@expenses_bp.route('', methods=['POST'])
-@jwt_required()
-def create_expense():
-    user_id = int(get_jwt_identity())
-
-    settlement_id = request.form.get('settlement_id', type=int)
-    # Support both category_id (legacy) and category_ids (list)
-    category_id = request.form.get('category_id', type=int)
-    category_ids_raw = request.form.get('category_ids')
+def _parse_category_ids(form_data):
+    """Helper untuk mengambil daftar category_id dari form atau json"""
+    category_id = form_data.get('category_id', type=int)
+    category_ids_raw = form_data.get('category_ids')
     category_ids = []
     if category_ids_raw:
         try:
@@ -56,6 +52,15 @@ def create_expense():
             pass
     if not category_ids and category_id:
         category_ids = [category_id]
+    return category_ids
+
+@expenses_bp.route('', methods=['POST'])
+@jwt_required()
+def create_expense():
+    user_id = int(get_jwt_identity())
+
+    settlement_id = request.form.get('settlement_id', type=int)
+    category_ids = _parse_category_ids(request.form)
 
     description = request.form.get('description', '').strip()
     amount = request.form.get('amount', type=float)
@@ -174,19 +179,11 @@ def update_expense(expense_id):
     data_keys = set(data.keys())
     only_checklist = data_keys.issubset({'notes', 'status'}) and 'notes' in data_keys
 
-    if settlement.status == 'rejected' and not only_checklist:
-        # rejected status: only allow updates to 'notes' or 'status'
-        if any(k in data_keys for k in ['category_id', 'description', 'amount', 'date', 'source', 'currency', 'currency_exchange']):
+    if any(k in data_keys for k in ['category_id', 'description', 'amount', 'date', 'source', 'currency', 'currency_exchange']):
             return jsonify({'error': 'saat rejected hanya boleh mengubah checklist, tidak bisa mengubah data utama'}), 400
 
     if 'category_ids' in data or 'category_id' in data:
-        cat_ids = data.get('category_ids')
-        if not isinstance(cat_ids, list):
-            # Coba parse jika string
-            try:
-                cat_ids = json.loads(cat_ids)
-            except:
-                cat_ids = [int(data['category_id'])] if 'category_id' in data else []
+        cat_ids = _parse_category_ids(data)
 
         if cat_ids:
             new_cats = Category.query.filter(Category.id.in_(cat_ids)).all()
@@ -220,10 +217,7 @@ def update_expense(expense_id):
         file = files['evidence']
         if file and file.filename and allowed_file(file.filename):
             # delete old file if exists
-            if expense.evidence_path:
-                old_path = os.path.join(current_app.config['UPLOAD_FOLDER'], expense.evidence_path)
-                if os.path.exists(old_path):
-                    os.remove(old_path)
+            delete_evidence_file(expense.evidence_path)
 
             ext = file.filename.rsplit('.', 1)[1].lower()
             unique_name = f"{uuid.uuid4().hex}.{ext}"
@@ -275,10 +269,7 @@ def bulk_delete_expenses():
 
         if can_delete:
             # hapus evidence file
-            if expense.evidence_path:
-                file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], expense.evidence_path)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+            delete_evidence_file(expense.evidence_path)
 
             db.session.delete(expense)
             count += 1

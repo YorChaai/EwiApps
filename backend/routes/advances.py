@@ -9,6 +9,7 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 
 from models import Advance, AdvanceItem, Category, Expense, Settlement, User, db
 from routes.notifications import notify_managers, notify_staff
+from utils.storage import delete_evidence_file
 
 advances_bp = Blueprint('advances', __name__, url_prefix='/api/advances')
 
@@ -24,6 +25,17 @@ def allowed_file(filename):
 def _advance_view_status_filter(query, status_filter):
     if not status_filter:
         return query
+    if status_filter == 'approved':
+        return query.filter(Advance.status.in_(['approved', 'in_settlement']))
+    if status_filter == 'rejected':
+        # Include advances with status 'rejected' OR advances with rejected items
+        has_rejected_items = db.exists().where(
+            db.and_(
+                AdvanceItem.advance_id == Advance.id,
+                AdvanceItem.status == 'rejected'
+            )
+        )
+        return query.filter(db.or_(Advance.status == 'rejected', has_rejected_items))
     if status_filter == 'completed':
         return query.filter_by(status='completed')
     return query.filter_by(status=status_filter)
@@ -543,10 +555,7 @@ def delete_advance_item(item_id):
     if editable_revision_no is None or (item.revision_no or 0) != editable_revision_no:
         return jsonify({'error': 'Item ini sudah terkunci dan tidak bisa dihapus'}), 400
 
-    if item.evidence_path:
-        file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], item.evidence_path)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+    delete_evidence_file(item.evidence_path)
 
     db.session.delete(item)
     db.session.commit()
@@ -887,10 +896,7 @@ def bulk_delete_advance_items():
                 can_delete = True
 
         if can_delete:
-            if item.evidence_path:
-                file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], item.evidence_path)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+            delete_evidence_file(item.evidence_path)
 
             db.session.delete(item)
             count += 1

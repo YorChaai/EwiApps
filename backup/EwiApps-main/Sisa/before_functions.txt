@@ -1,0 +1,34 @@
+def _annual_cache_paths(year):
+def _apply_manual_revenue_combine_groups(ws, revenues, combine_groups, start_row=8):
+def _apply_manual_tax_combine_groups(ws, taxes, combine_groups, start_row=27):
+def _build_annual_payload_from_db(year):
+def _build_annual_pdf_bytes(payload):
+def _clear_merged_ranges_in_region(ws, start_row, end_row, start_col, end_col):
+def _clone_row_format(ws, source_row, target_row, start_col=1, end_col=17):
+def _clone_sheet_from_template(src_ws, target_wb, new_name):
+def _compute_dividend_distribution(revenues, expenses, profit_retained, recipient_count):
+def _ensure_formatted_secondary_sheets(wb, year, template_dir):
+def _expense_amount_for_display(expense):
+def _expense_column_mapping_name(expense):
+def _expense_subcategory_label(expense):
+def _extract_subcategory_from_description(description):
+def _fill_annual_expense_row(ws, row_num, expense, seq_num, cat_names, category_by_id_map):
+def _has_any_report_tags():
+def _is_true(value):
+def _load_annual_payload_cache(year):
+def _manual_combine_groups_by_table(table_name, year):
+def _operation_cost_totals_by_column(expenses, cat_names):
+def _render_batch_expense_block(
+def _root_category_info(category_id, category_by_id):
+def _save_annual_payload_cache(year, payload):
+def _save_annual_pdf_cache(year, pdf_bytes):
+def _set_merged_top_alignment(ws, row_num, col_num):
+def _sheet_ref(name: str) -> str:
+def _subcategory_sort_key(label):
+def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name):
+def _tagged_ids_for_year(table_name, report_year):
+def _write_dynamic_category_headers(ws, root_cats, header_row=40, start_col=9, template_end_col=17):
+def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name):
+def get_annual_report():
+def get_annual_report_excel():
+def get_annual_report_pdf():

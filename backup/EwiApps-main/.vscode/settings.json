@@ -1,0 +1,20 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/backend",
+    "${workspaceFolder}/backend/venv/Lib/site-packages"
+  ],
+  "python.analysis.exclude": [
+    "frontend/**",
+    "sample_app/**",
+    "**/venv/**",
+    "**/.git/**"
+  ],
+  "python.analysis.diagnosticMode": "workspace",
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  "python-envs.defaultPackageManager": "ms-python.python:pip",
+  "java.import.exclusions": [
+    "**/frontend/android/**",
+    "**/sample_app/android/**"
+  ]
+}

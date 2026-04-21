@@ -1,0 +1,30 @@
+def _clone_row_format(ws, source_row, target_row, start_col=1, end_col=17):
+    ws.row_dimensions[target_row].height = ws.row_dimensions[source_row].height
+    for col in range(start_col, end_col + 1):
+        source_cell = ws.cell(row=source_row, column=col)
+        target_cell = ws.cell(row=target_row, column=col)
+        if isinstance(source_cell, MergedCell) or isinstance(target_cell, MergedCell):
+            continue
+        target_cell._style = copy(source_cell._style)
+        target_cell.number_format = source_cell.number_format
+
+def _apply_standard_cell_style(cell, style_type='data', bold=False, align='left', fill=None):
+    """
+    Helper pusat untuk merampingkan styling sel Excel.
+    style_type: 'header', 'data', 'total', 'final'
+    """
+    font_size = 12 if style_type == 'header' else 11
+    font_name = 'Arial Narrow'
+    cell.font = Font(bold=bold or (style_type in ('header', 'total', 'final')),
+                     size=font_size, name=font_name)
+    h_align = 'center' if style_type == 'header' else align
+    cell.alignment = Alignment(horizontal=h_align, vertical='center', wrap_text=(style_type == 'header'))
+    s_thin = Side(style='thin', color='000000')
+    s_double = Side(style='double', color='000000')
+    top_s = s_thin if style_type in ('total', 'final') else s_thin
+    bottom_s = s_double if style_type == 'final' else (s_thin if style_type == 'total' else s_thin)
+    cell.border = Border(left=s_thin, right=s_thin, top=top_s, bottom=bottom_s)
+    if fill:
+        cell.fill = fill
+    elif style_type == 'header':
+        cell.fill = GREEN_FILL

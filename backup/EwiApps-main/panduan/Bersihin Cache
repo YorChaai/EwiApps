@@ -1,0 +1,137 @@
+Di Python/Flask, tidak ada perintah persis seperti `flutter clean`, tapi ada beberapa cara untuk "membersihkan cache" tergantung apa yang ingin dibersihkan:
+
+##  🧹 Cache di Python/Flask
+
+### 1. **Python Bytecode Cache** (`.pyc` files)
+Ini yang paling mirip dengan `flutter clean` untuk build artifacts:
+
+```bash
+# Hapus semua folder __pycache__ dan file .pyc
+find . -type d -name "__pycache__" -exec rm -rf {} +
+find . -name "*.pyc" -delete
+
+# Atau lebih sederhana (Windows PowerShell)
+Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+Get-ChildItem -Recurse -Filter *.pyc | Remove-Item -Force
+
+# Atau pakai command Python
+python -Bc "import shutil, pathlib; [shutil.rmtree(p) for p in pathlib.Path('.').rglob('__pycache__')]"
+```
+
+---
+
+### 2. **Pip Cache**
+```bash
+# Hapus cache pip
+pip cache purge
+
+# Atau manual (lokasi tergantung OS)
+# Windows:
+rmdir /s /q %LocalAppData%\pip\Cache
+
+# Linux/Mac:
+rm -rf ~/.cache/pip
+```
+
+---
+
+### 3. **Flask Development Cache**
+Jika pakai Flask development server, kadang ada cache:
+
+```bash
+# Stop dan restart Flask server
+# Cache akan otomatis bersih karena development mode
+```
+
+Atau tambahkan environment variable untuk disable cache:
+```bash
+# Windows
+set FLASK_ENV=development
+set FLASK_DEBUG=1
+
+# Linux/Mac
+export FLASK_ENV=development
+export FLASK_DEBUG=1
+```
+
+---
+
+### 4. **Database Cache** (jika pakai)
+```python
+# Jika pakai Flask-Caching, clear cache:
+from flask_caching import Cache
+cache = Cache()
+
+# Clear all cache
+cache.clear()
+
+# Atau delete specific key
+cache.delete('key_name')
+```
+
+---
+
+### 5. **Browser Cache** (untuk frontend web)
+Jika akses via browser:
+- **Ctrl + Shift + R** (Windows/Linux) - Hard refresh
+- **Cmd + Shift + R** (Mac) - Hard refresh
+- Clear browser cache manual
+
+---
+
+##  Rekomendasi untuk Project EWI
+
+Untuk project KPI EWI ini, jika ada masalah cache setelah update backend:
+
+### **Quick Clean** (Paling Sering Dipakai):
+```bash
+# 1. Hapus __pycache__
+Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+
+# 2. Restart Flask server
+# Ctrl+C untuk stop
+python app.py  # Start lagi
+```
+
+### **Deep Clean** (Jika Ada Masalah Besar):
+```bash
+# 1. Hapus __pycache__
+Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+
+# 2. Hapus .venv dan install ulang (jika perlu)
+Remove-Item -Recurse -Force .venv
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 3. Restart Flask
+python app.py
+```
+
+---
+
+##  Perbandingan Flutter vs Python
+
+| Flutter | Python/Flask |
+|---------|--------------|
+| `flutter clean` | Hapus `__pycache__` |
+| `flutter pub get` | `pip install -r requirements.txt` |
+| `flutter run` | `python app.py` |
+| Hot reload | Flask debug mode auto-reload |
+| Build artifacts (`build/`) | `__pycache__`, `.pyc` |
+
+---
+
+**TL;DR:** Untuk backend EWI ini, cukup:
+```bash
+# Hapus cache Python
+Get-ChildItem -Recurse -Directory -Filter __pycache__ | Remove-Item -Recurse -Force
+
+# Restart server
+python app.py
+
+cd 'D:\2. Organize\1. Projects\MiniProjectKPI_EWI'
+git status
+git add .
+git commit -m "Fix: Konsistensi style Excel & empty state handling"
+git push origin main

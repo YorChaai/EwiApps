@@ -72,6 +72,15 @@ def list_settlements():
     if status_filter in ('approved', 'completed'):
         print(f'[SETTLEMENT_API] Filtering status: approved OR completed')
         query = query.filter(Settlement.status.in_(('approved', 'completed')))
+    elif status_filter == 'rejected':
+        # Include settlement status 'rejected' OR settlements with any rejected expense
+        has_rejected_expenses = db.exists().where(
+            db.and_(
+                Expense.settlement_id == Settlement.id,
+                Expense.status == 'rejected'
+            )
+        )
+        query = query.filter(db.or_(Settlement.status == 'rejected', has_rejected_expenses))
     elif status_filter:
         print(f'[SETTLEMENT_API] Filtering status: {status_filter}')
         query = query.filter_by(status=status_filter)
@@ -233,6 +242,8 @@ def create_settlement():
         linked_advance.status = 'in_settlement'
 
     db.session.commit()
+    # Refresh to ensure all properties are loaded correctly
+    db.session.refresh(settlement)
 
     return jsonify({'settlement': settlement.to_dict()}), 201
 

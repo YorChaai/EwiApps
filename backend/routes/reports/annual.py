@@ -148,12 +148,49 @@ def _clone_row_format(ws, source_row, target_row, start_col=1, end_col=17):
             continue
         target_cell._style = copy(source_cell._style)
         target_cell.number_format = source_cell.number_format
-        target_cell.font = copy(source_cell.font)
-        target_cell.fill = copy(source_cell.fill)
-        target_cell.border = copy(source_cell.border)
-        target_cell.alignment = copy(source_cell.alignment)
-        target_cell.protection = copy(source_cell.protection)
-        target_cell.value = None
+
+
+def _replace_text_in_sheet(ws, search_text, replace_text):
+    """
+    Search and replace text in all cells of a worksheet.
+    Used for updating headers like 'TAHUN 2024' -> 'TAHUN 2030'.
+    """
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value and isinstance(cell.value, str):
+                if search_text in cell.value:
+                    cell.value = cell.value.replace(search_text, replace_text)
+
+
+def _apply_standard_cell_style(cell, style_type='data', bold=False, align='left', fill=None):
+    """
+    Helper pusat untuk merampingkan styling sel Excel.
+    style_type: 'header', 'data', 'total', 'final'
+    """
+    # 1. Font
+    font_size = 12 if style_type == 'header' else 11
+    font_name = 'Arial Narrow'
+    cell.font = Font(bold=bold or (style_type in ('header', 'total', 'final')),
+                     size=font_size, name=font_name)
+
+    # 2. Alignment
+    h_align = 'center' if style_type == 'header' else align
+    cell.alignment = Alignment(horizontal=h_align, vertical='center', wrap_text=(style_type == 'header'))
+
+    # 3. Border
+    s_thin = Side(style='thin', color='000000')
+    s_double = Side(style='double', color='000000')
+
+    top_s = s_thin if style_type in ('total', 'final') else s_thin
+    bottom_s = s_double if style_type == 'final' else (s_thin if style_type == 'total' else s_thin)
+
+    cell.border = Border(left=s_thin, right=s_thin, top=top_s, bottom=bottom_s)
+
+    # 4. Fill
+    if fill:
+        cell.fill = fill
+    elif style_type == 'header':
+        cell.fill = GREEN_FILL
 
 
 def _copy_template_row(ws, source_row, target_row, start_col=2, end_col=17, include_values=True):
@@ -673,28 +710,92 @@ def _build_annual_pdf_bytes(payload):
         elements.append(t_div); elements.append(Spacer(1, 15))
     # tabel expense
     elements.append(Paragraph("PENGELUARAN & OPERATION COST", styles['Heading3']))
-    # Fetch root categories dynamically from DB using sort_order to match UI
     root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order, Category.id).all()
     cat_columns = [c.name for c in root_cats]
-    cat_names = cat_columns # for mapping
+    cat_names = cat_columns
 
     t3_headers = ['Date','#','Activity (Desc)','Source','Jumlah (IDR)','Curr','Rate'] + [c[:10]+'.' for c in cat_columns]
-    t3_data = [t3_headers]; cat_totals = [0]*len(cat_columns); grand_total = 0
-    for idx, e in enumerate(expenses, 1):
-        nominal_idr = _to_float(e.get('idr_amount'))
-        if nominal_idr == 0: nominal_idr = _idr_from_currency(e.get('amount'), e.get('currency'), e.get('currency_exchange'))
-        col_idx = _map_expense_column(e.get('category_name'), cat_names)
-        row_cats = ['-']*len(cat_columns); row_cats[col_idx] = f"{nominal_idr:,.0f}" if nominal_idr else '-'
-        cat_totals[col_idx] += nominal_idr; grand_total += nominal_idr
-        t3_data.append([_as_iso_date(e.get('date')),str(idx),_shorten(e.get('description'),30),_shorten(e.get('source'),10),
-            f"{nominal_idr:,.0f}" if nominal_idr else '-',_safe_text(e.get('currency')) or 'IDR',
-            f"{_to_float(e.get('currency_exchange'),1):,.0f}" if e.get('currency_exchange') else '-'] + row_cats)
-    t3_data.append(["TOTAL PENGELUARAN","","","",f"{grand_total:,.0f}","",""] + [f"{t:,.0f}" if t > 0 else "-" for t in cat_totals])
-    cw = [55,20,110,50,60,25,25] + [45]*len(cat_columns)
-    t3 = Table(t3_data, colWidths=cw)
-    t3.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#1565C0')),('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
-        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),('FONTSIZE',(0,0),(-1,-1),6),('ALIGN',(4,1),(-1,-1),'RIGHT'),
-        ('GRID',(0,0),(-1,-1),0.5,colors.grey),('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#E3F2FD')),('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold')]))
+    t3_data = [t3_headers]
+    cat_totals = [0]*len(cat_columns); grand_total = 0
+
+    # Separate single vs batch
+    single_expenses = [e for e in expenses if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))]
+    batch_expenses = [e for e in expenses if _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))]
+
+    # Render Single
+    if single_expenses:
+        single_grouped = _group_expenses_by_subcategory(single_expenses)
+        row_idx = 1
+        for subcat, items in single_grouped['groups'].items():
+            # Subcat header
+            t3_data.append(['', '', subcat, '', '', '', ''] + [''] * len(cat_columns))
+            for e in items:
+                nominal_idr = _expense_amount_for_display(e)
+                col_idx = _map_expense_column(e.get('category_name'), cat_names)
+                row_cats = ['-']*len(cat_columns); row_cats[col_idx] = f"{nominal_idr:,.0f}" if nominal_idr else '-'
+                cat_totals[col_idx] += nominal_idr; grand_total += nominal_idr
+                t3_data.append([_as_iso_date(e.get('date')), str(row_idx), _shorten(e.get('description'),30), _shorten(e.get('source'),10),
+                    f"{nominal_idr:,.0f}" if nominal_idr else '-', _safe_text(e.get('currency')) or 'IDR',
+                    f"{_to_float(e.get('currency_exchange'),1):,.0f}" if e.get('currency_exchange') else '-'] + row_cats)
+                row_idx += 1
+
+    # Render Batch
+    batch_by_settlement = {}
+    for e in batch_expenses:
+        key = f"{e.get('settlement_id')}:{e.get('settlement_title')}"
+        batch_by_settlement.setdefault(key, []).append(e)
+
+    sorted_keys = sorted(batch_by_settlement.keys(), key=lambda x: (int(x.split(':')[0]) if x.split(':')[0].isdigit() else 0))
+
+    batch_counter = 0
+    for key in sorted_keys:
+        batch_counter += 1
+        items = batch_by_settlement[key]
+        title = _clean_settlement_title(items[0].get('settlement_title') or 'Tanpa Settlement')
+
+        # Batch header (Expense#N) - Use Dark Navy Blue for "biru keiteman"
+        t3_data.append([f'Expense#{batch_counter}', ':', title, '', '', '', ''] + [''] * len(cat_columns))
+
+        batch_grouped = _group_expenses_by_subcategory(items)
+        row_idx = 1
+        for subcat, sub_items in batch_grouped['groups'].items():
+            t3_data.append(['', '', subcat, '', '', '', ''] + [''] * len(cat_columns))
+            for e in sub_items:
+                nominal_idr = _expense_amount_for_display(e)
+                col_idx = _map_expense_column(e.get('category_name'), cat_names)
+                row_cats = ['-']*len(cat_columns); row_cats[col_idx] = f"{nominal_idr:,.0f}" if nominal_idr else '-'
+                cat_totals[col_idx] += nominal_idr; grand_total += nominal_idr
+                t3_data.append([_as_iso_date(e.get('date')), str(row_idx), _shorten(e.get('description'),30), _shorten(e.get('source'),10),
+                    f"{nominal_idr:,.0f}" if nominal_idr else '-', _safe_text(e.get('currency')) or 'IDR',
+                    f"{_to_float(e.get('currency_exchange'),1):,.0f}" if e.get('currency_exchange') else '-'] + row_cats)
+                row_idx += 1
+
+        t3_data.append(["TOTAL PENGELUARAN","","","",f"{grand_total:,.0f}","",""] + [f"{t:,.0f}" if t > 0 else "-" for t in cat_totals])
+        cw = [55,20,110,50,60,25,25] + [45]*len(cat_columns)
+        t3 = Table(t3_data, colWidths=cw)
+
+    # Custom styling to apply different background for Expense# headers
+    t3_style = [
+        ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0D47A1')),
+        ('TEXTCOLOR',(0,0),(-1,0),colors.whitesmoke),
+        ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+        ('FONTSIZE',(0,0),(-1,-1),6),
+        ('ALIGN',(4,1),(-1,-1),'RIGHT'),
+        ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+        ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#E3F2FD')),
+        ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold')
+    ]
+
+    # Loop data to find 'Expense#' rows and subcategory headers to apply styling
+    for i, row in enumerate(t3_data):
+        if i == 0: continue # Skip main header
+        if str(row[0]).startswith('Expense#'):
+            t3_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#0D47A1'))) # Dark Navy Blue
+            t3_style.append(('TEXTCOLOR', (0, i), (-1, i), colors.whitesmoke))
+            t3_style.append(('FONTNAME', (0, i), (-1, i), 'Helvetica-Bold'))
+        elif row[2] and not row[0] and not row[1] and i < len(t3_data)-1: # Subcat header
+            t3_style.append(('FONTNAME', (2, i), (2, i), 'Helvetica-Bold'))
+    t3.setStyle(TableStyle(t3_style))
     elements.append(t3); elements.append(Spacer(1, 14))
     elements.append(Paragraph("AREA DISPLAY / IMPORT (Kosong - diisi saat refresh)", styles['Heading3']))
     area_data = [['No','Keterangan','Nilai']]
@@ -1780,6 +1881,20 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # ✅ DISABLE GRIDLINES for a clean look
         ws_lr.sheet_view.showGridLines = False
 
+        # ✅ FIX COLUMN WIDTHS to match Original Proportions (Gambar 1)
+        ws_lr.column_dimensions['B'].width = 20
+        ws_lr.column_dimensions['C'].width = 30
+        ws_lr.column_dimensions['D'].width = 5
+        ws_lr.column_dimensions['E'].width = 15
+        ws_lr.column_dimensions['F'].width = 2  # ✅ NARROW GAP between tables
+        ws_lr.column_dimensions['G'].width = 20
+        ws_lr.column_dimensions['H'].width = 30
+        ws_lr.column_dimensions['I'].width = 5
+        ws_lr.column_dimensions['J'].width = 15
+
+        # ✅ REPLACE YEAR IN HEADERS (B4 and F4 in template)
+        _replace_text_in_sheet(ws_lr, '2024', str(year))
+
         # ✅ CRITICAL: PRE-CLEAR ONLY LABA RUGI SIDE
         # We only clear columns A to E (1-5) to preserve NERACA on the right (G-J)
         max_lr_row = max(ws_lr.max_row, 150)
@@ -1792,33 +1907,66 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         def _apply_pl_row_style(r, style_type='data'):
             s_thin = Side(style='thin')
             s_none = Side(style=None)
-            s_double = Side(style='double')
+            s_double = Side(style='double') if style_type == 'final' else s_none # Or double if needed
 
-            # ✅ FIX: Set standard row height to match Sheet 1
+            # ✅ FIX: Set standard row height
             ws_lr.row_dimensions[r].height = 15
 
-            # Determine Top/Bottom style
-            top_s = s_thin if style_type in ('total', 'final') else s_none
+            # Determine Top/Bottom borders based on style
+            # Header has top border, total has top+bottom, final has top+double bottom
+            top_s = s_thin if style_type in ('total', 'final', 'header') else s_none
             bottom_s = s_thin if style_type == 'total' else (s_double if style_type == 'final' else s_none)
-            # Apply borders to columns B to E
-            # Column B (2): Left border + Top/Bottom
-            ws_lr.cell(row=r, column=2).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
-            # Column C (3): Right border + Top/Bottom
-            ws_lr.cell(row=r, column=3).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
-            # Column D (4): Top/Bottom ONLY (Explicitly NO Right border)
-            ws_lr.cell(row=r, column=4).border = Border(left=s_none, right=s_none, top=top_s, bottom=bottom_s)
-            # Column E (5): Right border + Top/Bottom (Explicitly NO Left border)
-            ws_lr.cell(row=r, column=5).border = Border(left=s_none, right=s_thin, top=top_s, bottom=bottom_s)
 
-            # Alignment and Number Format
+            # Apply borders - ✅ CRITICAL: Column B right and C left are NONE to hide the separator
+            # Column B (2): Left border only
+            ws_lr.cell(row=r, column=2).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
+
+            # Column C (3): Right border only (separates from Rp)
+            ws_lr.cell(row=r, column=3).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+
+            # Column D (4): NO Right border (unified box with Amount)
+            ws_lr.cell(row=r, column=4).border = Border(right=s_none, top=top_s, bottom=bottom_s)
+
+            # Column E (5): Right border only (Table edge)
+            ws_lr.cell(row=r, column=5).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+
+            # --- NERACA SIDE (Columns G-J / 7-10) ---
+            # Apply similar "unified box" logic for the right side
+            # Column G (7): Left border only
+            ws_lr.cell(row=r, column=7).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
+
+            # Column H (8): Right border only (Separates Text from Rp)
+            ws_lr.cell(row=r, column=8).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+
+            # Column I (9): NO Right border (Unified box with Amount)
+            ws_lr.cell(row=r, column=9).border = Border(right=s_none, top=top_s, bottom=bottom_s)
+
+            # Column J (10): Right border only (Table edge)
+            ws_lr.cell(row=r, column=10).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+
+            # Alignment for Laba Rugi
             ws_lr.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
             ws_lr.cell(row=r, column=3).alignment = Alignment(horizontal='left', vertical='center')
-            ws_lr.cell(row=r, column=4).alignment = Alignment(horizontal='left', vertical='center') # Rp to the left
+            ws_lr.cell(row=r, column=4).alignment = Alignment(horizontal='left', vertical='center')
             ws_lr.cell(row=r, column=5).alignment = Alignment(horizontal='right', vertical='center')
 
-            # Thousand separator for value column
-            if ws_lr.cell(row=r, column=5).value is not None:
-                ws_lr.cell(row=r, column=5).number_format = '#,##0'
+            # Alignment for Neraca
+            ws_lr.cell(row=r, column=7).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=8).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=9).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=10).alignment = Alignment(horizontal='right', vertical='center')
+
+            # Font - Header and Totals are Bold
+            is_bold = style_type in ('header', 'total', 'final')
+            font = Font(bold=is_bold, size=11, name='Arial Narrow')
+            for col in list(range(2, 6)) + list(range(7, 11)):
+                ws_lr.cell(row=r, column=col).font = font
+                # ✅ ENSURE NO FILL (Remove Green)
+                ws_lr.cell(row=r, column=col).fill = PatternFill(fill_type=None)
+
+            # Number Format for Value Columns (E and J)
+            ws_lr.cell(row=r, column=5).number_format = '#,##0'
+            ws_lr.cell(row=r, column=10).number_format = '#,##0'
 
         # Just clean up old metadata values if they somehow persist
         ws_lr['A3'] = None
@@ -1827,6 +1975,11 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # bersihkan nilai template dummy spesifik di neraca
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
+
+        # ✅ NEW: Apply consistent styling to the entire range (8-50) for both sides
+        # This ensures boxes are drawn even if one side is empty
+        for r in range(8, 51):
+            _apply_pl_row_style(r, 'data')
 
         # ✅ REVENUE TOTALS BY TYPE - Hitung dengan SUM langsung ke baris sesuai tipe
         direct_count = sum(1 for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung').strip().lower() != 'pendapatan_lain_lain')
@@ -1838,7 +1991,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_lr['B8'] = 'PENDAPATAN'; ws_lr['B8'].font = Font(bold=True)
         _apply_pl_row_style(8, 'header')
 
-        ws_lr['C9'] = '    PENDAPATAN LANGSUNG' # Indented
+        ws_lr['C9'] = 'PENDAPATAN LANGSUNG'
         ws_lr['D9'] = 'Rp'
         if direct_count > 0:
             ws_lr['E9'] = f'=SUM({main_ref}!{col_letter}{start_row_ref}:{col_letter}{start_row_ref + direct_count - 1})'
@@ -1846,7 +1999,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             ws_lr['E9'] = 0
         _apply_pl_row_style(9, 'data')
 
-        ws_lr['C10'] = '    PENDAPATAN LAIN LAIN' # Indented
+        ws_lr['C10'] = 'PENDAPATAN LAIN LAIN'
         ws_lr['D10'] = 'Rp'
         if other_count > 0:
             other_start = start_row_ref + direct_count
@@ -1902,7 +2055,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         start_bl = row
         for name, col_l in langsung_cats:
-            ws_lr[f'C{row}'] = f'    {name.upper()}' # Indented
+            ws_lr[f'C{row}'] = f'{name.upper()}'
             ws_lr[f'D{row}'] = 'Rp'
             ws_lr[f'E{row}'] = f'={main_ref}!{col_l}{cost_totals_row}'
             _apply_pl_row_style(row, 'data')
@@ -1944,7 +2097,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         row += 1
         start_ba = row
         for name, col_l in admin_cats:
-            ws_lr[f'C{row}'] = f'    {name.upper()}' # Indented
+            ws_lr[f'C{row}'] = f'{name.upper()}'
             ws_lr[f'D{row}'] = 'Rp'
             ws_lr[f'E{row}'] = f'={main_ref}!{col_l}{cost_totals_row}'
             _apply_pl_row_style(row, 'data')
@@ -1974,7 +2127,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_lr[f'B{row}'] = 'PENDAPATAN/BEBAN LAIN LAIN'; ws_lr[f'B{row}'].font = Font(bold=True)
         _apply_pl_row_style(row, 'header')
         row += 1
-        ws_lr[f'C{row}'] = '    PENDAPATAN LAINNYA' # Indented
+        ws_lr[f'C{row}'] = 'PENDAPATAN LAIN LAIN'
         ws_lr[f'D{row}'] = 'Rp'
         ws_lr[f'E{row}'] = 0
         _apply_pl_row_style(row, 'data')
@@ -2047,28 +2200,60 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_bs['A4'] = None  # Clean up mistake
         ws_bs['B4'] = f'BUSINESS SUMMARY | TAHUN {year}'
 
+        # ✅ REPLACE YEAR IN HEADERS
+        _replace_text_in_sheet(ws_bs, '2024', str(year))
+
         # FIX: Set consistent row height for main table (rows 6-16)
         for row_idx in range(6, 17):
             ws_bs.row_dimensions[row_idx].height = ROW_HEIGHT_DIVIDEND
 
         # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
-        # Revenue total: SUM of all revenue data rows (COL_AMOUNT_RECEIVED = 12)
-        # PPh23 total: SUM of all revenue tax rows (COL_PPH_23 = 14)
+        # Row 7: Item 1 - Revenue
+        ws_bs['B7'] = 1; ws_bs['C7'] = 'Revenue'
         ws_bs['E7'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)
+
+        # Row 8: Item 2 - Revenue Diterima (Setelah Pajak)
+        ws_bs['B8'] = 2; ws_bs['C8'] = 'Revenue Diterima (Setelah Pajak)'
         ws_bs['E8'] = f'=E7-{_sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)[1:]}'
 
         # ✅ FIX: Use dynamic category range instead of hardcoded :Q
         last_cat_col_letter_sync = get_column_letter(9 + len(cat_names) - 1)
+        # Row 9: Item 3 - Biaya
+        ws_bs['B9'] = 3; ws_bs['C9'] = 'Biaya'
         ws_bs['E9'] = f'=SUM({main_ref}!I{cost_totals_row}:{last_cat_col_letter_sync}{cost_totals_row})'
 
+        # Row 10: Item 4 - Profit SebelumTax
+        ws_bs['B10'] = 4; ws_bs['C10'] = 'Profit SebelumTax'
         ws_bs['E10'] = '=E7-E9'
+
+        # Row 11: Item 5 - PPh Badan (22%*50%)
+        ws_bs['B11'] = 5; ws_bs['C11'] = 'PPh Badan (22%*50%)'
         ws_bs['E11'] = '=E10*22%*50%'
+
+        # Row 12: Item 6 - PPh 23 Dipotong oleh client
+        ws_bs['B12'] = 6; ws_bs['C12'] = 'PPh 23 Dipotong oleh client'
         ws_bs['E12'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)  # PPh23 total
+
+        # Row 13: Item 7 - Kekurangan Bayar PPh Badan
+        ws_bs['B13'] = 7; ws_bs['C13'] = 'Kekurangan Bayar PPh Badan'
         ws_bs['E13'] = '=E11-E12'
+        # Yellow highlight for row 13 per screenshot
+        yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+        ws_bs['E13'].fill = yellow_fill
+
+        # Row 14: Item 8 - Profit After Tax
+        ws_bs['B14'] = 8; ws_bs['C14'] = 'Profit After Tax'
         ws_bs['E14'] = '=E10-E13'
+
         dividends = payload.get('dividend', {}).get('data', [])
         profit_retained = _to_float(payload.get('dividend', {}).get('profit_retained'))
+
+        # Row 15: Item 9 - Deviden Dibagi
+        ws_bs['B15'] = 9; ws_bs['C15'] = 'Deviden Dibagi'
         ws_bs['E15'] = '=E14-E16'
+
+        # Row 16: Item 10 - Profit Ditahan
+        ws_bs['B16'] = 10; ws_bs['C16'] = 'Profit Ditahan'
         ws_bs['E16'] = profit_retained
 
         # ✅ DEVIDEN SECTION - Format with proper headers
@@ -2185,6 +2370,7 @@ def _ensure_formatted_secondary_sheets(wb, year, template_dir):
     if target_lr in wb.sheetnames and target_bs in wb.sheetnames: return True
 
     donor_candidates = [
+        os.path.abspath(os.path.join(template_dir, '20250427_EWI Financial-Repport_2024.xlsx')),
         os.path.abspath(os.path.join(template_dir, '20250427_EWI Financial-Repport_2024_Submitted_Rev1.xlsx')),
         os.path.abspath(os.path.join(template_dir, 'Revenue-Cost_2024_cleaned.xlsx')),
     ]
@@ -2694,7 +2880,19 @@ def get_annual_report_excel():
         logger.debug(f'Renamed sheet to {final_main_sheet_name}')
 
     has_formatted_secondary = _ensure_formatted_secondary_sheets(wb, year, template_dir)
-    if not has_formatted_secondary:
+    if has_formatted_secondary:
+        # ✅ CASE 1: Template found (Preferred) - Use sophisticated side-by-side logic
+        _sync_formatted_secondary_sheets(
+            wb,
+            payload,
+            year,
+            final_main_sheet_name,
+            expense_total_row=total_row,
+            revenue_last_row=last_revenue_row,
+        )
+    else:
+        # ✅ CASE 2: No template found - Fallback to basic monthly summary
+        logger.warning('Excel template not found - falling back to basic summary sheets')
         _write_secondary_summary_sheets(
             wb,
             payload,
@@ -2703,14 +2901,6 @@ def get_annual_report_excel():
             expense_total_row=total_row,
             revenue_last_row=last_revenue_row,
         )
-    _sync_formatted_secondary_sheets(
-        wb,
-        payload,
-        year,
-        final_main_sheet_name,
-        expense_total_row=total_row,
-        revenue_last_row=last_revenue_row,
-    )
 
     try:
         wb.calculation.calcMode = 'auto'

@@ -586,7 +586,8 @@ def _expense_subcategory_label(expense):
                 elif 'biaya transaksi bank' in desc: label = 'Biaya Bank'
 
     if not label:
-        return ''
+        # Jika tidak ada subkategori, gunakan tanda strip sesuai permintaan user
+        label = "-"
 
     # APPEND PARENT CODE (A, B, C...)
     parent_code = _safe_text(expense.get('category_code')).strip()
@@ -604,8 +605,7 @@ def _group_annual_expenses(expenses, year):
     for e in expenses:
         # PENTING: Update label subkategori langsung di dictionary agar UI Flutter membacanya
         subcat_label = _expense_subcategory_label(e)
-        if subcat_label:
-            e['subcategory_name'] = subcat_label
+        e['subcategory_name'] = subcat_label if subcat_label else "-"
 
         sid = e.get('settlement_id')
         if sid is None:
