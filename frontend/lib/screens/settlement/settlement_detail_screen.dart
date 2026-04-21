@@ -777,6 +777,34 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               );
             },
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(
+                Icons.person_outline,
+                color: AppTheme.textSecondary,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Dibuat oleh: ${s['requester_name'] ?? '-'}',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(width: 16),
+              Icon(
+                Icons.calendar_today_outlined,
+                color: AppTheme.textSecondary,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                s['created_at'] != null
+                    ? s['created_at'].toString().substring(0, 10)
+                    : '-',
+                style: TextStyle(color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           if (advanceSummary != null) ...[
             Container(
@@ -829,25 +857,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
 
           // tabel expense
           expenses.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        size: 48,
-                        color: AppTheme.textSecondary.withValues(alpha: 0.3),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Belum ada expense',
-                        style: TextStyle(color: AppTheme.textSecondary),
-                      ),
-                    ],
-                  ),
-                )
-              : Container(
-                  decoration: BoxDecoration(
+              ? _buildEmptyState(canAddExpenses)
+              : Container(                  decoration: BoxDecoration(
                     color: AppTheme.card,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: AppTheme.divider),
@@ -1114,6 +1125,39 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   ),
                 ),
           const SizedBox(height: 100), // Padding extra agar tidak tertabrak FAB
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool canAddItems) {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        border: Border.all(color: AppTheme.divider, style: BorderStyle.solid),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: AppTheme.textSecondary,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Belum ada expense ditambahkan',
+            style: TextStyle(color: AppTheme.textSecondary),
+          ),
+          if (canAddItems) ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _showAddExpenseDialog(context),
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Item Sekarang'),
+            ),
+          ],
         ],
       ),
     );
