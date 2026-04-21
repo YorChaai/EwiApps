@@ -226,31 +226,27 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
     if (canEditHeader) {
       actions.add(
-        OutlinedButton.icon(
+        SettlementActionButton(
           onPressed: () => _showEditAdvanceDialog(context, adv),
-          icon: const Icon(Icons.edit_rounded, size: 16),
-          label: const Text('Edit'),
+          icon: Icons.edit_rounded,
+          label: 'Edit',
+          isOutlined: true,
         ),
       );
     }
 
     if (canSubmit) {
+      final label = adv['status'] == 'revision_draft' ||
+              adv['status'] == 'revision_rejected'
+          ? 'Submit Revisi'
+          : 'Submit';
       actions.add(
-        Builder(
-          builder: (context) {
-            return ElevatedButton.icon(
-              onPressed: _canSubmitAdvanceItems(workflowItems)
-                  ? () => _submitAdvance()
-                  : null,
-              icon: const Icon(Icons.send_rounded, size: 16),
-              label: Text(
-                adv['status'] == 'revision_draft' ||
-                        adv['status'] == 'revision_rejected'
-                    ? 'Submit Revisi'
-                    : 'Submit',
-              ),
-            );
-          },
+        SettlementActionButton(
+          onPressed: _canSubmitAdvanceItems(workflowItems)
+              ? () => _submitAdvance()
+              : null,
+          icon: Icons.send_rounded,
+          label: label,
         ),
       );
     }
@@ -261,11 +257,12 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             adv['status'] == 'revision_submitted' ||
             adv['status'] == 'revision_rejected')) {
       actions.add(
-        OutlinedButton.icon(
+        SettlementActionButton(
           onPressed: _moveToDraft,
-          icon: const Icon(Icons.undo_rounded, size: 16),
-          label: const Text('Move to Draft'),
-          style: OutlinedButton.styleFrom(foregroundColor: AppTheme.warning),
+          icon: Icons.undo_rounded,
+          label: 'Move to Draft',
+          isOutlined: true,
+          color: AppTheme.warning,
         ),
       );
     }
@@ -273,83 +270,77 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     if (_isManager &&
         (adv['status'] == 'submitted' ||
             adv['status'] == 'revision_submitted')) {
+      final label = adv['status'] == 'revision_submitted'
+          ? 'Approve Revisi ${adv['active_revision_no'] ?? ''}'
+          : 'Approve';
       actions.add(
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.success),
+        SettlementActionButton(
           onPressed: _canApproveAdvanceItems(workflowItems)
               ? () => _approveAdvance()
               : null,
-          icon: const Icon(Icons.check_circle_outline, size: 16),
-          label: Text(
-            adv['status'] == 'revision_submitted'
-                ? 'Approve Revisi ${adv['active_revision_no'] ?? ''}'
-                : 'Approve',
-          ),
+          icon: Icons.check_circle_outline,
+          label: label,
+          color: AppTheme.success,
         ),
       );
     }
 
     if (canCreateSettlement) {
       actions.add(
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.accent,
-            foregroundColor: Colors.white,
-          ),
+        SettlementActionButton(
           onPressed: () => _createSettlement(),
-          icon: const Icon(Icons.copy_all_rounded, size: 16),
-          label: const Text('Salin ke Settlement'),
+          icon: Icons.copy_all_rounded,
+          label: 'Salin ke Settlement',
+          color: AppTheme.accent,
         ),
       );
     }
 
     if (adv['settlement_id'] != null && adv['settlement_id'] != 0) {
       actions.add(
-        OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(foregroundColor: AppTheme.primary),
+        SettlementActionButton(
           onPressed: () => _viewSettlement(adv['settlement_id']),
-          icon: const Icon(Icons.visibility_rounded, size: 16),
-          label: const Text('Lihat Settlement'),
+          icon: Icons.visibility_rounded,
+          label: 'Lihat Settlement',
+          isOutlined: true,
+          color: AppTheme.primary,
         ),
       );
     }
 
     if (canStartRevision) {
+      final label = 'Tambah Revisi ${(adv['approved_revision_no'] ?? 0) + 1}';
       actions.add(
-        ElevatedButton.icon(
+        SettlementActionButton(
           onPressed: () => _startRevision(),
-          icon: const Icon(Icons.add_circle_outline, size: 16),
-          label: Text(
-            'Tambah Revisi ${(adv['approved_revision_no'] ?? 0) + 1}',
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.accent,
-            foregroundColor: Colors.white,
-          ),
+          icon: Icons.add_circle_outline,
+          label: label,
+          color: AppTheme.accent,
         ),
       );
     }
 
     if (canShowDownloadButtons) {
       actions.add(
-        OutlinedButton.icon(
+        SettlementActionButton(
           onPressed: () => _downloadReceipt(),
-          icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-          label: const Text('PDF'),
+          icon: Icons.picture_as_pdf_rounded,
+          label: 'PDF',
+          isOutlined: true,
         ),
       );
       actions.add(
-        OutlinedButton.icon(
+        SettlementActionButton(
           onPressed: () => _exportAdvanceExcel(),
-          icon: const Icon(Icons.table_chart_rounded, size: 16),
-          label: const Text('Excel'),
+          icon: Icons.table_chart_rounded,
+          label: 'Excel',
+          isOutlined: true,
         ),
       );
     }
 
     return actions;
   }
-
   Widget _buildMobileAdvanceActionBar(
     BuildContext context,
     Map<String, dynamic> adv,
@@ -398,22 +389,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   tooltip: 'Hapus ${_selectedItemIds.length} item pilihan',
                 ),
               ),
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: _advanceStatusColor(adv).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                (adv['status'] as String).toUpperCase(),
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                  color: _advanceStatusColor(adv),
-                ),
-              ),
-            ),
             ...actions.map(
               (action) => Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -421,8 +396,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               ),
             ),
           ],
-        ),
-      ),
+        ),      ),
     );
   }
 
@@ -1583,6 +1557,28 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           ],
                         ),
                         actions: [
+                          if (adv != null)
+                            Container(
+                              margin: const EdgeInsets.only(right: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _advanceStatusColor(
+                                  adv,
+                                ).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                (adv['status'] as String).toUpperCase(),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                  color: _advanceStatusColor(adv),
+                                ),
+                              ),
+                            ),
                           // Notification Bell
                           NotificationBellIcon(
                             onNotificationTap: _handleNotificationTap,
@@ -1596,8 +1592,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                             tooltip: 'Logout',
                           ),
                           const SizedBox(width: 8),
-                        ],
-                      )
+                        ],                      )
                     : AppBar(
                         title: Text(
                           adv != null

@@ -1,0 +1,385 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../providers/settlement_provider.dart';
+import '../../providers/advance_provider.dart';
+import '../../services/api_service.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/account_list_dialog.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final ApiService _api = ApiService();
+  bool _loading = true;
+  String _currentDir = '';
+  int _currentReportYear = 2024;
+  final _dirController = TextEditingController();
+  bool _showManagerSection = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _dirController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) return;
+    _api.setToken(auth.token!);
+    try {
+      final res = await _api.getStorageSettings();
+      final reportYearRes = await _api.getReportYearSettings();
+      if (mounted) {
+        final parsedYear = int.tryParse((reportYearRes['default_report_year'] ?? 2024).toString());
+        setState(() {
+          _currentDir = res['current_directory'] ?? '';
+          _dirController.text = _currentDir;
+          _currentReportYear = parsedYear ?? 2024;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    final newDir = _dirController.text.trim();
+    if (newDir.isEmpty) return;
+    setState(() => _loading = true);
+    try {
+      final res = await _api.updateStorageSettings(newDir);
+      if (mounted) {
+        setState(() { _loading = false; _currentDir = res['new_directory'] ?? newDir; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Berhasil memindahkan penyimpanan.'), backgroundColor: AppTheme.success));
+      }
+    } catch (e) {
+      if (mounted) { setState(() => _loading = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger)); }
+    }
+  }
+
+  Future<void> _saveReportYearSettings() async {
+    final year = _currentReportYear;
+    setState(() => _loading = true);
+    try {
+      final res = await _api.updateReportYearSettings(year);
+      if (mounted) {
+        setState(() { _loading = false; _currentReportYear = int.tryParse((res['default_report_year'] ?? year).toString()) ?? year; });
+        context.read<SettlementProvider>().setReportYear(year, reload: true);
+        context.read<AdvanceProvider>().setReportYear(year, reload: true);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Default tahun laporan berhasil disimpan.'), backgroundColor: AppTheme.success));
+      }
+    } catch (e) {
+      if (mounted) { setState(() => _loading = false); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger)); }
+    }
+  }
+
+  void _showAccountList() async {
+    showDialog(context: context, builder: (ctx) => const AccountListDialog());
+  }
+
+  void _toggleManagerSection() {
+    setState(() => _showManagerSection = !_showManagerSection);
+  }
+
+  void _showEditProfileDialog() async {
+    final auth = context.read<AuthProvider>();
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => EditProfileDialog(user: auth.user!),
+    );
+
+    if (result != null && result['success'] == true && mounted) {
+      auth.updateUserData(result['user']);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil berhasil diperbarui'), backgroundColor: AppTheme.success));
+    }
+  }
+
+  bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+  Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+  Color _surfaceColor(BuildContext context) => _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
+  Color _dividerColor(BuildContext context) => _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
+  Color _titleColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _bodyColor(BuildContext context) => _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+
+  Widget _buildProfileCard() {
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user ?? {};
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(color: _cardColor(context), borderRadius: BorderRadius.circular(20), border: Border.all(color: _dividerColor(context))),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            children: [
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: AppTheme.primary,
+                child: Text((auth.fullName.isNotEmpty ? auth.fullName[0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+              ),
+              Positioned(
+                right: 0, bottom: 0,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: _showEditProfileDialog,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
+                      child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Text(auth.fullName, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _titleColor(context))),
+          Text('@${user['username'] ?? '-'}', style: TextStyle(fontSize: 14, color: _bodyColor(context))),
+          const SizedBox(height: 24),
+          const Divider(),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 40,
+            runSpacing: 20,
+            alignment: WrapAlignment.center,
+            children: [
+              _profileColumn('Role', auth.roleDisplayName, Icons.badge_outlined),
+              _profileColumn('No HP', user['phone_number'] ?? '-', Icons.phone_outlined),
+              _profileColumn('Tempat Kerja', user['workplace'] ?? '-', Icons.work_outline),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileColumn(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, size: 20, color: AppTheme.primary.withValues(alpha: 0.7)),
+        const SizedBox(height: 8),
+        Text(label, style: TextStyle(color: _bodyColor(context), fontSize: 11)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(color: _titleColor(context), fontSize: 14, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _buildThemeSettingsCard(ThemeProvider themeProvider) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: _cardColor(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: _dividerColor(context))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.palette_rounded, color: AppTheme.primary), const SizedBox(width: 12), Text('Tema Aplikasi', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _titleColor(context)))]),
+        const SizedBox(height: 16),
+        SegmentedButton<ThemeMode>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment<ThemeMode>(value: ThemeMode.light, icon: Icon(Icons.light_mode_rounded), label: Text('Light')),
+            ButtonSegment<ThemeMode>(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_rounded), label: Text('Dark')),
+            ButtonSegment<ThemeMode>(value: ThemeMode.system, icon: Icon(Icons.settings_suggest_rounded), label: Text('System')),
+          ],
+          selected: {themeProvider.themeMode},
+          onSelectionChanged: (selection) => themeProvider.setThemeMode(selection.first),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildManagerSection() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 32),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8), border: Border.all(color: AppTheme.primary.withValues(alpha: 0.5))),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.admin_panel_settings_rounded, color: AppTheme.primary, size: 18), SizedBox(width: 8), Text('MANAGER ONLY', style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold, fontSize: 12))]),
+      ),
+      const SizedBox(height: 16),
+      Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: _cardColor(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: _dividerColor(context))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [const Icon(Icons.people_outline_rounded, color: AppTheme.primary), const SizedBox(width: 12), Text('Manage User (Account List)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _titleColor(context)))]),
+          const SizedBox(height: 16),
+          SizedBox(width: double.infinity, height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white), onPressed: _showAccountList, icon: const Icon(Icons.list_rounded), label: const Text('Lihat Account List', style: TextStyle(fontWeight: FontWeight.bold)))),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      _buildReportYearSettingsCard(),
+      const SizedBox(height: 16),
+      _buildStorageSettingsCard(),
+    ]);
+  }
+
+  Widget _buildStorageSettingsCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: _cardColor(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: _dividerColor(context))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.folder_rounded, color: AppTheme.primary), const SizedBox(width: 12), Text('Penyimpanan Data', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _titleColor(context)))]),
+        const SizedBox(height: 16),
+        TextField(controller: _dirController, decoration: const InputDecoration(hintText: 'Direktori penyimpanan')),
+        const SizedBox(height: 16),
+        SizedBox(width: double.infinity, height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white), onPressed: _loading ? null : _saveSettings, icon: const Icon(Icons.save_rounded), label: const Text('Simpan & Pindahkan Data', style: TextStyle(fontWeight: FontWeight.bold)))),
+      ]),
+    );
+  }
+
+  Widget _buildReportYearSettingsCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: _cardColor(context), borderRadius: BorderRadius.circular(16), border: Border.all(color: _dividerColor(context))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [const Icon(Icons.calendar_month_rounded, color: AppTheme.primary), const SizedBox(width: 12), Text('Default Tahun Laporan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: _titleColor(context)))]),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(color: _surfaceColor(context), borderRadius: BorderRadius.circular(8), border: Border.all(color: _dividerColor(context))),
+          child: DropdownButtonHideUnderline(child: DropdownButton<int>(
+            value: _currentReportYear, isExpanded: true, dropdownColor: _cardColor(context), style: TextStyle(color: _titleColor(context)),
+            items: List.generate(10, (index) => 2022 + index).map((y) => DropdownMenuItem(value: y, child: Text('Laporan $y'))).toList(),
+            onChanged: (value) { if (value != null) setState(() => _currentReportYear = value); },
+          )),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(width: double.infinity, height: 48, child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, foregroundColor: Colors.white), onPressed: _loading ? null : _saveReportYearSettings, icon: const Icon(Icons.save_rounded), label: const Text('Simpan Default Tahun', style: TextStyle(fontWeight: FontWeight.bold)))),
+      ]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final auth = context.watch<AuthProvider>();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Pengaturan Sistem'),
+        actions: [
+          if (auth.isManager) Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: TextButton.icon(
+              onPressed: _toggleManagerSection,
+              icon: Icon(Icons.admin_panel_settings_rounded, color: _showManagerSection ? AppTheme.primary : _bodyColor(context), size: 20),
+              label: Text('Manager Panel', style: TextStyle(color: _showManagerSection ? AppTheme.primary : _bodyColor(context), fontWeight: FontWeight.bold, fontSize: 13)),
+              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+            ),
+          ),
+        ],
+      ),
+      body: _loading ? const Center(child: CircularProgressIndicator()) : SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _buildProfileCard(),
+          const SizedBox(height: 16),
+          _buildThemeSettingsCard(themeProvider),
+          if (auth.isManager && _showManagerSection) _buildManagerSection(),
+        ]),
+      ),
+    );
+  }
+}
+
+class EditProfileDialog extends StatefulWidget {
+  final Map<String, dynamic> user;
+  const EditProfileDialog({super.key, required this.user});
+  @override
+  State<EditProfileDialog> createState() => _EditProfileDialogState();
+}
+
+class _EditProfileDialogState extends State<EditProfileDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _workplaceController;
+  final _oldPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  bool _isLoading = false;
+  bool _showPasswordFields = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.user['full_name']);
+    _phoneController = TextEditingController(text: widget.user['phone_number'] == '-' ? '' : widget.user['phone_number']);
+    _workplaceController = TextEditingController(text: widget.user['workplace'] == '-' ? '' : widget.user['workplace']);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose(); _phoneController.dispose(); _workplaceController.dispose();
+    _oldPasswordController.dispose(); _newPasswordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await ApiService().updateProfile(
+        fullName: _nameController.text.trim(),
+        phoneNumber: _phoneController.text.trim().isEmpty ? '-' : _phoneController.text.trim(),
+        workplace: _workplaceController.text.trim().isEmpty ? '-' : _workplaceController.text.trim(),
+        oldPassword: _showPasswordFields ? _oldPasswordController.text : null,
+        newPassword: _showPasswordFields ? _newPasswordController.text : null,
+      );
+      if (mounted) Navigator.pop(context, {'success': true, 'user': res['user']});
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e'), backgroundColor: AppTheme.danger));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AlertDialog(
+      backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text('Edit Profil Saya', style: TextStyle(fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nama Lengkap', prefixIcon: Icon(Icons.badge_outlined))),
+          const SizedBox(height: 12),
+          TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'No HP', prefixIcon: Icon(Icons.phone_outlined)), keyboardType: TextInputType.phone, inputFormatters: [FilteringTextInputFormatter.digitsOnly]),
+          const SizedBox(height: 12),
+          TextField(controller: _workplaceController, decoration: const InputDecoration(labelText: 'Tempat Kerja', prefixIcon: Icon(Icons.work_outline))),
+          const SizedBox(height: 20),
+          const Divider(),
+          ListTile(
+            onTap: () => setState(() => _showPasswordFields = !_showPasswordFields),
+            title: const Text('Ganti Password', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            trailing: Icon(_showPasswordFields ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down),
+            contentPadding: EdgeInsets.zero,
+          ),
+          if (_showPasswordFields) ...[
+            TextField(controller: _oldPasswordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password Saat Ini', prefixIcon: Icon(Icons.lock_outline))),
+            const SizedBox(height: 12),
+            TextField(controller: _newPasswordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password Baru', prefixIcon: Icon(Icons.lock_reset_rounded))),
+            const SizedBox(height: 8),
+            const Text('Password minimal 6 karakter', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+          ],
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+        ElevatedButton(onPressed: _isLoading ? null : _submit, child: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Simpan Perubahan')),
+      ],
+    );
+  }
+}
