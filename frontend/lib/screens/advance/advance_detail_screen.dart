@@ -787,12 +787,19 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ),
             content: SizedBox(
               width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-              child: SingleChildScrollView(                child: Column(
+              child: SingleChildScrollView(
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const SizedBox(height: 10), // Ruang ekstra agar label terbaca
                     // dropdown kategori utama
                     DropdownButtonFormField<int>(
-                      decoration: const InputDecoration(labelText: 'Kategori'),
+                      decoration: const InputDecoration(
+                        labelText: 'Kategori Utama',
+                        floatingLabelBehavior: FloatingLabelBehavior.always,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      ),
+                      isExpanded: true,
                       dropdownColor: AppTheme.card,
                       style: const TextStyle(color: AppTheme.textPrimary),
                       initialValue: effectiveParentId,
@@ -888,31 +895,34 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        TextButton.icon(
-                          onPressed: () => _showAddCategoryDialog(
-                            ctx,
-                            setDialogState,
-                            (newCat) {
-                              final parentID = newCat['parent_id'];
-                              final catID = newCat['id'] as int;
-                              setDialogState(() {
-                                if (parentID != null) {
-                                  selectedParentId = parentID;
-                                  selectedSubCategoryIds.add(catID);
-                                } else {
-                                  selectedParentId = catID;
-                                  selectedSubCategoryIds = {};
-                                }
-                              });
-                            },
-                            parentId: selectedParentId,
-                          ),
-                          icon: const Icon(Icons.add_circle_outline, size: 16),
-                          label: Text(
-                            selectedParentId != null
-                                ? 'Tambah Sub-Kategori Baru'
-                                : 'Tambah Kategori Baru',
-                            style: const TextStyle(fontSize: 12),
+                        Flexible(
+                          child: TextButton.icon(
+                            onPressed: () => _showAddCategoryDialog(
+                              ctx,
+                              setDialogState,
+                              (newCat) {
+                                final parentID = newCat['parent_id'];
+                                final catID = newCat['id'] as int;
+                                setDialogState(() {
+                                  if (parentID != null) {
+                                    selectedParentId = parentID;
+                                    selectedSubCategoryIds.add(catID);
+                                  } else {
+                                    selectedParentId = catID;
+                                    selectedSubCategoryIds = {};
+                                  }
+                                });
+                              },
+                              parentId: selectedParentId,
+                            ),
+                            icon: const Icon(Icons.add_circle_outline, size: 16),
+                            label: Text(
+                              selectedParentId != null
+                                  ? 'Tambah Sub-Kategori Baru'
+                                  : 'Tambah Kategori Baru',
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         ),
                         IconButton(

@@ -269,7 +269,7 @@ class _SettlementCardState extends State<SettlementCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                '${_getRoleName(s['creator_role'])} Â· ${s['expense_count'] ?? 0} item',
+                                '${_getRoleName(s['creator_role'])} • ${s['expense_count'] ?? 0} item',
                                 style: TextStyle(
                                   fontSize: isMobile ? 11 : 12,
                                   color: _bodyText(context),
@@ -355,6 +355,7 @@ class _SettlementCardState extends State<SettlementCard> {
 class AdvanceCard extends StatefulWidget {
   final Map<String, dynamic> advance;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
   final bool isManager;
   final bool selectionMode;
   final bool selected;
@@ -365,6 +366,7 @@ class AdvanceCard extends StatefulWidget {
     super.key,
     required this.advance,
     required this.onTap,
+    this.onDelete,
     this.isManager = false,
     this.selectionMode = false,
     this.selected = false,
@@ -528,7 +530,7 @@ class _AdvanceCardState extends State<AdvanceCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                '${_getRoleName(a['requester_role'])} Â· ${a['item_count'] ?? 0} item',
+                                '${_getRoleName(a['requester_role'])} • ${a['item_count'] ?? 0} item',
                                 style: TextStyle(
                                   fontSize: isMobile ? 11 : 12,
                                   color: _bodyText(context),
@@ -588,8 +590,19 @@ class _AdvanceCardState extends State<AdvanceCard> {
                         ),
                       ),
                     )
-                  else
+                  else ...[
+                    if (widget.onDelete != null &&
+                        ((widget.isManager && !['approved', 'in_settlement', 'settled', 'completed'].contains(status)) ||
+                            (!widget.isManager && status == 'draft')))
+                      IconButton(
+                        onPressed: widget.onDelete,
+                        icon: Icon(Icons.delete_outline, size: isMobile ? 18 : 20, color: AppTheme.danger),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Hapus Kasbon',
+                      ),
                     Icon(Icons.chevron_right_rounded, size: isMobile ? 18 : 20, color: _bodyText(context)),
+                  ],
                 ],
               );
             },

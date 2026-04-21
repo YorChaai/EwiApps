@@ -319,7 +319,22 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
                                               if (item == '__header_single__') return _groupHeader(Icons.receipt_long_rounded, 'Kasbon Mandiri (${singles.length})');
                                               if (item == '__header_batch__') return _groupHeader(Icons.folder_rounded, 'Kasbon Batch (${batches.length})');
                                               final a = item as Map<String, dynamic>;
-                                              return RepaintBoundary(child: AdvanceCard(advance: a, isManager: auth.isManager, selectionMode: _selectionMode, selected: _selectedAdvanceIds.contains(a['id']), canSelect: _canDeleteAdvanceCard(a, auth), onSelectionChanged: (v) => _toggleAdvanceSelection(a['id'], v), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: a['id']))).then((_) => _reloadAdvances())));
+                                              return RepaintBoundary(
+                                                child: AdvanceCard(
+                                                  key: ValueKey('advance_${a['id']}'),
+                                                  advance: a,
+                                                  isManager: auth.isManager,
+                                                  onDelete: _selectionMode ? null : () => _deleteAdvance(a['id']),
+                                                  selectionMode: _selectionMode,
+                                                  selected: _selectedAdvanceIds.contains(a['id']),
+                                                  canSelect: _canDeleteAdvanceCard(a, auth),
+                                                  onSelectionChanged: (v) => _toggleAdvanceSelection(a['id'], v),
+                                                  onTap: () => Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: a['id'])),
+                                                  ).then((_) => _reloadAdvances()),
+                                                ),
+                                              );
                                             },
                                             childCount: items.length,
                                           ),
@@ -335,7 +350,7 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
                     ],
                   ),
                   if (_showScrollToTop && !_selectionMode)
-                    Positioned(right: 16, bottom: 16, child: FloatingActionButton.small(onPressed: _scrollToTop, backgroundColor: _cardColor(context).withValues(alpha: 0.96), child: const Icon(Icons.keyboard_arrow_up_rounded, color: AppTheme.primary))),
+                    Positioned(right: 16, bottom: 16, child: FloatingActionButton.small(onPressed: _scrollToTop, backgroundColor: _cardColor(context).withValues(alpha: 0.9), child: const Icon(Icons.keyboard_arrow_up_rounded, color: AppTheme.primary))),
                 ],
               ),
             ),
@@ -343,6 +358,25 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
         );
       },
     );
+  }
+
+  Future<void> _deleteAdvance(int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardColor(context),
+        title: const Text('Hapus Kasbon'),
+        content: const Text('Apakah Anda yakin?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      if (!mounted) return;
+      await context.read<AdvanceProvider>().deleteAdvance(id);
+    }
   }
 
   Widget _groupHeader(IconData icon, String label) {

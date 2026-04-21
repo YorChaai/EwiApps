@@ -2,10 +2,23 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/context_extensions.dart';
 
-class CategoryPreviewDialog extends StatelessWidget {
+class CategoryPreviewDialog extends StatefulWidget {
   final List<Map<String, dynamic>> categories;
 
   const CategoryPreviewDialog({super.key, required this.categories});
+
+  @override
+  State<CategoryPreviewDialog> createState() => _CategoryPreviewDialogState();
+}
+
+class _CategoryPreviewDialogState extends State<CategoryPreviewDialog> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,33 +28,42 @@ class CategoryPreviewDialog extends StatelessWidget {
     final textPrimary = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
     final textSecondary = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
     final infoColor = isDark ? AppTheme.accent : AppTheme.primary;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return AlertDialog(
       backgroundColor: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(
+        mainAxisSize: MainAxisSize.max,
         children: [
-          Icon(Icons.category_rounded, color: infoColor, size: 24),
-          const SizedBox(width: 12),
-          Text(
-            'Pratinjau Kategori',
-            style: TextStyle(
-              color: isDark ? AppTheme.cream : AppTheme.lightTextPrimary,
-              fontWeight: FontWeight.w700,
+          Icon(Icons.category_rounded, color: infoColor, size: 20), // Reduced size slightly
+          const SizedBox(width: 8), // Reduced spacing
+          Expanded(
+            child: Text(
+              'Pratinjau Kategori',
+              style: TextStyle(
+                color: isDark ? AppTheme.cream : AppTheme.lightTextPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16, // Fixed font size to avoid overflow
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 4),
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close_rounded),
+            icon: const Icon(Icons.close_rounded, size: 20), // Smaller icon
             color: textSecondary,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         ],
       ),
       content: SizedBox(
-        width: 600,
-        height: 650,
-        child: categories.isEmpty
+        width: screenWidth > 600 ? 500 : screenWidth * 0.9,
+        height: screenHeight * 0.7,
+        child: widget.categories.isEmpty
             ? Center(
                 child: Text(
                   'Belum ada kategori tersedia',
@@ -49,12 +71,14 @@ class CategoryPreviewDialog extends StatelessWidget {
                 ),
               )
             : Scrollbar(
+                controller: _scrollController,
                 thumbVisibility: true,
                 child: ListView.separated(
-                  itemCount: categories.length,
+                  controller: _scrollController,
+                  itemCount: widget.categories.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    final cat = categories[index];
+                    final cat = widget.categories[index];
                     final children = (cat['children'] as List?) ?? [];
                     final isPending = cat['status'] == 'pending';
 

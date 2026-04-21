@@ -117,7 +117,6 @@ class AppTheme {
       ).apply(
         bodyColor: textPrimary,
         displayColor: textPrimary,
-        fontSizeFactor: mobile ? 0.92 : 1.0,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: surface,
@@ -246,7 +245,6 @@ class AppTheme {
       ).apply(
         bodyColor: lightTextPrimary,
         displayColor: lightTextPrimary,
-        fontSizeFactor: mobile ? 0.92 : 1.0,
       ),
       appBarTheme: AppBarTheme(
         backgroundColor: lightSurface,

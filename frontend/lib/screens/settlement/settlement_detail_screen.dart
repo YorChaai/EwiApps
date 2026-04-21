@@ -1263,9 +1263,15 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  const SizedBox(height: 10), // Memberi ruang agar label tidak menempel ke judul
                   // dropdown kategori utama
                   DropdownButtonFormField<int>(
-                    decoration: InputDecoration(labelText: 'Kategori Utama'),
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori Utama',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    isExpanded: true,
                     dropdownColor: AppTheme.card,
                     style: TextStyle(color: AppTheme.textPrimary),
                     initialValue: effectiveParentId,
@@ -1366,34 +1372,37 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      TextButton.icon(
-                        onPressed: () => _showAddCategoryDialog(
-                          ctx,
-                          setDialogState,
-                          (newCat) {
-                            // coba pilih otomatis kalau bisa
-                            final parentID = newCat['parent_id'];
-                            final catID = newCat['id'] as int;
-                            setDialogState(() {
-                             if (parentID != null) {
-                                // ini sub kategori
-                                selectedParentId = parentID;
-                                selectedSubCategoryIds.add(catID);
-                              } else {
-                                // ini kategori utama
-                                selectedParentId = catID;
-                                selectedSubCategoryIds = {}; // No sub yet
-                              }
-                            });
-                          },
-                          parentId: selectedParentId,
-                        ),
-                        icon: const Icon(Icons.add_circle_outline, size: 16),
-                        label: Text(
-                          selectedParentId != null
-                              ? 'Tambah Sub-Kategori Baru'
-                              : 'Tambah Kategori Baru',
-                          style: const TextStyle(fontSize: 12),
+                      Flexible(
+                        child: TextButton.icon(
+                          onPressed: () => _showAddCategoryDialog(
+                            ctx,
+                            setDialogState,
+                            (newCat) {
+                              // coba pilih otomatis kalau bisa
+                              final parentID = newCat['parent_id'];
+                              final catID = newCat['id'] as int;
+                              setDialogState(() {
+                               if (parentID != null) {
+                                  // ini sub kategori
+                                  selectedParentId = parentID;
+                                  selectedSubCategoryIds.add(catID);
+                                } else {
+                                  // ini kategori utama
+                                  selectedParentId = catID;
+                                  selectedSubCategoryIds = {}; // No sub yet
+                                }
+                              });
+                            },
+                            parentId: selectedParentId,
+                          ),
+                          icon: const Icon(Icons.add_circle_outline, size: 16),
+                          label: Text(
+                            selectedParentId != null
+                                ? 'Tambah Sub-Kategori Baru'
+                                : 'Tambah Kategori Baru',
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                       IconButton(
@@ -2551,9 +2560,15 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const SizedBox(height: 10), // Ruang ekstra agar label terbaca
                     // dropdown kategori utama
                   DropdownButtonFormField<int>(
-                    decoration: InputDecoration(labelText: 'Kategori Utama'),
+                    decoration: const InputDecoration(
+                      labelText: 'Kategori Utama',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                    ),
+                    isExpanded: true,
                     dropdownColor: AppTheme.card,
                     style: TextStyle(color: AppTheme.textPrimary),
                     initialValue: selectedParentId,
@@ -2670,38 +2685,50 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   ],
 
                   const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: () => _showAddCategoryDialog(
-                        ctx,
-                        setDialogState,
-                        (newCat) {
-                          // coba pilih otomatis kalau bisa
-                          final parentID = newCat['parent_id'];
-                          final catID = newCat['id'] as int;
-                          setDialogState(() {
-                            if (parentID != null) {
-                              // ini sub kategori
-                              selectedParentId = parentID;
-                              selectedSubCategoryIds.add(catID);
-                            } else {
-                              // ini kategori utama
-                              selectedParentId = catID;
-                              selectedSubCategoryIds = {}; // No sub yet
-                            }
-                          });
-                        },
-                        parentId: selectedParentId,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: TextButton.icon(
+                          onPressed: () => _showAddCategoryDialog(
+                            ctx,
+                            setDialogState,
+                            (newCat) {
+                              // coba pilih otomatis kalau bisa
+                              final parentID = newCat['parent_id'];
+                              final catID = newCat['id'] as int;
+                              setDialogState(() {
+                                if (parentID != null) {
+                                  // ini sub kategori
+                                  selectedParentId = parentID;
+                                  selectedSubCategoryIds.add(catID);
+                                } else {
+                                  // ini kategori utama
+                                  selectedParentId = catID;
+                                  selectedSubCategoryIds = {}; // No sub yet
+                                }
+                              });
+                            },
+                            parentId: selectedParentId,
+                          ),
+                          icon: const Icon(Icons.add_circle_outline, size: 16),
+                          label: Text(
+                            selectedParentId != null
+                                ? 'Tambah Sub-Kategori Baru'
+                                : 'Tambah Kategori Baru',
+                            style: const TextStyle(fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ),
-                      icon: const Icon(Icons.add_circle_outline, size: 16),
-                      label: Text(
-                        selectedParentId != null
-                            ? 'Tambah Sub Kategori Baru'
-                            : 'Tambah Kategori Utama Baru',
-                        style: const TextStyle(fontSize: 12),
+                      IconButton(
+                        icon: const Icon(Icons.category_rounded,
+                            color: AppTheme.primary, size: 20),
+                        tooltip: 'Pratinjau Struktur Kategori',
+                        onPressed: () => showCategoryPreviewDialog(context,
+                            context.read<SettlementProvider>().categories),
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(
