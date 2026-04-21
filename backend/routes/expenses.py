@@ -107,6 +107,9 @@ def create_expense():
 
     try:
         expense_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        # Jika settlement punya report_year, paksa tahun expense mengikuti report_year
+        if settlement.report_year and expense_date.year != settlement.report_year:
+            expense_date = expense_date.replace(year=settlement.report_year)
     except ValueError:
         return jsonify({'error': 'Format tanggal: YYYY-MM-DD'}), 400
 

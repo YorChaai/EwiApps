@@ -100,12 +100,14 @@ class AdvanceProvider extends ChangeNotifier {
     String title,
     String desc, {
     String advanceType = 'single',
+    int? reportYear,
   }) async {
     try {
       final res = await _api.createAdvance(
         title,
         desc,
         advanceType: advanceType,
+        reportYear: reportYear,
       );
       _currentAdvance = res['advance'];
       _unsavedDraft = true;

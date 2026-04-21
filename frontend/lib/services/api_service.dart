@@ -294,6 +294,7 @@ class ApiService {
     String description, {
     int? advanceId,
     String settlementType = 'single',
+    int? reportYear,
   }) async {
     final body = <String, dynamic>{
       'title': title,
@@ -302,6 +303,9 @@ class ApiService {
     };
     if (advanceId != null) {
       body['advance_id'] = advanceId;
+    }
+    if (reportYear != null) {
+      body['report_year'] = reportYear;
     }
     final res = await http.post(
       Uri.parse('$baseUrl/settlements'),
@@ -622,15 +626,19 @@ class ApiService {
     String title,
     String description, {
     String advanceType = 'single',
+    int? reportYear,
   }) async {
+    final body = <String, dynamic>{
+      'title': title,
+      'description': description,
+      'advance_type': advanceType,
+    };
+    if (reportYear != null) body['report_year'] = reportYear;
+
     final res = await http.post(
       Uri.parse('$baseUrl/advances'),
       headers: _headers,
-      body: jsonEncode({
-        'title': title,
-        'description': description,
-        'advance_type': advanceType,
-      }),
+      body: jsonEncode(body),
     );
     return _handleResponse(res);
   }

@@ -409,50 +409,123 @@ class _SettlementListViewState extends State<_SettlementListView> {
   }
 
   void _showCreateDialog(BuildContext context) {
+    final prov = context.read<SettlementProvider>();
     final titleCtrl = TextEditingController();
     String selectedType = 'single';
+    int selectedYear = prov.reportYear;
     bool creating = false;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: _cardColor(context),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Buat Settlement Baru', style: TextStyle(color: _titleColorLocal(context))),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            RadioGroup<String>(
-              groupValue: selectedType,
-              onChanged: (v) => setDialogState(() => selectedType = v!),
-              child: Row(children: [
-                Expanded(child: RadioListTile<String>(title: const Text('Sendiri'), value: 'single')),
-                Expanded(child: RadioListTile<String>(title: const Text('Batch'), value: 'batch')),
-              ]),
-            ),
-            if (selectedType == 'batch') TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Judul Kegiatan'), style: TextStyle(color: _primaryTextLocal(context))),
-          ]),
+          title: Text('Buat Settlement Baru',
+              style: TextStyle(color: _titleColorLocal(context))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pemilihan Tahun
+              DropdownButtonFormField<int>(
+                initialValue: selectedYear,
+                dropdownColor: _cardColor(context),
+                decoration: InputDecoration(
+                  labelText: 'Tahun Laporan',
+                  labelStyle: TextStyle(color: _primaryTextLocal(context)),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: _primaryTextLocal(context).withValues(alpha: 0.3)),
+                  ),
+                ),
+                style: TextStyle(color: _primaryTextLocal(context)),
+                items: List.generate(7, (index) => 2024 + index)
+                    .map((year) => DropdownMenuItem(
+                          value: year,
+                          child: Text(year.toString()),
+                        ))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedYear = v!),
+              ),
+              const SizedBox(height: 16),
+              // Custom Radio Group
+              AppRadioGroup<String>(
+                groupValue: selectedType,
+                onChanged: (v) => setDialogState(() => selectedType = v!),
+                child: Row(
+                  children: const [
+                    Expanded(
+                      child: AppRadioItem<String>(
+                        value: 'single',
+                        label: Text('Sendiri'),
+                      ),
+                    ),
+                    Expanded(
+                      child: AppRadioItem<String>(
+                        value: 'batch',
+                        label: Text('Batch'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selectedType == 'batch')
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(labelText: 'Judul Kegiatan'),
+                  style: TextStyle(color: _primaryTextLocal(context)),
+                ),
+            ],
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal')),
             ElevatedButton(
-              onPressed: creating ? null : () async {
-                final title = selectedType == 'single' ? 'Pengeluaran Sendiri' : titleCtrl.text.trim();
-                if (selectedType == 'batch' && title.isEmpty) return;
+                onPressed: creating
+                    ? null
+                    : () async {
+                        final title = selectedType == 'single'
+                            ? 'Pengeluaran Sendiri'
+                            : titleCtrl.text.trim();
+                        if (selectedType == 'batch' && title.isEmpty) return;
 
-                setDialogState(() => creating = true);
-                final result = await context.read<SettlementProvider>().createSettlement(title, "", settlementType: selectedType);
+                        // Capture Navigator and SettlementProvider early
+                        final navigator = Navigator.of(context);
+                        final sProv = context.read<SettlementProvider>();
 
-                if (ctx.mounted) {
-                  if (result != null) {
-                    Navigator.pop(ctx);
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => SettlementDetailScreen(settlementId: result['id'])));
-                  } else {
-                    setDialogState(() => creating = false);
-                  }
-                }
-              },
-              child: creating
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Buat')
-            ),
+                        setDialogState(() => creating = true);
+                        final result = await sProv.createSettlement(
+                          title,
+                          "",
+                          settlementType: selectedType,
+                          reportYear: selectedYear,
+                        );
+
+                        if (!ctx.mounted) return;
+
+                        if (result != null) {
+                          // Tutup dialog
+                          Navigator.pop(ctx);
+
+                          // Berpindah ke detail screen (gunakan navigator yang sudah dicapture)
+                          navigator.push(
+                            MaterialPageRoute(
+                              builder: (_) => SettlementDetailScreen(
+                                settlementId: result['id'],
+                              ),
+                            ),
+                          );
+                        } else {
+                          setDialogState(() => creating = false);
+                          AppSnackbar.show(sProv.error ?? 'Gagal membuat settlement', isError: true);
+                        }
+                      },
+                child: creating                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Buat')),
           ],
         ),
       ),

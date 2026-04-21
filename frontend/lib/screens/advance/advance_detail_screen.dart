@@ -13,6 +13,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/category_preview_dialog.dart';
 import '../../utils/currency_formatter.dart';
 import '../../utils/file_helper.dart';
+import '../../utils/responsive_layout.dart';
 import '../../services/api_service.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
@@ -640,7 +641,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     Map<String, dynamic> advance,
   ) {
     final titleCtrl = TextEditingController(text: advance['title']);
-    final descCtrl = TextEditingController(text: advance['description']);
 
     showDialog(
       context: context,
@@ -650,33 +650,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           'Edit Kasbon',
           style: TextStyle(color: _creamColor(ctx)),
         ),
-        content: advance['advance_type'] == 'batch'
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Judul Pengajuan / Nama Trip',
-                    ),
-                    style: TextStyle(color: AppTheme.textPrimary),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descCtrl,
-                    decoration: const InputDecoration(labelText: 'Deskripsi'),
-                    style: TextStyle(color: AppTheme.textPrimary),
-                    maxLines: 2,
-                  ),
-                ],
-              )
-            : const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8.0),
-                child: Text(
-                  'Judul Kasbon Single akan otomatis diperbarui mengikuti isi item.',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-                ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Judul Pengajuan / Nama Trip',
               ),
+              style: TextStyle(color: AppTheme.textPrimary),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -688,7 +673,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               await context.read<AdvanceProvider>().updateAdvance(
                 advance['id'],
                 titleCtrl.text.trim(),
-                descCtrl.text.trim(),
+                "", // empty description
               );
               if (ctx.mounted) Navigator.pop(ctx);
               if (context.mounted) {
@@ -1313,7 +1298,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final canEditHeader =
         adv != null &&
         auth.user?['id'] == adv['user_id'] &&
-        (adv['status'] == 'draft' || adv['status'] == 'rejected');
+        (adv['status'] == 'draft' || adv['status'] == 'rejected') &&
+        adv['advance_type'] == 'batch';
     final canSubmit =
         adv != null &&
         auth.user?['id'] == adv['user_id'] &&
@@ -1634,7 +1620,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 ),
                               ),
                             ),
-                            if (!useCompact)
+                            if (!ResponsiveLayout.isMobile(context))
                               ..._buildAdvanceDetailActions(
                                 context,
                                 adv,
@@ -1656,41 +1642,68 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           color: AppTheme.primary,
                         ),
                       )
-                    : isAndroid
-                    ? Column(
-                        children: [
-                          _buildMobileAdvanceActionBar(
+                    : ResponsiveLayout.isMobile(context)
+                    ? Scrollbar(
+                        controller: _mainScrollController,
+                        thumbVisibility: true,
+                        thickness: 8,
+                        interactive: true,
+                        radius: const Radius.circular(4),
+                        child: SingleChildScrollView(
+                          controller: _mainScrollController,
+                          child: Column(
+                            children: [
+                              _buildMobileAdvanceActionBar(
+                                context,
+                                adv,
+                                auth,
+                                workflowItems,
+                                canEditHeader,
+                                canSubmit,
+                                canCreateSettlement,
+                                canStartRevision,
+                                canShowDownloadButtons,
+                              ),
+                              _buildContent(
+                                context,
+                                adv,
+                                auth,
+                                prov,
+                                items,
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : Scrollbar(
+                        controller: _mainScrollController,
+                        thumbVisibility: true,
+                        thickness: 8,
+                        interactive: true,
+                        radius: const Radius.circular(4),
+                        child: SingleChildScrollView(
+                          controller: _mainScrollController,
+                          child: _buildContent(
                             context,
                             adv,
                             auth,
-                            workflowItems,
-                            canEditHeader,
-                            canSubmit,
-                            canCreateSettlement,
-                            canStartRevision,
-                            canShowDownloadButtons,
+                            prov,
+                            items,
                           ),
-                          Expanded(
-                            child: _buildContent(
-                              context,
-                              adv,
-                              auth,
-                              prov,
-                              items,
-                            ),
-                          ),
-                        ],
-                      )
-                    : _buildContent(context, adv, auth, prov, items),
+                        ),
+                      ),
                 floatingActionButton: canAddItems
-                    ? FloatingActionButton.extended(
-                        onPressed: () => _showAddItemDialog(context),
-                        icon: const Icon(Icons.add),
-                        label: Text(
-                          adv['status'] == 'revision_draft' ||
-                                  adv['status'] == 'revision_rejected'
-                              ? 'Tambah Item Revisi'
-                              : 'Tambah Item Kasbon',
+                    ? Padding(
+                        padding: const EdgeInsets.only(bottom: 16, right: 8),
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showAddItemDialog(context),
+                          icon: const Icon(Icons.add),
+                          label: Text(
+                            adv['status'] == 'revision_draft' ||
+                                    adv['status'] == 'revision_rejected'
+                                ? 'Tambah Item Revisi'
+                                : 'Tambah Item Kasbon',
+                          ),
                         ),
                       )
                     : null,
@@ -1724,15 +1737,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final useCompact = screenWidth < 600 || Theme.of(context).platform == TargetPlatform.android;
 
-    return Scrollbar(
-      controller: _mainScrollController,
-      thumbVisibility: true,
-      thickness: 8,
-      interactive: true,
-      radius: const Radius.circular(4),
-      child: SingleChildScrollView(
-        controller: _mainScrollController,
-        padding: EdgeInsets.all(useCompact ? 16 : 24),
+    return Padding(
+      padding: EdgeInsets.all(useCompact ? 16 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1887,9 +1893,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           SizedBox(height: useCompact ? 80 : 100), // Padding extra agar tidak tertabrak FAB
         ],
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildEmptyState(bool canEditItems) {
     return Container(

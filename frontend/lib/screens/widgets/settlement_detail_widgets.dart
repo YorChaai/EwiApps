@@ -134,34 +134,7 @@ class SettlementActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final useCompact = width < 550;
-
     final effectiveColor = color ?? AppTheme.primary;
-
-    if (useCompact) {
-      return Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: IconButton(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          style: isOutlined
-              ? IconButton.styleFrom(
-                  side: BorderSide(
-                    color: effectiveColor.withValues(alpha: 0.5),
-                  ),
-                  foregroundColor: effectiveColor,
-                )
-              : IconButton.styleFrom(
-                  backgroundColor: backgroundColor ?? effectiveColor,
-                  foregroundColor: Colors.white,
-                ),
-          tooltip: label,
-        ),
-      );
-    }
 
     if (isOutlined) {
       return Padding(

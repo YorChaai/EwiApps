@@ -101,6 +101,7 @@ class Advance(db.Model):
     notes = db.Column(db.Text, nullable=True)  # notes approval mgr
     approved_revision_no = db.Column(db.Integer, default=0)
     active_revision_no = db.Column(db.Integer, nullable=True)
+    report_year = db.Column(db.Integer, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     approved_at = db.Column(db.DateTime, nullable=True)
@@ -184,6 +185,7 @@ class Advance(db.Model):
             'description': self.description,
             'first_item_description': first_item.description if first_item else None,
             'advance_type': self.advance_type or 'single',
+            'report_year': self.report_year,
             'user_id': self.user_id,
             'requester_name': self.requester.full_name if self.requester else None,
             'requester_role': self.requester.role if self.requester else None,
@@ -300,6 +302,7 @@ class Settlement(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     settlement_type = db.Column(db.String(10), default='single')  # 'single' or 'batch'
     status = db.Column(db.String(20), default='draft', index=True)  # draft, submitted, approved, rejected, completed(legacy)
+    report_year = db.Column(db.Integer, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
@@ -348,6 +351,7 @@ class Settlement(db.Model):
             'creator_role': self.creator.role if self.creator else None,
             'creator_id': self.creator.id if self.creator else None,
             'settlement_type': self.settlement_type,
+            'report_year': self.report_year,
             'status': self.status,
             'total_amount': self.total_amount,
             'approved_amount': self.approved_amount,

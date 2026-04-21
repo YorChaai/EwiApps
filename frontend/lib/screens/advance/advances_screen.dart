@@ -127,38 +127,121 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
   }
 
   void _showCreateDialog(BuildContext context) {
+    final prov = context.read<AdvanceProvider>();
     final titleCtrl = TextEditingController();
     String selectedType = 'single';
+    int selectedYear = prov.reportYear;
+    bool creating = false;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: _cardColor(context),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('Buat Kasbon Baru', style: TextStyle(color: _titleColor(context))),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            RadioGroup<String>(
-              groupValue: selectedType,
-              onChanged: (v) => setDialogState(() => selectedType = v!),
-              child: Row(children: [
-                Expanded(child: RadioListTile<String>(title: const Text('Single'), value: 'single')),
-                Expanded(child: RadioListTile<String>(title: const Text('Batch'), value: 'batch')),
-              ]),
-            ),
-            if (selectedType == 'batch') TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: 'Judul Kegiatan'), style: TextStyle(color: _primaryText(context))),
-          ]),
+          title: Text('Buat Kasbon Baru',
+              style: TextStyle(color: _titleColor(context))),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Pemilihan Tahun
+              DropdownButtonFormField<int>(
+                initialValue: selectedYear,
+                dropdownColor: _cardColor(context),
+                decoration: InputDecoration(
+                  labelText: 'Tahun Laporan',
+                  labelStyle: TextStyle(color: _primaryText(context)),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                        color: _primaryText(context).withValues(alpha: 0.3)),
+                  ),
+                ),
+                style: TextStyle(color: _primaryText(context)),
+                items: List.generate(7, (index) => 2024 + index)
+                    .map((year) => DropdownMenuItem(
+                          value: year,
+                          child: Text(year.toString()),
+                        ))
+                    .toList(),
+                onChanged: (v) => setDialogState(() => selectedYear = v!),
+              ),
+              const SizedBox(height: 16),
+              // Custom Radio Group
+              AppRadioGroup<String>(
+                groupValue: selectedType,
+                onChanged: (v) => setDialogState(() => selectedType = v!),
+                child: Row(
+                  children: const [
+                    Expanded(
+                      child: AppRadioItem<String>(
+                        value: 'single',
+                        label: Text('Single'),
+                      ),
+                    ),
+                    Expanded(
+                      child: AppRadioItem<String>(
+                        value: 'batch',
+                        label: Text('Batch'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selectedType == 'batch')
+                TextField(
+                  controller: titleCtrl,
+                  decoration: const InputDecoration(labelText: 'Judul Kegiatan'),
+                  style: TextStyle(color: _primaryText(context)),
+                ),
+            ],
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal')),
             ElevatedButton(
-              onPressed: () async {
-                final title = selectedType == 'single' ? 'Kasbon Mandiri' : titleCtrl.text.trim();
-                if (selectedType == 'batch' && title.isEmpty) return;
-                final advance = await context.read<AdvanceProvider>().createUnsavedAdvance(title, "", advanceType: selectedType);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (advance != null && context.mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: advance['id'])));
-              },
-              child: const Text('Buat'),
-            ),
+                onPressed: creating
+                    ? null
+                    : () async {
+                        final title = selectedType == 'single'
+                            ? 'Kasbon Mandiri'
+                            : titleCtrl.text.trim();
+                        if (selectedType == 'batch' && title.isEmpty) return;
+
+                        // Capture Navigator and Provider early
+                        final navigator = Navigator.of(context);
+                        final aProv = context.read<AdvanceProvider>();
+
+                        setDialogState(() => creating = true);
+                        final advance = await aProv.createUnsavedAdvance(
+                          title,
+                          "",
+                          advanceType: selectedType,
+                          reportYear: selectedYear,
+                        );
+
+                        if (!ctx.mounted) return;
+
+                        if (advance != null) {
+                          Navigator.pop(ctx);
+                          navigator.push(
+                            MaterialPageRoute(
+                              builder: (_) => AdvanceDetailScreen(
+                                advanceId: advance['id'],
+                              ),
+                            ),
+                          );
+                        } else {
+                          setDialogState(() => creating = false);
+                        }
+                      },
+                child: creating
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Text('Buat')),
           ],
         ),
       ),

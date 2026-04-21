@@ -202,9 +202,10 @@ class SettlementProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>?> createSettlement(
     String title,
-    String desc, {
+    String description, {
     int? advanceId,
     String settlementType = 'single',
+    int? reportYear,
   }) async {
     _loading = true;
     _error = null;
@@ -212,14 +213,19 @@ class SettlementProvider extends ChangeNotifier {
     try {
       final res = await _api.createSettlement(
         title,
-        desc,
+        description,
         advanceId: advanceId,
         settlementType: settlementType,
+        reportYear: reportYear,
       );
-      await loadSettlements();
+
+      final newSettlement = res['settlement'];
+      _currentSettlement = newSettlement;
+      _unsavedDraft = true; // Mark as unsaved draft until first expense
+
       _loading = false;
       notifyListeners();
-      return res['settlement'];
+      return newSettlement;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       _loading = false;

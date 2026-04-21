@@ -181,11 +181,13 @@ def list_advances():
         advance_no_items = db.not_(
             db.exists().where(AdvanceItem.advance_id == Advance.id)
         )
-        advance_year_match = db.extract('year', Advance.created_at) == report_year
+        advance_created_year_match = db.extract('year', Advance.created_at) == report_year
+
         query = query.filter(
             db.or_(
+                Advance.report_year == report_year,
                 item_match,
-                db.and_(advance_no_items, advance_year_match),
+                db.and_(advance_no_items, advance_created_year_match),
             )
         ).distinct()
 
@@ -213,12 +215,24 @@ def create_advance():
     title = data.get('title', '').strip()
     description = data.get('description', '').strip()
     advance_type = data.get('advance_type', 'single')
+    try:
+        report_year = int(data.get('report_year')) if data.get('report_year') else None
+    except (ValueError, TypeError):
+        report_year = None
 
     if advance_type not in ('single', 'batch'):
         advance_type = 'single'
 
     if not title:
         return jsonify({'error': 'Title wajib diisi'}), 400
+
+    # Set created_at to match report_year if provided
+    created_at = datetime.now(timezone.utc)
+    if report_year:
+        try:
+            created_at = created_at.replace(year=report_year)
+        except ValueError:
+            created_at = created_at.replace(year=report_year, day=28)
 
     advance = Advance(
         title=title,
@@ -228,6 +242,8 @@ def create_advance():
         status='draft',
         approved_revision_no=0,
         active_revision_no=None,
+        report_year=report_year,
+        created_at=created_at
     )
     db.session.add(advance)
     db.session.commit()
@@ -729,6 +745,14 @@ def create_settlement_from_advance(advance_id):
             'settlement': advance.settlement.to_dict(include_expenses=True),
         }), 200
 
+    # Determine report_year from items (most common year)
+    years = [item.date.year for item in advance.items if item.date]
+    if years:
+        # Use most common year or first
+        report_year = max(set(years), key=years.count)
+    else:
+        report_year = datetime.now(timezone.utc).year
+
     settlement = Settlement(
         title=advance.title,
         description=advance.description,
@@ -736,6 +760,7 @@ def create_settlement_from_advance(advance_id):
         settlement_type=advance.advance_type,
         status='draft',
         advance_id=advance.id,
+        report_year=report_year
     )
     db.session.add(settlement)
     db.session.flush()

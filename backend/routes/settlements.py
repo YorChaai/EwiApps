@@ -85,13 +85,12 @@ def list_settlements():
         print(f'[SETTLEMENT_API] Filtering status: {status_filter}')
         query = query.filter_by(status=status_filter)
 
-    # YEAR FILTER - HANYA cek Expense.date!
-    # Settlement.created_at TIDAK dipakai karena bisa misleading
-    # Contoh: expense 2024 tapi settlement dibuat 2026 → harus masuk 2024!
+    # YEAR FILTER
     if report_year is not None and report_year != 0:
-        print(f'[SETTLEMENT_API] Filtering year={report_year} (Expense.date ONLY)')
+        print(f'[SETTLEMENT_API] Filtering year={report_year}')
 
-        # Filter berdasarkan Expense.date
+        # Cek apakah settlement punya report_year yang cocok
+        # ATAU punya expense di tahun tersebut
         expense_match = db.exists().where(
             db.and_(
                 Expense.settlement_id == Settlement.id,
@@ -100,21 +99,17 @@ def list_settlements():
         )
 
         # Fallback: settlement tanpa expense tapi created_at match tahun
-        # Ini untuk edge case settlement kosong yang baru dibuat
         settlement_no_expenses = db.not_(
             db.exists().where(Expense.settlement_id == Settlement.id)
         )
-        settlement_year_match = db.extract('year', Settlement.created_at) == report_year
+        settlement_created_year_match = db.extract('year', Settlement.created_at) == report_year
 
-        # Logic: (ada expense match tahun) OR (tidak ada expense DAN created_at match tahun)
-        query = query.filter(
-            db.or_(
-                expense_match,
-                db.and_(settlement_no_expenses, settlement_year_match)
-            )
-        ).distinct()
-
-        print(f'[SETTLEMENT_API] Year filter: Expense.date={report_year} OR (no expenses AND created_at={report_year})')
+        # Gabungkan semua kondisi dalam satu OR
+        query = query.filter(db.or_(
+            Settlement.report_year == report_year,
+            expense_match,
+            db.and_(settlement_no_expenses, settlement_created_year_match)
+        )).distinct()
     else:
         print(f'[SETTLEMENT_API] NO year filter (report_year={report_year})')
 
@@ -187,6 +182,10 @@ def create_settlement():
     description = data.get('description', '').strip()
     advance_id = data.get('advance_id')
     settlement_type = data.get('settlement_type', 'single')
+    try:
+        report_year = int(data.get('report_year')) if data.get('report_year') else None
+    except (ValueError, TypeError):
+        report_year = None
 
     if settlement_type not in ('single', 'batch'):
         settlement_type = 'single'
@@ -205,6 +204,14 @@ def create_settlement():
             return jsonify({'error': 'Kasbon ini sudah punya settlement'}), 400
         settlement_type = linked_advance.advance_type
 
+    # Set created_at to match report_year if provided
+    created_at = datetime.now(timezone.utc)
+    if report_year:
+        try:
+            created_at = created_at.replace(year=report_year)
+        except ValueError:
+            created_at = created_at.replace(year=report_year, day=28)
+
     settlement = Settlement(
         title=title,
         description=description,
@@ -212,6 +219,8 @@ def create_settlement():
         status='draft',
         settlement_type=settlement_type,
         advance_id=advance_id,
+        report_year=report_year,
+        created_at=created_at
     )
     db.session.add(settlement)
     db.session.flush()

@@ -447,8 +447,8 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Wrap(
-          spacing: 4,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               constraints: const BoxConstraints.tightFor(width: 36, height: 36),
@@ -484,8 +484,8 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: Wrap(
-                  spacing: 4,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
                       constraints: const BoxConstraints.tightFor(

@@ -202,7 +202,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     }
 
     if (auth.user?['id'] == s['user_id'] &&
-        (s['status'] == 'draft' || s['status'] == 'rejected')) {
+        (s['status'] == 'draft' || s['status'] == 'rejected') &&
+        s['settlement_type'] == 'batch') {
       actions.add(
         SettlementActionButton(
           onPressed: () => _showEditSettlementDialog(context, s),
@@ -308,22 +309,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: _statusColor(s['status']).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                _displaySettlementStatus((s['status'] as String)).toUpperCase(),
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 10,
-                  color: _statusColor(s['status']),
-                ),
-              ),
-            ),
             if (_selectedExpenses.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -627,12 +612,14 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 child: _buildContent(context, s, auth, prov),
               ),
             ),
-      floatingActionButton:
-          canAddExpenses
-          ? FloatingActionButton.extended(
-              onPressed: () => _showAddExpenseDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Tambah Expense'),
+      floatingActionButton: canAddExpenses
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 16, right: 8),
+              child: ElevatedButton.icon(
+                onPressed: () => _showAddExpenseDialog(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Tambah Expense'),
+              ),
             )
           : null,
         ), // End inner Scaffold
@@ -655,6 +642,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final advanceSummary = s['advance_summary'] as Map<String, dynamic>?;
     final policyWarnings = List<String>.from(s['policy_warnings'] ?? []);
     final isFromAdvance = (s['advance_id'] ?? 0) > 0;
+    final isSingleSettlement =
+        (s['settlement_type'] ?? 'single').toString().toLowerCase() == 'single';
+    final canAddExpenses = auth.user?['id'] == s['user_id'] &&
+        (s['status'] == 'draft' || s['status'] == 'rejected') &&
+        !(isSingleSettlement && expenses.isNotEmpty);
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -2212,13 +2204,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           backgroundColor: AppTheme.success,
         ),
       );
-      // Kembali ke Dashboard List Settlement (Tab 0)
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => const DashboardScreen(initialTabIndex: 0),
-        ),
-        (route) => false,
-      );
+      // RELOAD data agar UI terupdate (status jadi SUBMITTED)
+      prov.loadSettlement(widget.settlementId);
     }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2428,7 +2415,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
 
   void _showEditSettlementDialog(BuildContext context, Map<String, dynamic> s) {
     final titleCtrl = TextEditingController(text: s['title'] ?? '');
-    final descCtrl = TextEditingController(text: s['description'] ?? '');
     final prov = context.read<SettlementProvider>();
 
     showDialog(
@@ -2452,13 +2438,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 ),
                 style: TextStyle(color: AppTheme.textPrimary),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descCtrl,
-                decoration: const InputDecoration(labelText: 'Deskripsi'),
-                style: TextStyle(color: AppTheme.textPrimary),
-                maxLines: 3,
-              ),
             ],
           ),
         ),
@@ -2481,7 +2460,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               final success = await prov.updateSettlement(
                 widget.settlementId,
                 title: titleCtrl.text.trim(),
-                description: descCtrl.text.trim(),
               );
               if (ctx.mounted) Navigator.pop(ctx);
               if (success && context.mounted) {

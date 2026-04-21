@@ -627,3 +627,66 @@ class StatusBadge extends StatelessWidget {
     );
   }
 }
+
+class AppRadioGroup<T> extends StatelessWidget {
+  final T groupValue;
+  final ValueChanged<T?> onChanged;
+  final Widget child;
+  const AppRadioGroup({super.key, required this.groupValue, required this.onChanged, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AppRadioGroupScope(
+      groupValue: groupValue,
+      onChanged: (val) => onChanged(val as T?),
+      child: child,
+    );
+  }
+}
+
+class _AppRadioGroupScope extends InheritedWidget {
+  final dynamic groupValue;
+  final ValueChanged<dynamic> onChanged;
+  const _AppRadioGroupScope({required this.groupValue, required this.onChanged, required super.child});
+
+  static _AppRadioGroupScope? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_AppRadioGroupScope>();
+
+  @override
+  bool updateShouldNotify(_AppRadioGroupScope oldWidget) => groupValue != oldWidget.groupValue;
+}
+
+class AppRadioItem<T> extends StatelessWidget {
+  final T value;
+  final Widget label;
+  const AppRadioItem({super.key, required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = _AppRadioGroupScope.of(context);
+    final selected = scope?.groupValue == value;
+    return InkWell(
+      onTap: () => scope?.onChanged(value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Radio<T>(
+            value: value,
+            // ignore: deprecated_member_use
+            groupValue: scope?.groupValue as T?,
+            // ignore: deprecated_member_use
+            onChanged: (v) => scope?.onChanged(v),
+            activeColor: AppTheme.primary,
+          ),
+          DefaultTextStyle(
+            style: TextStyle(
+              fontSize: 14,
+              color: selected ? AppTheme.primary : AppTheme.textSecondary,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+            ),
+            child: label,
+          ),
+        ],
+      ),
+    );
+  }
+}
