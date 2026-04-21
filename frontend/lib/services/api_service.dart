@@ -160,7 +160,14 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> register(String username, String password, String fullName, String role, {String? phoneNumber, String? workplace}) async {
+  Future<Map<String, dynamic>> register(
+    String username,
+    String password,
+    String fullName,
+    String role, {
+    String? phoneNumber,
+    String? workplace,
+  }) async {
     try {
       final res = await _retryRequest(
         () => http.post(
@@ -222,7 +229,14 @@ class ApiService {
     );
     return _handleResponse(res);
   }
-  Future<Map<String, dynamic>> updateProfile({String? fullName, String? phoneNumber, String? workplace, String? oldPassword, String? newPassword}) async {
+
+  Future<Map<String, dynamic>> updateProfile({
+    String? fullName,
+    String? phoneNumber,
+    String? workplace,
+    String? oldPassword,
+    String? newPassword,
+  }) async {
     final body = <String, dynamic>{};
     if (fullName != null) body['full_name'] = fullName;
     if (phoneNumber != null) body['phone_number'] = phoneNumber;
@@ -240,7 +254,14 @@ class ApiService {
     return _handleResponse(res);
   }
 
-  Future<Map<String, dynamic>> updateUser(int userId, {String? fullName, String? phoneNumber, String? workplace, String? role, String? password}) async {
+  Future<Map<String, dynamic>> updateUser(
+    int userId, {
+    String? fullName,
+    String? phoneNumber,
+    String? workplace,
+    String? role,
+    String? password,
+  }) async {
     final body = <String, dynamic>{};
     if (fullName != null) body['full_name'] = fullName;
     if (phoneNumber != null) body['phone_number'] = phoneNumber;
@@ -278,7 +299,9 @@ class ApiService {
     }
 
     final url = _buildUrl('$baseUrl/settlements', params);
-    final res = await _retryRequest(() => http.get(Uri.parse(url), headers: _headers));
+    final res = await _retryRequest(
+      () => http.get(Uri.parse(url), headers: _headers),
+    );
     return _handleResponse(res);
   }
 

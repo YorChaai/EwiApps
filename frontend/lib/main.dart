@@ -51,47 +51,49 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
 void main() {
   // Set error widget builder for better error handling
   ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      color: AppTheme.surface,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 64,
-                color: AppTheme.danger,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Terjadi kesalahan pada aplikasi',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Material(
+        color: AppTheme.surface,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: AppTheme.danger,
                 ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Silakan restart aplikasi atau hubungi support jika masalah berlanjut.',
-                style: TextStyle(
-                  color: AppTheme.textSecondary,
-                  fontSize: 14,
+                const SizedBox(height: 24),
+                const Text(
+                  'Terjadi kesalahan pada aplikasi',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton.icon(
-                onPressed: () {
-                  // User can manually restart by closing and reopening app
-                  // For now, just show message
-                },
-                icon: const Icon(Icons.refresh),
-                label: const Text('Restart Aplikasi'),
-              ),
-            ],
+                const SizedBox(height: 12),
+                const Text(
+                  'Silakan restart aplikasi atau hubungi support jika masalah berlanjut.',
+                  style: TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // User can manually restart by closing and reopening app
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Restart Aplikasi'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
