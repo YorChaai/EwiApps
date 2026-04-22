@@ -2055,47 +2055,76 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # ✅ REPLACE YEAR IN HEADERS
         _replace_text_in_sheet(ws_bs, '2024', str(year))
 
+        # ✅ Clean background: Hide gridlines for a professional look
+        ws_bs.sheet_view.showGridLines = False
+
+        # ✅ Set column widths for Sheet 3
+        ws_bs.column_dimensions['A'].width = 3.0
+        ws_bs.column_dimensions['B'].width = 4.0
+        ws_bs.column_dimensions['C'].width = 40.0
+        ws_bs.column_dimensions['D'].width = 4.0
+        ws_bs.column_dimensions['E'].width = 25.0
+        ws_bs.column_dimensions['F'].width = 2.0  # Narrow separator as requested
+        ws_bs.column_dimensions['G'].width = 15.0
+
         # FIX: Set consistent row height for main table (rows 6-16)
         for row_idx in range(6, 17):
             ws_bs.row_dimensions[row_idx].height = ROW_HEIGHT_DIVIDEND
 
-        # ✅ UNIFIED FORMULA APPROACH: Always use SUM range, not single cell reference
+        # ✅ FIX: Define variables to prevent NameErrors
+        last_cat_col_letter_sync = get_column_letter(9 + len(cat_names) - 1)
+        yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+
+        # Apply Custom Border to hide vertical line between D and E for rows 7-16 (NO MERGE)
+        for r in range(7, 17):
+            try:
+                ws_bs.unmerge_cells(f'D{r}:E{r}')
+            except Exception: pass
+            _set_dividend_row_border(ws_bs, r) # Uses helper that hides D-E line
+            ws_bs[f'D{r}'] = 'Rp'
+            ws_bs[f'D{r}'].alignment = Alignment(horizontal='left')
+            ws_bs[f'E{r}'].alignment = Alignment(horizontal='right')
+
         # Row 7: Item 1 - Revenue
         ws_bs['B7'] = 1; ws_bs['C7'] = 'Revenue'
         ws_bs['E7'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)
+        ws_bs['E7'].number_format = '#,##0'
 
         # Row 8: Item 2 - Revenue Diterima (Setelah Pajak)
         ws_bs['B8'] = 2; ws_bs['C8'] = 'Revenue Diterima (Setelah Pajak)'
         ws_bs['E8'] = f'=E7-{_sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)[1:]}'
+        ws_bs['E8'].number_format = '#,##0'
 
-        # ✅ FIX: Use dynamic category range instead of hardcoded :Q
-        last_cat_col_letter_sync = get_column_letter(9 + len(cat_names) - 1)
         # Row 9: Item 3 - Biaya
         ws_bs['B9'] = 3; ws_bs['C9'] = 'Biaya'
         ws_bs['E9'] = f'=SUM({main_ref}!I{cost_totals_row}:{last_cat_col_letter_sync}{cost_totals_row})'
+        ws_bs['E9'].number_format = '#,##0'
 
         # Row 10: Item 4 - Profit SebelumTax
         ws_bs['B10'] = 4; ws_bs['C10'] = 'Profit SebelumTax'
         ws_bs['E10'] = '=E7-E9'
+        ws_bs['E10'].number_format = '#,##0'
 
         # Row 11: Item 5 - PPh Badan (22%*50%)
         ws_bs['B11'] = 5; ws_bs['C11'] = 'PPh Badan (22%*50%)'
         ws_bs['E11'] = '=E10*22%*50%'
+        ws_bs['E11'].number_format = '#,##0'
 
         # Row 12: Item 6 - PPh 23 Dipotong oleh client
         ws_bs['B12'] = 6; ws_bs['C12'] = 'PPh 23 Dipotong oleh client'
-        ws_bs['E12'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)  # PPh23 total
+        ws_bs['E12'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)
+        ws_bs['E12'].number_format = '#,##0'
 
         # Row 13: Item 7 - Kekurangan Bayar PPh Badan
         ws_bs['B13'] = 7; ws_bs['C13'] = 'Kekurangan Bayar PPh Badan'
         ws_bs['E13'] = '=E11-E12'
-        # Yellow highlight for row 13 per screenshot
-        yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+        ws_bs['E13'].number_format = '#,##0'
         ws_bs['E13'].fill = yellow_fill
 
         # Row 14: Item 8 - Profit After Tax
         ws_bs['B14'] = 8; ws_bs['C14'] = 'Profit After Tax'
         ws_bs['E14'] = '=E10-E13'
+        ws_bs['E14'].number_format = '#,##0'
 
         dividends = payload.get('dividend', {}).get('data', [])
         profit_retained = _to_float(payload.get('dividend', {}).get('profit_retained'))
@@ -2103,90 +2132,79 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # Row 15: Item 9 - Deviden Dibagi
         ws_bs['B15'] = 9; ws_bs['C15'] = 'Deviden Dibagi'
         ws_bs['E15'] = '=E14-E16'
+        ws_bs['E15'].number_format = '#,##0'
 
         # Row 16: Item 10 - Profit Ditahan
         ws_bs['B16'] = 10; ws_bs['C16'] = 'Profit Ditahan'
         ws_bs['E16'] = profit_retained
+        ws_bs['E16'].number_format = '#,##0'
 
-        # ✅ DEVIDEN SECTION - Format with proper headers
-        # Row 18: Title "DEVIDEN"
+        # ✅ DEVIDEN SECTION
         ws_bs['B18'] = 'DEVIDEN'
         ws_bs['B18'].font = Font(bold=True, size=14, name='Trebuchet MS')
 
-        # Row 19: Headers # | nama lengkap | (empty) | Amount | (empty) | Pajak
-        ws_bs['B19'] = '#'
-        ws_bs['C19'] = 'Nama Lengkap'
-        ws_bs['D19'] = ''  # Empty separator
-        ws_bs['E19'] = 'Amount'
-        ws_bs['F19'] = ''  # Empty
-        ws_bs['G19'] = 'Pajak'
-
-        # Style headers - border only for columns B, C, D, E (NOT F, G - Pajak)
-        for col in ('B', 'C', 'D', 'E'):
+        # Row 19 Header - REMOVED 'Pajak' text
+        ws_bs['B19'] = '#'; ws_bs['C19'] = 'Nama Lengkap'; ws_bs['D19'] = 'Rp'; ws_bs['E19'] = 'Amount'; ws_bs['G19'] = ''
+        for col in ('B', 'C', 'D', 'E', 'G'):
             cell = ws_bs[f'{col}19']
             cell.font = Font(bold=True, size=14, name='Trebuchet MS')
-            # ✅ FIX: wrap_text=False untuk mencegah row melebar
-            cell.alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
-
-        # ✅ FIX: Apply border with NO vertical line between D and E for header
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        # Hide middle border for header too
+        try: ws_bs.unmerge_cells('D19:E19')
+        except Exception: pass
         _set_dividend_row_border(ws_bs, 19)
 
-        # Header Pajak (column G) - no border
-        ws_bs['G19'].font = Font(bold=True, size=14, name='Trebuchet MS')
-        ws_bs['G19'].alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
-
-        # FIX: Set row height for header row
-        ws_bs.row_dimensions[19].height = ROW_HEIGHT_DIVIDEND
-
-        # Clear dividend data rows (20-80), columns B-G
-        for row in range(20, 80):
+        # Clear ALL potential dividend data rows (20-80) and REMOVE any existing borders
+        for row in range(20, 81):
             for col in ('B', 'C', 'D', 'E', 'F', 'G'):
-                try:
+                try: 
                     ws_bs[f'{col}{row}'] = None
-                except Exception:
-                    pass
+                    # Set border to None for all cells to clean up
+                    ws_bs[f'{col}{row}'].border = Border()
+                except Exception: pass
+            try: ws_bs.unmerge_cells(f'D{row}:E{row}')
+            except Exception: pass
 
-        # Fill dividend data (starting row 20) - DYNAMIC based on actual dividend count
+        # Fill actual dividend data
         num_dividends = len(dividends)
         last_row = 19 + num_dividends if num_dividends > 0 else 19
 
         for idx, item in enumerate(dividends, 1):
             row = 19 + idx
-            ws_bs[f'B{row}'] = idx  # Nomor urut (#)
-            ws_bs[f'C{row}'] = item.get('name', '')  # Nama lengkap penerima
-            ws_bs[f'D{row}'] = 'Rp'  # Currency label
-            # Format amount as round (no decimals) - using ROUND instead of INT for accuracy
-            amount_formula = f'=IF(C{row}="","",ROUND($E$15/COUNTA($C$20:$C${19 + num_dividends}), 0))'
-            ws_bs[f'E{row}'] = amount_formula
-            ws_bs[f'G{row}'] = 'Pajak 10%'  # Tax label (column G only)
+            ws_bs[f'B{row}'] = idx
+            ws_bs[f'C{row}'] = item.get('name', '')
+            ws_bs[f'D{row}'] = 'Rp'
+            ws_bs[f'E{row}'] = f'=IF(C{row}="","",ROUND($E$15/COUNTA($C$20:$C${19 + num_dividends}), 0))'
+            ws_bs[f'G{row}'] = 'Pajak 10%'
 
-            # ✅ FIX: Apply border AND center alignment to ALL cells including column #
+            # Styling for data rows
             for col in ('B', 'C', 'D', 'E'):
                 cell = ws_bs[f'{col}{row}']
                 cell.font = Font(size=14, name='Trebuchet MS')
-                # ✅ Center align column # (B), left align others
-                # ✅ FIX: wrap_text=False untuk mencegah row melebar
-                if col == 'B':
-                    cell.alignment = Alignment(wrap_text=False, horizontal='center', vertical='center')
-                elif col == 'C':
-                    cell.alignment = Alignment(wrap_text=False, horizontal='left', vertical='center')
-                elif col in ('D', 'E'):
-                    cell.alignment = Alignment(wrap_text=False, horizontal='right', vertical='center')
-
-            # Number format for amount (no decimals)
+                if col == 'B': cell.alignment = Alignment(horizontal='center')
+                elif col == 'C': cell.alignment = Alignment(horizontal='left')
+                elif col == 'D': cell.alignment = Alignment(horizontal='left')
+                elif col == 'E': cell.alignment = Alignment(horizontal='right')
+            
             ws_bs[f'E{row}'].number_format = '#,##0'
-
-        # FIX: Set consistent row height for all dividend rows
-        ws_bs.row_dimensions[row].height = ROW_HEIGHT_DIVIDEND
-
-        # ✅ FIX: Apply border with NO vertical line between D and E for all dividend data rows
-        for row in range(20, last_row + 1):
+            # ✅ Apply border ONLY to the actual data row
             _set_dividend_row_border(ws_bs, row)
 
-        # Add bottom border at last row to close the table
-        if num_dividends > 0:
-            # ✅ FIX: Apply border with NO vertical line between D and E for last row
-            _set_dividend_row_border(ws_bs, last_row)
+        # Set consistent row heights
+        for r in range(19, last_row + 1):
+            ws_bs.row_dimensions[r].height = ROW_HEIGHT_DIVIDEND
+
+        # ✅ ADD BRANDING TO BUSINESS SUMMARY
+        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+        profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
+        
+        # Top Logo - Balanced size (approx 5.89cm)
+        _add_image_to_sheet(ws_bs, logo_path, 'D1', width=220, height=65)
+
+        # Footer Profile - Restored "Gap Panjang" (4 rows below last_row to stay at the bottom)
+        footer_row = last_row + 4
+        _add_image_to_sheet(ws_bs, profile_path, f'B{footer_row}', width=550, height=45)
 
 def _clone_sheet_from_template(src_ws, target_wb, new_name):
     if new_name in target_wb.sheetnames: del target_wb[new_name]

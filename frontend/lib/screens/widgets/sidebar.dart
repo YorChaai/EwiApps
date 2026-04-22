@@ -282,6 +282,11 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
         ? hoverColor
         : Colors.transparent;
 
+    // Use shorter duration for hover exit to feel instant
+    final duration = _hovering 
+        ? const Duration(milliseconds: 150) 
+        : const Duration(milliseconds: 0);
+
     final iconColor = widget.selected ? AppTheme.primary : textSecondary;
     final textColor = widget.selected ? textPrimary : textSecondary;
 
@@ -293,8 +298,10 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
         child: InkWell(
           borderRadius: BorderRadius.circular(isCompact ? 10 : 14),
           onTap: widget.onTap,
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+            duration: duration,
             curve: Curves.easeOut,
             padding: EdgeInsets.symmetric(
               horizontal: widget.expanded ? horizontalPadding : 0,
