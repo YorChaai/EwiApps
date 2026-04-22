@@ -18,6 +18,7 @@ from reportlab.lib import colors
 # Setup logging
 logger = logging.getLogger(__name__)
 
+from sqlalchemy.orm import joinedload
 from models import User, Expense, Category, Settlement, db, Advance
 from . import reports_bp
 from .helpers import _default_report_year, _parse_iso_date

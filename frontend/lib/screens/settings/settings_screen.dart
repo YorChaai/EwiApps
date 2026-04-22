@@ -204,13 +204,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final filePath = result.files.single.path!;
 
       if (!filePath.endsWith('.db')) {
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Hanya file .db (SQLite) yang diperbolehkan.'),
               backgroundColor: AppTheme.danger,
             ),
           );
+        }
         return;
       }
 
@@ -266,7 +267,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: summary.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (c, i) => ListTile(
                     dense: true,
                     title: Text(
@@ -1015,16 +1016,18 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
         imagePath: _selectedImagePath,
         removeImage: _removeImage,
       );
-      if (success && mounted)
+      if (success && mounted) {
         Navigator.pop(context, {'success': true, 'user': auth.user});
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

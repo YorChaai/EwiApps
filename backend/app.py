@@ -26,7 +26,7 @@ def create_app():
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['EXPORT_FOLDER'], exist_ok=True)
 
-    # register blueprints
+    # register blueprints using a cleaner loop
     from routes.auth import auth_bp
     from routes.settlements import settlements_bp
     from routes.expenses import expenses_bp
@@ -40,18 +40,14 @@ def create_app():
     from routes.dashboard import dashboard_bp
     from routes.notifications import notifications_bp
 
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(settlements_bp)
-    app.register_blueprint(expenses_bp)
-    app.register_blueprint(reports_bp)
-    app.register_blueprint(categories_bp)
-    app.register_blueprint(advances_bp)
-    app.register_blueprint(settings_bp)
-    app.register_blueprint(revenues_bp)
-    app.register_blueprint(taxes_bp)
-    app.register_blueprint(dividends_bp)
-    app.register_blueprint(dashboard_bp)
-    app.register_blueprint(notifications_bp)
+    blueprints = [
+        auth_bp, settlements_bp, expenses_bp, reports_bp,
+        categories_bp, advances_bp, settings_bp, revenues_bp,
+        taxes_bp, dividends_bp, dashboard_bp, notifications_bp
+    ]
+
+    for bp in blueprints:
+        app.register_blueprint(bp)
 
     @app.before_request
     def touch_authenticated_user_activity():

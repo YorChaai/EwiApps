@@ -4,6 +4,7 @@ from typing import Any
 
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy.orm import joinedload
 from models import Advance, Expense, Settlement, User, db
 from routes.notifications import notify_managers, notify_staff
 
@@ -64,9 +65,9 @@ def list_settlements():
     print(f'[SETTLEMENT_API] search_query={search_query}')
 
     if user.role == 'manager':
-        query = Settlement.query
+        query = Settlement.query.options(joinedload(Settlement.expenses))
     else:
-        query = Settlement.query.filter_by(user_id=user_id)
+        query = Settlement.query.options(joinedload(Settlement.expenses)).filter_by(user_id=user_id)
 
     # STATUS FILTER
     if status_filter in ('approved', 'completed'):

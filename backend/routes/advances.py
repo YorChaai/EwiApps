@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy.orm import joinedload
 
 from models import Advance, AdvanceItem, Category, Expense, Settlement, User, db
 from routes.notifications import notify_managers, notify_staff
@@ -140,7 +141,7 @@ def list_advances():
     report_year = request.args.get('report_year', type=int)
     type_filter = request.args.get('type')
 
-    query = Advance.query
+    query = Advance.query.options(joinedload(Advance.items), joinedload(Advance.requester))
     if user.role != 'manager':
         query = query.filter_by(user_id=user.id)
 

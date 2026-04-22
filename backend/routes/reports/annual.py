@@ -21,6 +21,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from sqlalchemy import text as sql_text
+from sqlalchemy.orm import joinedload
 
 from models import User, Expense, Category, Settlement, ManualCombineGroup, db
 from . import reports_bp
@@ -409,10 +410,10 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         # ✅ Urutkan berdasarkan tipe dan receive_date
         revenues.sort(key=revenue_sort_key)
     else:
-        # ✅ FIX: Use Python filter for consistent year filtering and sort in memory
-        all_revenues = Revenue.query.all()
-        revenues = [r for r in all_revenues if (r.invoice_date and r.invoice_date.year == year)]
-        logger.debug(f'Filtered {len(revenues)} revenues from {len(all_revenues)} for year {year}')
+        # ✅ FIX: Use Database filter instead of pulling all rows into memory
+        revenues = Revenue.query.filter(
+            db.extract('year', Revenue.invoice_date) == year
+        ).all()
         revenues.sort(key=revenue_sort_key)
 
     logger.debug(f'Loaded {len(revenues)} revenues for year {year}')
@@ -434,16 +435,21 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         taxes = [t for t in taxes if (t.date and t.date.year == year)]
         taxes.sort(key=lambda t: t.date)
     else:
-        # ✅ FIX: Use Python filter for consistent year filtering
-        all_taxes = Tax.query.order_by(Tax.date.asc(), Tax.id.asc()).all()
-        taxes = [t for t in all_taxes if (t.date and t.date.year == year)]
-        logger.debug(f'Filtered {len(taxes)} taxes from {len(all_taxes)} for year {year}')
+        # ✅ FIX: Use Database filter instead of pulling all rows into memory
+        taxes = Tax.query.filter(
+            db.extract('year', Tax.date) == year
+        ).order_by(Tax.date.asc(), Tax.id.asc()).all()
+        logger.debug(f'Filtered {len(taxes)} taxes for year {year}')
 
     logger.debug(f'Loaded {len(taxes)} taxes for year {year}')
     if taxes:
         logger.debug(f'Tax date range: {taxes[0].date} to {taxes[-1].date}')
 
-    expenses_query = Expense.query.join(
+    # ✅ ADDED joinedload to avoid N+1 queries during to_dict() loop
+    expenses_query = Expense.query.options(
+        joinedload(Expense.category),
+        joinedload(Expense.subcategories)
+    ).join(
         Settlement, Expense.settlement_id == Settlement.id
     ).filter(
         Settlement.status.in_(('approved', 'completed')),
@@ -480,7 +486,8 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         row['dividend_per_person'] = dividend_calc['dividend_per_person']
         dividend_data.append(row)
 
-    all_categories = Category.query.all()
+    # ✅ Optimization: use joinedload for categories to avoid nested database hits
+    all_categories = Category.query.options(joinedload(Category.parent)).all()
     category_by_id = {c.id: c for c in all_categories}
     expense_data = []
     for e in expenses:
@@ -2149,7 +2156,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             cell = ws_bs[f'{col}19']
             cell.font = Font(bold=True, size=14, name='Trebuchet MS')
             cell.alignment = Alignment(horizontal='center', vertical='center')
-        
+
         # Hide middle border for header too
         try: ws_bs.unmerge_cells('D19:E19')
         except Exception: pass
@@ -2158,7 +2165,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # Clear ALL potential dividend data rows (20-80) and REMOVE any existing borders
         for row in range(20, 81):
             for col in ('B', 'C', 'D', 'E', 'F', 'G'):
-                try: 
+                try:
                     ws_bs[f'{col}{row}'] = None
                     # Set border to None for all cells to clean up
                     ws_bs[f'{col}{row}'].border = Border()
@@ -2186,7 +2193,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
                 elif col == 'C': cell.alignment = Alignment(horizontal='left')
                 elif col == 'D': cell.alignment = Alignment(horizontal='left')
                 elif col == 'E': cell.alignment = Alignment(horizontal='right')
-            
+
             ws_bs[f'E{row}'].number_format = '#,##0'
             # ✅ Apply border ONLY to the actual data row
             _set_dividend_row_border(ws_bs, row)
@@ -2198,7 +2205,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # ✅ ADD BRANDING TO BUSINESS SUMMARY
         logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
         profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
-        
+
         # Top Logo - Balanced size (approx 5.89cm)
         _add_image_to_sheet(ws_bs, logo_path, 'D1', width=220, height=65)
 
@@ -2750,17 +2757,17 @@ def get_annual_report_excel():
     # Signature & Footer at the bottom of Table 3
     sig_name_row = total_row + 4
     sig_title_row = total_row + 5
-    
+
     ws.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
     ws[f'B{sig_name_row}'] = 'Nama Lengkap'
     ws[f'B{sig_name_row}'].font = Font(bold=True, underline='single')
     ws[f'B{sig_name_row}'].alignment = Alignment(horizontal='center')
-    
+
     ws.merge_cells(f'B{sig_title_row}:E{sig_title_row}')
     ws[f'B{sig_title_row}'] = 'Direktur'
     ws[f'B{sig_title_row}'].font = Font(bold=True)
     ws[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
-    
+
     footer_row = sig_title_row + 2
     # Width 550 to span the table width edge-to-edge
     _add_image_to_sheet(ws, profile_path, f'B{footer_row}', width=550, height=45)

@@ -26,6 +26,11 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   final ScrollController _scrollController = ScrollController();
   final _currencyFormat = NumberFormat('#,##0', 'id_ID');
 
+  // Cache untuk optimasi performa
+  List<List<Map<String, dynamic>>>? _cachedGroupedExpenses;
+  final Map<int, String> _subcategoryLabelCache = {};
+  int? _lastProcessedReportYear;
+
   bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
   Color _cardColor(BuildContext context) =>
@@ -81,11 +86,25 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   }
 
   Future<void> _fetchReport() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _cachedGroupedExpenses = null;
+      _subcategoryLabelCache.clear();
+    });
     try {
       final api = context.read<AuthProvider>().api;
       final data = await api.getAnnualReport(year: _selectedYear);
-      if (mounted) setState(() => _reportData = data);
+      if (mounted) {
+        setState(() {
+          _reportData = data;
+          _lastProcessedReportYear = _selectedYear;
+          // Pre-calculate grouping immediately after data arrives
+          final rawExpenses = _asListMap(data['expenses']);
+          if (rawExpenses.isNotEmpty) {
+            _cachedGroupedExpenses = _groupAnnualExpenses(rawExpenses);
+          }
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -577,7 +596,14 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     final catTotals = List<double>.filled(catHeaders.length, 0);
     final List<List<String>> expenseRows = <List<String>>[];
     final expenseBoldRows = <int>{};
-    final expenseGroups = _groupAnnualExpenses(expenseData);
+
+    // ✅ Optimasi: Gunakan cache jika tersedia dan tahun laporan tidak berubah
+    final List<List<Map<String, dynamic>>> expenseGroups;
+    if (_cachedGroupedExpenses != null && _lastProcessedReportYear == _selectedYear) {
+      expenseGroups = _cachedGroupedExpenses!;
+    } else {
+      expenseGroups = _groupAnnualExpenses(expenseData);
+    }
 
     // RESTORE GROUPING LOGIC EXACTLY
     final List<Map<String, dynamic>> allSingles = [];
@@ -695,7 +721,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         );
 
       for (final sub in sortedBatchSubs) {
-        expenseBoldRows.add(expenseRows.length);
+          expenseBoldRows.add(expenseRows.length);
         expenseRows.add([
           '',
           '',
