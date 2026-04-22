@@ -3,6 +3,7 @@ class NotificationModel {
   final int userId;
   final int? actorId;
   final String actorName;
+  final String? actorProfileImage;
   final String actionType;
   final String targetType;
   final int targetId;
@@ -16,6 +17,7 @@ class NotificationModel {
     required this.userId,
     this.actorId,
     required this.actorName,
+    this.actorProfileImage,
     required this.actionType,
     required this.targetType,
     required this.targetId,
@@ -31,6 +33,7 @@ class NotificationModel {
       userId: json['user_id'] ?? 0,
       actorId: json['actor_id'],
       actorName: json['actor_name'] ?? 'System',
+      actorProfileImage: json['actor_profile_image'],
       actionType: json['action_type'] ?? '',
       targetType: json['target_type'] ?? '',
       targetId: json['target_id'] ?? 0,

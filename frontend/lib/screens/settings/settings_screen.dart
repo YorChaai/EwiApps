@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart'; // Ganti ke file_picker
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -131,7 +133,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               CircleAvatar(
                 radius: 48,
                 backgroundColor: AppTheme.primary,
-                child: Text((auth.fullName.isNotEmpty ? auth.fullName[0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                backgroundImage: auth.profileImageUrl != null
+                    ? NetworkImage(auth.profileImageUrl!)
+                    : null,
+                child: auth.profileImageUrl == null
+                    ? Text((auth.fullName.isNotEmpty ? auth.fullName[0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold))
+                    : null,
               ),
               Positioned(
                 right: 0, bottom: 0,
@@ -312,6 +319,9 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   bool _isLoading = false;
   bool _showPasswordFields = false;
 
+  String? _selectedImagePath; // Simpan path string
+  bool _removeImage = false;
+
   @override
   void initState() {
     super.initState();
@@ -327,17 +337,40 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     super.dispose();
   }
 
+  Future<void> _pickImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _selectedImagePath = result.files.single.path;
+          _removeImage = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error picking image: $e');
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _isLoading = true);
     try {
-      final res = await ApiService().updateProfile(
-        fullName: _nameController.text.trim(),
-        phoneNumber: _phoneController.text.trim().isEmpty ? '-' : _phoneController.text.trim(),
-        workplace: _workplaceController.text.trim().isEmpty ? '-' : _workplaceController.text.trim(),
-        oldPassword: _showPasswordFields ? _oldPasswordController.text : null,
-        newPassword: _showPasswordFields ? _newPasswordController.text : null,
+      final auth = context.read<AuthProvider>();
+      final success = await auth.updateProfile(
+        {
+          'full_name': _nameController.text.trim(),
+          'phone_number': _phoneController.text.trim().isEmpty ? '-' : _phoneController.text.trim(),
+          'workplace': _workplaceController.text.trim().isEmpty ? '-' : _workplaceController.text.trim(),
+          'old_password': _showPasswordFields ? _oldPasswordController.text : null,
+          'new_password': _showPasswordFields ? _newPasswordController.text : null,
+        },
+        imagePath: _selectedImagePath,
+        removeImage: _removeImage,
       );
-      if (mounted) Navigator.pop(context, {'success': true, 'user': res['user']});
+      if (success && mounted) Navigator.pop(context, {'success': true, 'user': auth.user});
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e'), backgroundColor: AppTheme.danger));
     } finally {
@@ -348,12 +381,62 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = context.watch<AuthProvider>();
+
     return AlertDialog(
       backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Text('Edit Profil Saya', style: TextStyle(fontWeight: FontWeight.bold)),
       content: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // Image Picker UI
+          Center(
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 40,
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                  backgroundImage: _removeImage
+                    ? null
+                    : (_selectedImagePath != null
+                        ? FileImage(File(_selectedImagePath!))
+                        : (auth.profileImageUrl != null ? NetworkImage(auth.profileImageUrl!) : null) as ImageProvider?),
+                  child: (_removeImage || (_selectedImagePath == null && auth.profileImageUrl == null))
+                    ? const Icon(Icons.person, size: 40, color: AppTheme.primary)
+                    : null,
+                ),
+                Positioned(
+                  right: -4,
+                  bottom: -4,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppTheme.card,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppTheme.divider, width: 2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.camera_alt_rounded, size: 16, color: AppTheme.primary),
+                          onPressed: _pickImage,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                        ),
+                        if (auth.profileImageUrl != null || _selectedImagePath != null)
+                          IconButton(
+                            icon: const Icon(Icons.delete_rounded, size: 16, color: AppTheme.danger),
+                            onPressed: () => setState(() { _selectedImagePath = null; _removeImage = true; }),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),          const SizedBox(height: 24),
           TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nama Lengkap', prefixIcon: Icon(Icons.badge_outlined))),
           const SizedBox(height: 12),
           TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'No HP', prefixIcon: Icon(Icons.phone_outlined)), keyboardType: TextInputType.phone, inputFormatters: [FilteringTextInputFormatter.digitsOnly]),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 
 class UserDetailDialog extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -115,7 +116,12 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
                   CircleAvatar(
                     radius: 32,
                     backgroundColor: AppTheme.primary,
-                    child: Text(((user['full_name'] as String?)?.isNotEmpty == true ? user['full_name'][0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    backgroundImage: user['profile_image'] != null
+                        ? NetworkImage('${ApiService.baseUrl}/uploads/${user['profile_image']}')
+                        : null,
+                    child: user['profile_image'] == null
+                        ? Text(((user['full_name'] as String?)?.isNotEmpty == true ? user['full_name'][0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))
+                        : null,
                   ),
                   Positioned(
                     right: 0, bottom: 0,

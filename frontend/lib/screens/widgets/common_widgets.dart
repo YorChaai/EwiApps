@@ -292,9 +292,19 @@ class _SettlementCardState extends State<SettlementCard> {
                               onTap: () {
                                 final creatorId = s['creator_id'];
                                 if (creatorId != null) {
+                                  // Sertakan data user lengkap termasuk foto profil
+                                  final userData = {
+                                    'id': creatorId,
+                                    'full_name': s['creator_name'],
+                                    'role': s['creator_role'],
+                                    'username': s['username'] ?? '',
+                                    'profile_image': s['creator_profile_image'],
+                                    'phone_number': s['phone_number'],
+                                    'workplace': s['workplace'],
+                                  };
                                   showDialog(
                                     context: context,
-                                    builder: (ctx) => UserDetailDialog(userId: creatorId),
+                                    builder: (ctx) => UserDetailDialog(user: userData),
                                   );
                                 }
                               },
@@ -553,9 +563,19 @@ class _AdvanceCardState extends State<AdvanceCard> {
                               onTap: () {
                                 final creatorId = a['requester_id'];
                                 if (creatorId != null) {
+                                  // Sertakan data user lengkap termasuk foto profil
+                                  final userData = {
+                                    'id': creatorId,
+                                    'full_name': a['requester_name'],
+                                    'role': a['requester_role'],
+                                    'username': a['username'] ?? '',
+                                    'profile_image': a['requester_profile_image'],
+                                    'phone_number': a['phone_number'],
+                                    'workplace': a['workplace'],
+                                  };
                                   showDialog(
                                     context: context,
-                                    builder: (ctx) => UserDetailDialog(userId: creatorId),
+                                    builder: (ctx) => UserDetailDialog(user: userData),
                                   );
                                 }
                               },

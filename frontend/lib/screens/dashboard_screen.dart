@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settlement_provider.dart';
+import '../providers/advance_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/file_helper.dart';
 import '../utils/context_extensions.dart';
@@ -40,6 +41,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int? _lastNotificationId;
   Key _reportPageKey = UniqueKey();
   Key _settingsPageKey = UniqueKey();
+
+  // GlobalKeys to control child scroll positions
+  final GlobalKey<_SettlementListViewState> _settlementListKey = GlobalKey();
+  final GlobalKey<AdvancesScreenState> _advancesListKey = GlobalKey();
 
   Color _surfaceColor(BuildContext context) =>
       context.isDark ? AppTheme.surface : AppTheme.lightSurface;
@@ -185,8 +190,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? (isTablet || !_sidebarExpanded ? 80.0 : 240.0)
         : 0.0;
     final pages = [
-      const _SettlementListView(),
-      const AdvancesScreen(),
+      _SettlementListView(key: _settlementListKey),
+      AdvancesScreen(key: _advancesListKey),
       if (auth.isManager) ReportScreen(key: _reportPageKey),
       if (auth.isManager) const CategoryManagementView(),
       SettingsScreen(key: _settingsPageKey),
@@ -207,8 +212,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 isManager: auth.isManager,
                 fullName: auth.fullName,
                 role: auth.roleDisplayName,
+                profileImageUrl: auth.profileImageUrl,
                 onNotificationTap: _handleNotificationTap,
                 onNavTap: (i) {
+                  // Trigger reload jika klik menu yang sama atau pindah tab
+                  if (i == 0) {
+                    context.read<SettlementProvider>().loadSettlements();
+                    _settlementListKey.currentState?.scrollToTop();
+                  } else if (i == 1) {
+                    context.read<AdvanceProvider>().loadAdvances();
+                    _advancesListKey.currentState?.scrollToTop();
+                  }
+
                   setState(() {
                     _navIndex = i;
                     if (i == 2) _reportPageKey = UniqueKey();
@@ -243,24 +258,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       title: Row(
                         children: [
                           Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: useCompact ? 6 : 8,
-                              vertical: useCompact ? 3 : 4,
-                            ),
+                            width: useCompact ? 32 : 36,
+                            height: useCompact ? 32 : 36,
                             decoration: BoxDecoration(
                               color: AppTheme.primary,
                               borderRadius: BorderRadius.circular(6),
+                              image: auth.profileImageUrl != null
+                                  ? DecorationImage(
+                                      image: NetworkImage(auth.profileImageUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
                             ),
-                            child: Text(
-                              auth.fullName.isNotEmpty
-                                  ? auth.fullName[0].toUpperCase()
-                                  : 'U',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                                fontSize: useCompact ? 11 : 12,
-                              ),
-                            ),
+                            child: auth.profileImageUrl == null
+                                ? Center(
+                                    child: Text(
+                                      auth.fullName.isNotEmpty
+                                          ? auth.fullName[0].toUpperCase()
+                                          : 'U',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: useCompact ? 11 : 12,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -296,8 +319,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             currentIndex: currentIndex,
                             isManager: auth.isManager,
                             compact: true,
-                            onChanged: (index) =>
-                                setState(() => _navIndex = index),
+                            onChanged: (index) {
+                              if (index == 0) {
+                                context.read<SettlementProvider>().loadSettlements();
+                                _settlementListKey.currentState?.scrollToTop();
+                              } else if (index == 1) {
+                                context.read<AdvanceProvider>().loadAdvances();
+                                _advancesListKey.currentState?.scrollToTop();
+                              }
+                              setState(() => _navIndex = index);
+                            },
                           ),
                         ],
                       ),
@@ -332,7 +363,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class _SettlementListView extends StatefulWidget {
-  const _SettlementListView();
+  const _SettlementListView({super.key});
   @override
   State<_SettlementListView> createState() => _SettlementListViewState();
 }
@@ -368,11 +399,11 @@ class _SettlementListViewState extends State<_SettlementListView> {
     }
   }
 
-  Future<void> _scrollToTop() async {
+  Future<void> scrollToTop() async {
     if (!_listScrollController.hasClients) return;
     await _listScrollController.animateTo(
       0,
-      duration: const Duration(milliseconds: 260),
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
     );
   }
@@ -709,193 +740,167 @@ class _SettlementListViewState extends State<_SettlementListView> {
                   Column(
                     children: [
                       Expanded(
-                        child: prov.loading || prov.settlements.isEmpty
-                            ? CustomScrollView(
-                                slivers: [
-                                  SliverToBoxAdapter(
-                                    child: _buildScrollableSettlementHeader(
-                                      context,
-                                      auth,
-                                      prov,
-                                      isNarrow,
-                                      isVeryNarrow,
-                                      canShowExport,
-                                      pagePadding,
-                                      useCompact,
+                        child: Scrollbar(
+                          controller: _listScrollController,
+                          thumbVisibility: true,
+                          thickness: 8,
+                          child: RefreshIndicator(
+                            onRefresh: () async => _reloadSettlements(),
+                            child: Builder(
+                              builder: (context) {
+                                final singles = prov.settlements
+                                    .where(
+                                      (s) =>
+                                          (s['settlement_type'] ?? 'single') ==
+                                          'single',
+                                    )
+                                    .toList();
+                                final batches = prov.settlements
+                                    .where(
+                                      (s) =>
+                                          (s['settlement_type'] ?? 'single') ==
+                                          'batch',
+                                    )
+                                    .toList();
+                                final items = <dynamic>[];
+                                if (singles.isNotEmpty) {
+                                  items.add('__header_single__');
+                                  items.addAll(singles);
+                                }
+                                if (batches.isNotEmpty) {
+                                  items.add('__header_batch__');
+                                  items.addAll(batches);
+                                }
+
+                                return CustomScrollView(
+                                  key: const PageStorageKey('settlement_list'),
+                                  controller: _listScrollController,
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  slivers: [
+                                    SliverToBoxAdapter(
+                                      child: _buildScrollableSettlementHeader(
+                                        context,
+                                        auth,
+                                        prov,
+                                        isNarrow,
+                                        isVeryNarrow,
+                                        canShowExport,
+                                        pagePadding,
+                                        useCompact,
+                                      ),
                                     ),
-                                  ),
-                                  SliverFillRemaining(
-                                    hasScrollBody: false,
-                                    child: prov.loading
-                                        ? const Center(
-                                            child: CircularProgressIndicator(
-                                              color: AppTheme.primary,
-                                            ),
-                                          )
-                                        : Center(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.inbox_rounded,
-                                                  size: 64,
-                                                  color: _bodyColorLocal(
-                                                    context,
-                                                  ).withValues(alpha: 0.3),
-                                                ),
-                                                const SizedBox(height: 16),
-                                                Text(
-                                                  'Belum ada settlement',
-                                                  style: TextStyle(
-                                                    color: _bodyColorLocal(
-                                                      context,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                    if (prov.loading && prov.settlements.isEmpty)
+                                      const SliverFillRemaining(
+                                        child: Center(
+                                          child: CircularProgressIndicator(
+                                            color: AppTheme.primary,
                                           ),
-                                  ),
-                                ],
-                              )
-                            : Scrollbar(
-                                controller: _listScrollController,
-                                thumbVisibility: true,
-                                thickness: 8,
-                                child: RefreshIndicator(
-                                  onRefresh: () async => _reloadSettlements(),
-                                  child: Builder(
-                                    builder: (context) {
-                                      final singles = prov.settlements
-                                          .where(
-                                            (s) =>
-                                                (s['settlement_type'] ??
-                                                    'single') ==
-                                                'single',
-                                          )
-                                          .toList();
-                                      final batches = prov.settlements
-                                          .where(
-                                            (s) =>
-                                                (s['settlement_type'] ??
-                                                    'single') ==
-                                                'batch',
-                                          )
-                                          .toList();
-                                      final items = <dynamic>[];
-                                      if (singles.isNotEmpty) {
-                                        items.add('__header_single__');
-                                        items.addAll(singles);
-                                      }
-                                      if (batches.isNotEmpty) {
-                                        items.add('__header_batch__');
-                                        items.addAll(batches);
-                                      }
-                                      return CustomScrollView(
-                                        controller: _listScrollController,
-                                        physics:
-                                            const AlwaysScrollableScrollPhysics(),
-                                        slivers: [
-                                          SliverToBoxAdapter(
-                                            child:
-                                                _buildScrollableSettlementHeader(
-                                                  context,
-                                                  auth,
-                                                  prov,
-                                                  isNarrow,
-                                                  isVeryNarrow,
-                                                  canShowExport,
-                                                  pagePadding,
-                                                  useCompact,
+                                        ),
+                                      )
+                                    else if (prov.settlements.isEmpty)
+                                      SliverFillRemaining(
+                                        hasScrollBody: false,
+                                        child: Center(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.inbox_rounded,
+                                                size: 64,
+                                                color: _bodyColorLocal(context)
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'Belum ada settlement',
+                                                style: TextStyle(
+                                                  color: _bodyColorLocal(context),
                                                 ),
+                                              ),
+                                            ],
                                           ),
-                                          SliverPadding(
-                                            padding: EdgeInsets.only(
-                                              left: isNarrow ? 16 : 24,
-                                              right: isNarrow ? 16 : 24,
-                                              bottom: isNarrow ? 16 : 24,
-                                            ),
-                                            sliver: SliverList(
-                                              delegate: SliverChildBuilderDelegate((
-                                                context,
-                                                i,
-                                              ) {
-                                                final item = items[i];
-                                                if (item == '__header_single__') {
-                                                  return _buildGroupHeader(
-                                                    Icons.receipt_long_rounded,
-                                                    'Pengeluaran Sendiri (${singles.length})',
-                                                    AppTheme.primary,
-                                                  );
-                                                }
-                                                if (item == '__header_batch__') {
-                                                  return _buildGroupHeader(
-                                                    Icons.folder_rounded,
-                                                    'Pengeluaran Batch (${batches.length})',
-                                                    AppTheme.warning,
-                                                  );
-                                                }
-                                                final s =
-                                                    item
-                                                        as Map<String, dynamic>;
-                                                return RepaintBoundary(
-                                                  child: SettlementCard(
-                                                    key: ValueKey(
-                                                      'settlement_${s['id']}',
-                                                    ),
-                                                    settlement: s,
-                                                    isManager: auth.isManager,
-                                                    onDelete: _selectionMode
-                                                        ? null
-                                                        : () =>
-                                                              _deleteSettlement(
-                                                                s['id'],
-                                                              ),
-                                                    selectionMode:
-                                                        _selectionMode,
-                                                    selected:
-                                                        _selectedSettlementIds
-                                                            .contains(s['id']),
-                                                    onSelectionChanged: (v) =>
-                                                        _toggleSettlementSelection(
-                                                          s['id'],
-                                                          v,
-                                                        ),
-                                                    onTap: () =>
-                                                        Navigator.push(
-                                                          context,
-                                                          MaterialPageRoute(
-                                                            builder: (_) =>
-                                                                SettlementDetailScreen(
-                                                                  settlementId:
-                                                                      s['id'],
-                                                                ),
-                                                          ),
-                                                        ).then(
-                                                          (_) =>
-                                                              _reloadSettlements(),
-                                                        ),
-                                                  ),
+                                        ),
+                                      )
+                                    else
+                                      SliverPadding(
+                                        padding: EdgeInsets.only(
+                                          left: isNarrow ? 16 : 24,
+                                          right: isNarrow ? 16 : 24,
+                                          bottom: isNarrow ? 16 : 24,
+                                        ),
+                                        sliver: SliverList(
+                                          delegate: SliverChildBuilderDelegate(
+                                            (context, i) {
+                                              final item = items[i];
+                                              if (item == '__header_single__') {
+                                                return _buildGroupHeader(
+                                                  Icons.receipt_long_rounded,
+                                                  'Pengeluaran Sendiri (${singles.length})',
+                                                  AppTheme.primary,
                                                 );
-                                              }, childCount: items.length),
-                                            ),
+                                              }
+                                              if (item == '__header_batch__') {
+                                                return _buildGroupHeader(
+                                                  Icons.folder_rounded,
+                                                  'Pengeluaran Batch (${batches.length})',
+                                                  AppTheme.warning,
+                                                );
+                                              }
+                                              final s =
+                                                  item as Map<String, dynamic>;
+                                              return RepaintBoundary(
+                                                child: SettlementCard(
+                                                  key: ValueKey(
+                                                    'settlement_${s['id']}',
+                                                  ),
+                                                  settlement: s,
+                                                  isManager: auth.isManager,
+                                                  onDelete: _selectionMode
+                                                      ? null
+                                                      : () => _deleteSettlement(
+                                                            s['id'],
+                                                          ),
+                                                  selectionMode: _selectionMode,
+                                                  selected:
+                                                      _selectedSettlementIds
+                                                          .contains(s['id']),
+                                                  onSelectionChanged: (v) =>
+                                                      _toggleSettlementSelection(
+                                                        s['id'],
+                                                        v,
+                                                      ),
+                                                  onTap: () => Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          SettlementDetailScreen(
+                                                            settlementId:
+                                                                s['id'],
+                                                          ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            childCount: items.length,
                                           ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
+                                        ),
+                                      ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   if (_showScrollToTop && !_selectionMode)
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: FloatingActionButton.small(
-                        onPressed: _scrollToTop,
-                        backgroundColor: _cardColor(
+                  Positioned(
+                  right: 16,
+                  bottom: 16,
+                  child: FloatingActionButton.small(
+                    onPressed: scrollToTop,                        backgroundColor: _cardColor(
                           context,
                         ).withValues(alpha: 0.9),
                         child: const Icon(

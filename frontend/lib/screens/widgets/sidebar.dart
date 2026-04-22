@@ -10,6 +10,7 @@ class DashboardSidebar extends StatelessWidget {
   final bool isManager;
   final String fullName;
   final String role;
+  final String? profileImageUrl;
   final ValueChanged<int> onNavTap;
   final VoidCallback onLogout;
   final bool isMini;
@@ -25,6 +26,7 @@ class DashboardSidebar extends StatelessWidget {
     required this.isManager,
     required this.fullName,
     required this.role,
+    this.profileImageUrl,
     required this.onNavTap,
     required this.onLogout,
     this.isMini = false,
@@ -203,6 +205,7 @@ class DashboardSidebar extends StatelessWidget {
               ? _ExpandedUserPanel(
                   fullName: fullName,
                   role: role,
+                  profileImageUrl: profileImageUrl,
                   isManager: isManager,
                   onLogout: onLogout,
                   onNotificationTap: onNotificationTap,
@@ -211,6 +214,7 @@ class DashboardSidebar extends StatelessWidget {
                   fullName: fullName,
                   isManager: isManager,
                   role: role,
+                  profileImageUrl: profileImageUrl,
                   onLogout: onLogout,
                   onNotificationTap: onNotificationTap,
                 ),
@@ -387,6 +391,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 class _ExpandedUserPanel extends StatelessWidget {
   final String fullName;
   final String role;
+  final String? profileImageUrl;
   final bool isManager;
   final VoidCallback onLogout;
   final ValueChanged<String>? onNotificationTap;
@@ -394,6 +399,7 @@ class _ExpandedUserPanel extends StatelessWidget {
   const _ExpandedUserPanel({
     required this.fullName,
     required this.role,
+    this.profileImageUrl,
     required this.isManager,
     required this.onLogout,
     this.onNotificationTap,
@@ -433,14 +439,17 @@ class _ExpandedUserPanel extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
-                child: Text(
-                  fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
-                  style: const TextStyle(
-                    color: AppTheme.primary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
+                backgroundImage: profileImageUrl != null ? NetworkImage(profileImageUrl!) : null,
+                child: profileImageUrl == null
+                  ? Text(
+                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    )
+                  : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -495,6 +504,7 @@ class _ExpandedUserPanel extends StatelessWidget {
 class _MiniUserPanel extends StatelessWidget {
   final String fullName;
   final String role;
+  final String? profileImageUrl;
   final bool isManager;
   final VoidCallback onLogout;
   final ValueChanged<String>? onNotificationTap;
@@ -502,6 +512,7 @@ class _MiniUserPanel extends StatelessWidget {
   const _MiniUserPanel({
     required this.fullName,
     required this.role,
+    this.profileImageUrl,
     required this.isManager,
     required this.onLogout,
     this.onNotificationTap,
@@ -520,14 +531,17 @@ class _MiniUserPanel extends StatelessWidget {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
-              child: Text(
-                fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
-                style: const TextStyle(
-                  color: AppTheme.primary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
+              backgroundImage: profileImageUrl != null ? NetworkImage(profileImageUrl!) : null,
+              child: profileImageUrl == null
+                ? Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  )
+                : null,
             ),
           ),
           const SizedBox(height: 8),

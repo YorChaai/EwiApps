@@ -18,6 +18,10 @@ class AuthProvider extends ChangeNotifier {
   bool get isMitraEks => _user?['role'] == 'mitra_eks';
   String get fullName => _user?['full_name'] ?? '';
   String get role => _user?['role'] ?? '';
+  String? get profileImageUrl {
+    if (_user?['profile_image'] == null) return null;
+    return '${ApiService.baseUrl}/uploads/${_user?['profile_image']}';
+  }
   String get roleDisplayName {
     switch (_user?['role']) {
       case 'manager':
@@ -172,6 +176,33 @@ class AuthProvider extends ChangeNotifier {
         role: data['role'],
         password: data['password'],
       );
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateProfile(Map<String, dynamic> data, {String? imagePath, bool removeImage = false}) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await _api.updateProfile(
+        fullName: data['full_name'],
+        phoneNumber: data['phone_number'],
+        workplace: data['workplace'],
+        oldPassword: data['old_password'],
+        newPassword: data['new_password'],
+        profileImagePath: imagePath,
+        removeProfileImage: removeImage,
+      );
+      _user = res['user'];
       _loading = false;
       notifyListeners();
       return true;

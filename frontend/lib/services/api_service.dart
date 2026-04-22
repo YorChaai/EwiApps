@@ -236,21 +236,30 @@ class ApiService {
     String? workplace,
     String? oldPassword,
     String? newPassword,
+    String? profileImagePath,
+    bool removeProfileImage = false,
   }) async {
-    final body = <String, dynamic>{};
-    if (fullName != null) body['full_name'] = fullName;
-    if (phoneNumber != null) body['phone_number'] = phoneNumber;
-    if (workplace != null) body['workplace'] = workplace;
-    if (oldPassword != null) body['old_password'] = oldPassword;
-    if (newPassword != null) body['new_password'] = newPassword;
-
-    final res = await _retryRequest(
-      () => http.put(
-        Uri.parse('$baseUrl/auth/profile'),
-        headers: _headers,
-        body: jsonEncode(body),
-      ),
+    var request = http.MultipartRequest(
+      'PUT',
+      Uri.parse('$baseUrl/auth/profile'),
     );
+    request.headers.addAll(_authHeaders);
+
+    if (fullName != null) request.fields['full_name'] = fullName;
+    if (phoneNumber != null) request.fields['phone_number'] = phoneNumber;
+    if (workplace != null) request.fields['workplace'] = workplace;
+    if (oldPassword != null) request.fields['old_password'] = oldPassword;
+    if (newPassword != null) request.fields['new_password'] = newPassword;
+    if (removeProfileImage) request.fields['remove_profile_image'] = 'true';
+
+    if (profileImagePath != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath('profile_image', profileImagePath),
+      );
+    }
+
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
     return _handleResponse(res);
   }
 

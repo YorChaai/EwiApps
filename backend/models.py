@@ -28,6 +28,7 @@ class User(db.Model):
     phone_number = db.Column(db.String(20), nullable=True, default='-')
     workplace = db.Column(db.String(100), nullable=True, default='-')
     role = db.Column(db.String(20), nullable=False, default='staff')  # staff, manager, mitra_eks
+    profile_image = db.Column(db.String(500), nullable=True)
     last_login = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -48,6 +49,7 @@ class User(db.Model):
             'phone_number': self.phone_number or '-',
             'workplace': self.workplace or '-',
             'role': self.role,
+            'profile_image': self.profile_image,
             'last_login': self.last_login.isoformat() if self.last_login else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -190,6 +192,7 @@ class Advance(db.Model):
             'requester_name': self.requester.full_name if self.requester else None,
             'requester_role': self.requester.role if self.requester else None,
             'requester_id': self.requester.id if self.requester else None,
+            'requester_profile_image': self.requester.profile_image if self.requester else None,
             'status': self.status,
             'notes': self.notes,
             'total_amount': self.total_amount,
@@ -350,6 +353,7 @@ class Settlement(db.Model):
             'creator_name': self.creator.full_name if self.creator else None,
             'creator_role': self.creator.role if self.creator else None,
             'creator_id': self.creator.id if self.creator else None,
+            'creator_profile_image': self.creator.profile_image if self.creator else None,
             'settlement_type': self.settlement_type,
             'report_year': self.report_year,
             'status': self.status,
@@ -680,11 +684,13 @@ class Notification(db.Model):
 
     def to_dict(self):
         actor_name = self.actor.full_name if self.actor else 'System'
+        actor_image = self.actor.profile_image if self.actor else None
         return {
             'id': self.id,
             'user_id': self.user_id,
             'actor_id': self.actor_id,
             'actor_name': actor_name,
+            'actor_profile_image': actor_image,
             'action_type': self.action_type,
             'target_type': self.target_type,
             'target_id': self.target_id,

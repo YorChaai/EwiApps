@@ -15,10 +15,10 @@ class AdvancesScreen extends StatefulWidget {
   const AdvancesScreen({super.key});
 
   @override
-  State<AdvancesScreen> createState() => _AdvancesScreenState();
+  State<AdvancesScreen> createState() => AdvancesScreenState();
 }
 
-class _AdvancesScreenState extends State<AdvancesScreen> {
+class AdvancesScreenState extends State<AdvancesScreen> {
   static const Duration _searchDebounceDuration = Duration(milliseconds: 350);
   String? _statusFilter;
   DateTime? _startDate;
@@ -43,9 +43,14 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
     if (shouldShow != _showScrollToTop && mounted) setState(() => _showScrollToTop = shouldShow);
   }
 
-  Future<void> _scrollToTop() async {
+  /// Memaksa daftar scroll kembali ke paling atas
+  Future<void> scrollToTop() async {
     if (!_listScrollController.hasClients) return;
-    await _listScrollController.animateTo(0, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+    await _listScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   void _scheduleAdvanceReload() {
@@ -285,14 +290,7 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
                   Column(
                     children: [
                       Expanded(
-                        child: prov.loading || prov.advances.isEmpty
-                        ? Column(children: [
-                            _buildScrollableAdvanceHeader(context, auth, prov, isNarrow, isVeryNarrow, _statusFilter == 'completed', pagePadding, useCompact),
-                            Expanded(child: prov.loading
-                              ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-                              : Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.inbox_rounded, size: 64, color: _bodyColor(context).withValues(alpha: 0.3)), const SizedBox(height: 16), Text('Belum ada kasbon', style: TextStyle(color: _bodyColor(context)))]))),
-                          ])
-                        : Scrollbar(
+                        child: Scrollbar(
                             controller: _listScrollController,
                             thumbVisibility: true,
                             thickness: 8,
@@ -305,41 +303,53 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
                                   final items = <dynamic>[];
                                   if (singles.isNotEmpty) { items.add('__header_single__'); items.addAll(singles); }
                                   if (batches.isNotEmpty) { items.add('__header_batch__'); items.addAll(batches); }
+
                                   return CustomScrollView(
+                                    key: const PageStorageKey('advance_list'),
                                     controller: _listScrollController,
                                     physics: const AlwaysScrollableScrollPhysics(),
                                     slivers: [
                                       SliverToBoxAdapter(child: _buildScrollableAdvanceHeader(context, auth, prov, isNarrow, isVeryNarrow, _statusFilter == 'completed', pagePadding, useCompact)),
-                                      SliverPadding(
-                                        padding: EdgeInsets.only(left: isNarrow ? 16 : 24, right: isNarrow ? 16 : 24, bottom: isNarrow ? 16 : 24),
-                                        sliver: SliverList(
-                                          delegate: SliverChildBuilderDelegate(
-                                            (context, i) {
-                                              final item = items[i];
-                                              if (item == '__header_single__') return _groupHeader(Icons.receipt_long_rounded, 'Kasbon Mandiri (${singles.length})');
-                                              if (item == '__header_batch__') return _groupHeader(Icons.folder_rounded, 'Kasbon Batch (${batches.length})');
-                                              final a = item as Map<String, dynamic>;
-                                              return RepaintBoundary(
-                                                child: AdvanceCard(
-                                                  key: ValueKey('advance_${a['id']}'),
-                                                  advance: a,
-                                                  isManager: auth.isManager,
-                                                  onDelete: _selectionMode ? null : () => _deleteAdvance(a['id']),
-                                                  selectionMode: _selectionMode,
-                                                  selected: _selectedAdvanceIds.contains(a['id']),
-                                                  canSelect: _canDeleteAdvanceCard(a, auth),
-                                                  onSelectionChanged: (v) => _toggleAdvanceSelection(a['id'], v),
-                                                  onTap: () => Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: a['id'])),
-                                                  ).then((_) => _reloadAdvances()),
-                                                ),
-                                              );
-                                            },
-                                            childCount: items.length,
+                                      if (prov.loading && prov.advances.isEmpty)
+                                        const SliverFillRemaining(
+                                          child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
+                                        )
+                                      else if (prov.advances.isEmpty)
+                                        SliverFillRemaining(
+                                          hasScrollBody: false,
+                                          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.inbox_rounded, size: 64, color: _bodyColor(context).withValues(alpha: 0.3)), const SizedBox(height: 16), Text('Belum ada kasbon', style: TextStyle(color: _bodyColor(context)))]))
+                                        )
+                                      else
+                                        SliverPadding(
+                                          padding: EdgeInsets.only(left: isNarrow ? 16 : 24, right: isNarrow ? 16 : 24, bottom: isNarrow ? 16 : 24),
+                                          sliver: SliverList(
+                                            delegate: SliverChildBuilderDelegate(
+                                              (context, i) {
+                                                final item = items[i];
+                                                if (item == '__header_single__') return _groupHeader(Icons.receipt_long_rounded, 'Kasbon Mandiri (${singles.length})');
+                                                if (item == '__header_batch__') return _groupHeader(Icons.folder_rounded, 'Kasbon Batch (${batches.length})');
+                                                final a = item as Map<String, dynamic>;
+                                                return RepaintBoundary(
+                                                  child: AdvanceCard(
+                                                    key: ValueKey('advance_${a['id']}'),
+                                                    advance: a,
+                                                    isManager: auth.isManager,
+                                                    onDelete: _selectionMode ? null : () => _deleteAdvance(a['id']),
+                                                    selectionMode: _selectionMode,
+                                                    selected: _selectedAdvanceIds.contains(a['id']),
+                                                    canSelect: _canDeleteAdvanceCard(a, auth),
+                                                    onSelectionChanged: (v) => _toggleAdvanceSelection(a['id'], v),
+                                                    onTap: () => Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(builder: (_) => AdvanceDetailScreen(advanceId: a['id'])),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              childCount: items.length,
+                                            ),
                                           ),
                                         ),
-                                      ),
                                     ],
                                   );
                                 },
@@ -350,7 +360,7 @@ class _AdvancesScreenState extends State<AdvancesScreen> {
                     ],
                   ),
                   if (_showScrollToTop && !_selectionMode)
-                    Positioned(right: 16, bottom: 16, child: FloatingActionButton.small(onPressed: _scrollToTop, backgroundColor: _cardColor(context).withValues(alpha: 0.9), child: const Icon(Icons.keyboard_arrow_up_rounded, color: AppTheme.primary))),
+                    Positioned(right: 16, bottom: 16, child: FloatingActionButton.small(onPressed: scrollToTop, backgroundColor: _cardColor(context).withValues(alpha: 0.9), child: const Icon(Icons.keyboard_arrow_up_rounded, color: AppTheme.primary))),
                 ],
               ),
             ),

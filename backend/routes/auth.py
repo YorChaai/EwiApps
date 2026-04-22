@@ -1,10 +1,17 @@
-from flask import Blueprint, request, jsonify
+import os
+import uuid
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from models import db, User
 from datetime import datetime, timezone
 from routes.notifications import notify_managers, create_notification
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+
+
+def allowed_file(filename):
+    allowed = current_app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'pdf'})
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
 
 
 def format_last_login(last_login):
@@ -199,15 +206,18 @@ def update_profile():
     if not user:
         return jsonify({'error': 'User tidak ditemukan'}), 404
 
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Data tidak valid'}), 400
+    # Handle both JSON and form data
+    if request.is_json:
+        data = request.get_json()
+    else:
+        data = request.form
 
     full_name = data.get('full_name', '').strip()
     phone_number = data.get('phone_number', '').strip()
     workplace = data.get('workplace', '').strip()
     old_password = data.get('old_password')
     new_password = data.get('new_password')
+    remove_image = data.get('remove_profile_image') == 'true'
 
     if full_name:
         user.full_name = full_name
@@ -219,6 +229,38 @@ def update_profile():
 
     if workplace:
         user.workplace = workplace
+
+    # Handle Profile Image Upload
+    if 'profile_image' in request.files:
+        file = request.files['profile_image']
+        if file and file.filename and allowed_file(file.filename):
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            unique_name = f"profile_{user.id}_{uuid.uuid4().hex[:8]}.{ext}"
+
+            upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'profiles')
+            os.makedirs(upload_dir, exist_ok=True)
+
+            # Delete old image if exists
+            if user.profile_image:
+                old_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.profile_image)
+                if os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                    except:
+                        pass
+
+            file.save(os.path.join(upload_dir, unique_name))
+            user.profile_image = f"profiles/{unique_name}"
+
+    elif remove_image:
+        if user.profile_image:
+            old_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.profile_image)
+            if os.path.exists(old_path):
+                try:
+                    os.remove(old_path)
+                except:
+                    pass
+            user.profile_image = None
 
     # Ganti Password logic
     if new_password:

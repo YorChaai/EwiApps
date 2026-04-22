@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/notification_provider.dart';
 import '../models/notification_model.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
 
 class NotificationBellIcon extends StatefulWidget {
@@ -285,6 +286,7 @@ class _NotificationBellIconState extends State<NotificationBellIcon> {
   ) {
     final now = DateTime.now();
     final notifTime = notification.createdAt;
+    final isUnread = !notification.readStatus;
 
     String timeText;
     if (now.difference(notifTime).inMinutes < 1) {
@@ -299,103 +301,173 @@ class _NotificationBellIconState extends State<NotificationBellIcon> {
       timeText = '$day/$month/${notifTime.year}';
     }
 
+    // Determine Icon based on target type
+    IconData typeIcon;
+    Color typeColor;
+    switch (notification.targetType.toLowerCase()) {
+      case 'advance':
+        typeIcon = Icons.payments_rounded;
+        typeColor = Colors.teal;
+        break;
+      case 'settlement':
+        typeIcon = Icons.receipt_long_rounded;
+        typeColor = Colors.blue;
+        break;
+      case 'category':
+        typeIcon = Icons.category_rounded;
+        typeColor = Colors.orange;
+        break;
+      case 'user':
+        typeIcon = Icons.person_add_rounded;
+        typeColor = Colors.purple;
+        break;
+      default:
+        typeIcon = Icons.notifications_rounded;
+        typeColor = AppTheme.accent;
+    }
+
     return Container(
       decoration: BoxDecoration(
-        color: !notification.readStatus
+        color: isUnread
             ? (_isDark(context)
-                  ? const Color(0xFF2D2D44)
-                  : AppTheme.lightSurface)
+                ? const Color(0xFF232335)
+                : AppTheme.lightSurface.withValues(alpha: 0.8))
             : Colors.transparent,
       ),
       child: Column(
         children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            dense: true,
-            leading: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: !notification.readStatus
-                    ? Colors.blue
-                    : Colors.transparent,
-              ),
-            ),
-            title: Text(
-              notification.message.isEmpty
-                  ? 'Notifikasi'
-                  : notification.message,
-              style: TextStyle(
-                color: _titleColor(context),
-                fontSize: 14,
-                fontWeight: !notification.readStatus
-                    ? FontWeight.w600
-                    : FontWeight.normal,
-              ),
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: Stack(
                 children: [
-                  Text(
-                    timeText,
-                    style: TextStyle(color: _bodyColor(context), fontSize: 12),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: typeColor.withValues(alpha: 0.15),
+                    backgroundImage: notification.actorProfileImage != null
+                        ? NetworkImage('${ApiService.baseUrl}/uploads/${notification.actorProfileImage}')
+                        : null,
+                    child: notification.actorProfileImage == null
+                        ? Text(
+                            notification.actorName.isNotEmpty
+                                ? notification.actorName[0].toUpperCase()
+                                : 'S',
+                            style: TextStyle(
+                              color: typeColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          )
+                        : null,
                   ),
-                  if (_hasNavigablePath(notification)) ...[
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          _openNotificationTarget(notification, provider),
-                      icon: const Icon(Icons.open_in_new_rounded, size: 15),
-                      label: Text(_openButtonLabel(notification)),
-                      style: OutlinedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: _cardColor(context),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: _cardColor(context), width: 1),
+                      ),
+                      child: Icon(typeIcon, size: 10, color: typeColor),
+                    ),
+                  ),
+                  if (isUnread)
+                    Positioned(
+                      left: 0,
+                      top: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _cardColor(context), width: 2),
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
-            ),
-            trailing: PopupMenuButton(
-              itemBuilder: (context) => [
-                if (!notification.readStatus)
+              title: RichText(
+                text: TextSpan(
+                  style: TextStyle(
+                    color: _titleColor(context),
+                    fontSize: 13.5,
+                    height: 1.3,
+                    fontFamily: 'Inter',
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '${notification.actorName} ',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(text: notification.message),
+                  ],
+                ),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      timeText,
+                      style: TextStyle(color: _bodyColor(context), fontSize: 11),
+                    ),
+                    if (_hasNavigablePath(notification)) ...[
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 32,
+                        child: OutlinedButton(
+                          onPressed: () => _openNotificationTarget(notification, provider),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: typeColor.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          ),
+                          child: Text(
+                            _openButtonLabel(notification),
+                            style: TextStyle(fontSize: 11, color: typeColor, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              trailing: PopupMenuButton(
+                itemBuilder: (context) => [
+                  if (isUnread)
+                    PopupMenuItem(
+                      child: const Text('Tandai Dibaca', style: TextStyle(fontSize: 13)),
+                      onTap: () {
+                        Future.delayed(Duration.zero, () async {
+                          await provider.markAsRead(notification.id);
+                        });
+                      },
+                    ),
                   PopupMenuItem(
-                    child: const Text('Tandai Dibaca'),
+                    child: const Text('Hapus', style: TextStyle(fontSize: 13)),
                     onTap: () {
                       Future.delayed(Duration.zero, () async {
-                        await provider.markAsRead(notification.id);
+                        await provider.deleteNotification(notification.id);
                       });
                     },
                   ),
-                PopupMenuItem(
-                  child: const Text('Hapus'),
-                  onTap: () {
-                    Future.delayed(Duration.zero, () async {
-                      await provider.deleteNotification(notification.id);
-                    });
-                  },
+                ],
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Icon(Icons.more_horiz_rounded, size: 18, color: _bodyColor(context).withValues(alpha: 0.6)),
                 ),
-              ],
-              child: Icon(
-                Icons.more_vert,
-                size: 16,
-                color: _bodyColor(context),
               ),
+              onTap: () {
+                _openNotificationTarget(notification, provider);
+              },
             ),
-            onTap: () {
-              _openNotificationTarget(notification, provider);
-            },
           ),
-          Divider(height: 1, thickness: 0.5, color: _dividerColor(context)),
+          Divider(height: 1, thickness: 0.5, color: _dividerColor(context).withValues(alpha: 0.5)),
         ],
       ),
     );
