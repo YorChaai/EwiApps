@@ -1708,47 +1708,32 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             ws_lr.row_dimensions[r].height = 15
 
             # Determine Top/Bottom borders based on style
-            # Header has top border, total has top+bottom, final has top+double bottom
             top_s = s_thin if style_type in ('total', 'final', 'header') else s_none
             bottom_s = s_thin if style_type == 'total' else (s_double if style_type == 'final' else s_none)
 
-            # Apply borders - ✅ CRITICAL: Column B right and C left are NONE to hide the separator
-            # Column B (2): Left border only
+            # ✅ UNIFIED BOX LOGIC: Remove all internal vertical borders for a cleaner look
+            # Laba Rugi Side (B-E)
             ws_lr.cell(row=r, column=2).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
-
-            # Column C (3): Right border only (separates from Rp)
-            ws_lr.cell(row=r, column=3).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
-
-            # Column D (4): NO Right border (unified box with Amount)
-            ws_lr.cell(row=r, column=4).border = Border(right=s_none, top=top_s, bottom=bottom_s)
-
-            # Column E (5): Right border only (Table edge)
+            ws_lr.cell(row=r, column=3).border = Border(top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=4).border = Border(top=top_s, bottom=bottom_s)
             ws_lr.cell(row=r, column=5).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
 
-            # --- NERACA SIDE (Columns G-J / 7-10) ---
-            # Apply similar "unified box" logic for the right side
-            # Column G (7): Left border only
+            # Neraca Side (G-J)
             ws_lr.cell(row=r, column=7).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
-
-            # Column H (8): Right border only (Separates Text from Rp)
-            ws_lr.cell(row=r, column=8).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
-
-            # Column I (9): NO Right border (Unified box with Amount)
-            ws_lr.cell(row=r, column=9).border = Border(right=s_none, top=top_s, bottom=bottom_s)
-
-            # Column J (10): Right border only (Table edge)
+            ws_lr.cell(row=r, column=8).border = Border(top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=9).border = Border(top=top_s, bottom=bottom_s)
             ws_lr.cell(row=r, column=10).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
 
             # Alignment for Laba Rugi
             ws_lr.cell(row=r, column=2).alignment = Alignment(horizontal='left', vertical='center')
             ws_lr.cell(row=r, column=3).alignment = Alignment(horizontal='left', vertical='center')
-            ws_lr.cell(row=r, column=4).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=4).alignment = Alignment(horizontal='right', vertical='center') # Rp closer to number
             ws_lr.cell(row=r, column=5).alignment = Alignment(horizontal='right', vertical='center')
 
             # Alignment for Neraca
             ws_lr.cell(row=r, column=7).alignment = Alignment(horizontal='left', vertical='center')
             ws_lr.cell(row=r, column=8).alignment = Alignment(horizontal='left', vertical='center')
-            ws_lr.cell(row=r, column=9).alignment = Alignment(horizontal='left', vertical='center')
+            ws_lr.cell(row=r, column=9).alignment = Alignment(horizontal='right', vertical='center') # Rp closer to number
             ws_lr.cell(row=r, column=10).alignment = Alignment(horizontal='right', vertical='center')
 
             # Font - Header and Totals are Bold
@@ -1756,12 +1741,23 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             font = Font(bold=is_bold, size=11, name='Arial Narrow')
             for col in list(range(2, 6)) + list(range(7, 11)):
                 ws_lr.cell(row=r, column=col).font = font
-                # ✅ ENSURE NO FILL (Remove Green)
                 ws_lr.cell(row=r, column=col).fill = PatternFill(fill_type=None)
 
             # Number Format for Value Columns (E and J)
             ws_lr.cell(row=r, column=5).number_format = '#,##0'
             ws_lr.cell(row=r, column=10).number_format = '#,##0'
+
+        # ✅ COMPACT COLUMN WIDTHS: Lock widths to match Gambar 2 proportions
+        ws_lr.column_dimensions['A'].width = 2
+        ws_lr.column_dimensions['B'].width = 5  # Indent col
+        ws_lr.column_dimensions['C'].width = 30 # Label col
+        ws_lr.column_dimensions['D'].width = 4  # Rp col
+        ws_lr.column_dimensions['E'].width = 18 # Amount col
+        ws_lr.column_dimensions['F'].width = 3  # Middle spacer
+        ws_lr.column_dimensions['G'].width = 5  # Indent col
+        ws_lr.column_dimensions['H'].width = 30 # Label col
+        ws_lr.column_dimensions['I'].width = 4  # Rp col
+        ws_lr.column_dimensions['J'].width = 18 # Amount col
 
         # Just clean up old metadata values if they somehow persist
         ws_lr['A3'] = None
