@@ -1099,9 +1099,7 @@ def _render_expense_section_from_data(
                         cell.font = cell.font.copy(bold=False)
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                date_val = _format_date_dd_mmm_yy(expense.get('date'))
-                _safe_set_cell(ws, row_cursor, 2, date_val)
-                ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
+                _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
@@ -1130,9 +1128,7 @@ def _render_expense_section_from_data(
                     cell.font = cell.font.copy(bold=False)
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-            date_val = _format_date_dd_mmm_yy(expense.get('date'))
-            _safe_set_cell(ws, row_cursor, 2, date_val)
-            ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
+            _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
             _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
@@ -1236,9 +1232,7 @@ def _render_expense_section_from_data(
                             cell.font = cell.font.copy(bold=False)
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                    date_val = _format_date_dd_mmm_yy(expense.get('date'))
-                    _safe_set_cell(ws, row_cursor, 2, date_val)
-                    ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
+                    _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
                     _safe_set_cell(ws, row_cursor, 3, seq_counter)
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
@@ -2367,7 +2361,7 @@ def get_annual_report_excel():
             else:
                 remark = remark_from_db
 
-            _safe_set_cell(ws, row_cursor, COL_DATE, _format_date_dd_mmm_yy(r.get('invoice_date')))
+            _set_date_with_format(ws, row_cursor, COL_DATE, r.get('invoice_date'))
             _safe_set_cell(ws, row_cursor, COL_SEQ, idx)
 
             description = r.get('description') or ''
@@ -2386,8 +2380,7 @@ def get_annual_report_excel():
                 _safe_set_cell(ws, row_cursor, COL_INVOICE_NUMBER, '')
 
             _safe_set_cell(ws, row_cursor, COL_CLIENT, r.get('client') or '')
-            _safe_set_cell(ws, row_cursor, COL_RECEIVE_DATE, _format_date_dd_mmm_yy(r.get('receive_date')))
-            ws.cell(row=row_cursor, column=COL_RECEIVE_DATE).number_format = 'dd-mmm-yy'
+            _set_date_with_format(ws, row_cursor, COL_RECEIVE_DATE, r.get('receive_date'))
             _safe_set_number(ws, row_cursor, COL_AMOUNT_RECEIVED, amount_received)
             _safe_set_number(ws, row_cursor, COL_PPN, p_ppn)
             _safe_set_number(ws, row_cursor, COL_PPH_23, p_pph23)
@@ -2507,7 +2500,7 @@ def get_annual_report_excel():
     for idx, t in enumerate(taxes[:10]):
         row = tax_start_row + idx
 
-        _safe_set_cell(ws, row, 2, _format_date_dd_mmm_yy(t.get('date')))
+        _set_date_with_format(ws, row, 2, t.get('date'))
         _safe_set_cell(ws, row, 3, idx + 1)
 
         # ✅ MERGE D:E for TAX description using helper

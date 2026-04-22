@@ -392,9 +392,26 @@ def _parse_iso_date(date_str):
     if not date_str:
         return None
     try:
-        return datetime.strptime(date_str, '%Y-%m-%d').date()
+        # Check if it's already a date object
+        if hasattr(date_str, 'strftime'):
+            return date_str
+        return datetime.strptime(str(date_str)[:10], '%Y-%m-%d').date()
     except ValueError:
         return None
+
+
+def _parse_to_date_obj(value):
+    """Convert various date formats to a datetime or date object for openpyxl."""
+    if value is None:
+        return None
+    if hasattr(value, 'strftime'):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.strptime(value[:10], '%Y-%m-%d')
+        except ValueError:
+            pass
+    return value
 
 
 def _format_date_dd_mmm_yy(date_value) -> str:
@@ -442,14 +459,20 @@ def _set_formula_with_format(ws, row: int, col: int, formula: str, number_format
 
 def _set_date_with_format(ws, row: int, col: int, date_value, date_format: str = 'dd-mmm-yy') -> None:
     """
-    Set date value with format in one call.
-    Eliminates redundancy of setting date and format separately.
+    Set date value as a real date object with number format.
+    Prevents "2-digit year" string warnings in Excel.
     """
     cell = ws.cell(row=row, column=col)
     if isinstance(cell, MergedCell):
         return
-    cell.value = _format_date_dd_mmm_yy(date_value)
-    cell.number_format = date_format
+    
+    date_obj = _parse_to_date_obj(date_value)
+    if date_obj:
+        cell.value = date_obj
+        cell.number_format = date_format
+    else:
+        # Fallback to whatever was provided
+        cell.value = date_value
 
 
 def _as_iso_date(value):

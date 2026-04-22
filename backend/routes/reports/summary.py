@@ -388,7 +388,7 @@ def generate_excel_advance_report():
     for cell in ws[1]: cell.font = Font(bold=True)
     for advance in approved_advances:
         row_data = [None] * len(headers)
-        row_data[0] = advance.approved_at.strftime('%Y-%m-%d') if advance.approved_at else ''
+        row_data[0] = advance.approved_at if advance.approved_at else None
         row_data[1] = advance.description; row_data[2] = advance.requester.full_name if advance.requester else ''; row_data[3] = advance.title
         cat_sums = {}
         for item in advance.items:
