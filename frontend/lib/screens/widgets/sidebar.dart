@@ -156,7 +156,6 @@ class DashboardSidebar extends StatelessWidget {
                     expanded: _showFull,
                     badge: pendingSettlements,
                   ),
-                  const SizedBox(height: 4),
                   _SidebarNavItem(
                     icon: Icons.money_rounded,
                     label: 'Kasbon',
@@ -167,7 +166,6 @@ class DashboardSidebar extends StatelessWidget {
                     badge: pendingAdvances,
                   ),
                   if (isManager) ...[
-                    const SizedBox(height: 4),
                     _SidebarNavItem(
                       icon: Icons.bar_chart_rounded,
                       label: 'Laporan',
@@ -176,7 +174,6 @@ class DashboardSidebar extends StatelessWidget {
                       onTap: () => onNavTap(2),
                       expanded: _showFull,
                     ),
-                    const SizedBox(height: 4),
                     _SidebarNavItem(
                       icon: Icons.category_rounded,
                       label: 'Kategori',
@@ -187,7 +184,6 @@ class DashboardSidebar extends StatelessWidget {
                     ),
                   ],
                   // Settings untuk semua role
-                  const SizedBox(height: 4),
                   _SidebarNavItem(
                     icon: Icons.settings_rounded,
                     label: 'Pengaturan',
@@ -269,12 +265,16 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 
     // Responsive sizing untuk HP
     final isCompact = ResponsiveLayout.isCompactPhone(context);
-    final iconBoxSize = widget.expanded ? (isCompact ? 36.0 : 40.0) : (isCompact ? 42.0 : 48.0);
+    final iconBoxSize = widget.expanded
+        ? (isCompact ? 36.0 : 40.0)
+        : (isCompact ? 42.0 : 48.0);
     final iconSize = isCompact ? 18.0 : (widget.expanded ? 20.0 : 22.0);
     final labelFontSize = isCompact ? 12.5 : 13.5;
     final subtitleFontSize = isCompact ? 10.0 : 11.0;
     final horizontalPadding = isCompact ? 8.0 : 12.0;
-    final verticalPadding = widget.expanded ? (isCompact ? 9.0 : 11.0) : (isCompact ? 8.0 : 10.0);
+    final verticalPadding = widget.expanded
+        ? (isCompact ? 9.0 : 11.0)
+        : (isCompact ? 8.0 : 10.0);
 
     final bgColor = widget.selected
         ? AppTheme.primary.withValues(alpha: 0.14)
@@ -283,8 +283,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
         : Colors.transparent;
 
     // Use shorter duration for hover exit to feel instant
-    final duration = _hovering 
-        ? const Duration(milliseconds: 150) 
+    final duration = _hovering
+        ? const Duration(milliseconds: 150)
         : const Duration(milliseconds: 0);
 
     final iconColor = widget.selected ? AppTheme.primary : textSecondary;
@@ -293,100 +293,103 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(isCompact ? 10 : 14),
-          onTap: widget.onTap,
-          hoverColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-          child: AnimatedContainer(
-            duration: duration,
-            curve: Curves.easeOut,
-            padding: EdgeInsets.symmetric(
-              horizontal: widget.expanded ? horizontalPadding : 0,
-              vertical: verticalPadding,
-            ),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(isCompact ? 10 : 14),
-              border: Border.all(
-                color: widget.selected
-                    ? AppTheme.primary.withValues(alpha: 0.25)
-                    : Colors.transparent,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 2), // The 'hold' effect gap
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(isCompact ? 10 : 14),
+            onTap: widget.onTap,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            child: AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOut,
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.expanded ? horizontalPadding : 0,
+                vertical: verticalPadding,
               ),
-            ),
-            child: widget.expanded
-                ? Row(
-                    children: [
-                      // icon box
-                      Container(
-                        width: iconBoxSize,
-                        height: iconBoxSize,
-                        decoration: BoxDecoration(
-                          color: widget.selected
-                              ? AppTheme.primary.withValues(alpha: 0.14)
-                              : surfaceColor,
-                          borderRadius: BorderRadius.circular(isCompact ? 10 : 12),
-                        ),
-                        child: Icon(widget.icon, color: iconColor, size: iconSize),
-                      ),
-                      SizedBox(width: isCompact ? 8 : 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: labelFontSize,
-                                fontWeight: widget.selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: textColor,
-                              ),
-                            ),
-                            SizedBox(height: isCompact ? 1 : 2),
-                            Text(
-                              widget.subtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: subtitleFontSize,
-                                color: textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (widget.badge > 0) ...[
-                        SizedBox(width: isCompact ? 4 : 6),
-                        _BadgePill(count: widget.badge, isCompact: isCompact),
-                      ],
-                    ],
-                  )
-                : Center(
-                    child: Stack(
-                      clipBehavior: Clip.none,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(isCompact ? 10 : 14),
+                border: Border.all(
+                  color: widget.selected
+                      ? AppTheme.primary.withValues(alpha: 0.25)
+                      : Colors.transparent,
+                ),
+              ),
+              child: widget.expanded
+                  ? Row(
                       children: [
+                        // icon box
                         Container(
                           width: iconBoxSize,
                           height: iconBoxSize,
                           decoration: BoxDecoration(
                             color: widget.selected
                                 ? AppTheme.primary.withValues(alpha: 0.14)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(isCompact ? 12 : 14),
+                                : surfaceColor,
+                            borderRadius: BorderRadius.circular(isCompact ? 10 : 12),
                           ),
                           child: Icon(widget.icon, color: iconColor, size: iconSize),
                         ),
-                        if (widget.badge > 0)
-                          Positioned(top: -2, right: -2, child: _BadgeDot()),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: labelFontSize,
+                                  fontWeight: widget.selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: textColor,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: subtitleFontSize,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (widget.badge > 0) ...[
+                          const SizedBox(width: 6),
+                          _BadgePill(count: widget.badge, isCompact: isCompact),
+                        ],
                       ],
+                    )
+                  : Center(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            width: iconBoxSize,
+                            height: iconBoxSize,
+                            decoration: BoxDecoration(
+                              color: widget.selected
+                                  ? AppTheme.primary.withValues(alpha: 0.14)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(isCompact ? 12 : 14),
+                            ),
+                            child: Icon(widget.icon, color: iconColor, size: iconSize),
+                          ),
+                          if (widget.badge > 0)
+                            Positioned(top: -2, right: -2, child: _BadgeDot()),
+                        ],
+                      ),
                     ),
-                  ),
+            ),
           ),
         ),
       ),
@@ -448,17 +451,19 @@ class _ExpandedUserPanel extends StatelessWidget {
               CircleAvatar(
                 radius: 18,
                 backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
-                backgroundImage: profileImageUrl != null ? NetworkImage(profileImageUrl!) : null,
+                backgroundImage: profileImageUrl != null
+                    ? NetworkImage(profileImageUrl!)
+                    : null,
                 child: profileImageUrl == null
-                  ? Text(
-                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    )
-                  : null,
+                    ? Text(
+                        fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -540,17 +545,19 @@ class _MiniUserPanel extends StatelessWidget {
             child: CircleAvatar(
               radius: 18,
               backgroundColor: AppTheme.primary.withValues(alpha: 0.18),
-              backgroundImage: profileImageUrl != null ? NetworkImage(profileImageUrl!) : null,
+              backgroundImage: profileImageUrl != null
+                  ? NetworkImage(profileImageUrl!)
+                  : null,
               child: profileImageUrl == null
-                ? Text(
-                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: AppTheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  )
-                : null,
+                  ? Text(
+                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    )
+                  : null,
             ),
           ),
           const SizedBox(height: 8),
@@ -600,7 +607,10 @@ class _BadgePill extends StatelessWidget {
     final borderRadius = isCompact ? 8.0 : 10.0;
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: paddingHorizontal, vertical: paddingVertical),
+      padding: EdgeInsets.symmetric(
+        horizontal: paddingHorizontal,
+        vertical: paddingVertical,
+      ),
       decoration: BoxDecoration(
         color: Colors.redAccent,
         borderRadius: BorderRadius.circular(borderRadius),

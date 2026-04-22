@@ -1298,6 +1298,37 @@ class ApiService {
     return _handleResponse(res);
   }
 
+  // database management
+
+  Future<Map<String, dynamic>> exportDatabase() async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/settings/db/export'),
+      headers: _authHeaders,
+    );
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> importDatabasePreview(String filePath) async {
+    var request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/settings/db/import-preview'),
+    );
+    request.headers.addAll(_authHeaders);
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final streamedRes = await request.send();
+    final res = await http.Response.fromStream(streamedRes);
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> confirmImportDatabase() async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/settings/db/import-confirm'),
+      headers: _authHeaders,
+    );
+    return _handleResponse(res);
+  }
+
   Future<List<int>> getAnnualReportPdf({int? year}) async {
     String url = '$baseUrl/reports/annual/pdf';
     if (year != null) {

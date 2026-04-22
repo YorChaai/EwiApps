@@ -287,8 +287,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         aSub,
       ).compareTo(_subcategorySortBucket(bSub));
       if (subBucketCmp != 0) return subBucketCmp;
-      if (aSub.toLowerCase() != bSub.toLowerCase())
+      if (aSub.toLowerCase() != bSub.toLowerCase()) {
         return aSub.toLowerCase().compareTo(bSub.toLowerCase());
+      }
       final aBatch = _isBatchSettlement(af);
       final bBatch = _isBatchSettlement(bf);
       if (aBatch != bBatch) return aBatch ? 1 : -1;
@@ -324,8 +325,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       final catName = (_categories[i]['name'] ?? '').toString().toLowerCase();
       if (catName == targetName ||
           catName.contains(targetName) ||
-          targetName.contains(catName))
+          targetName.contains(catName)) {
         return i;
+      }
     }
     return 0;
   }
