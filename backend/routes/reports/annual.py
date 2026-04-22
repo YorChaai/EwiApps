@@ -13,7 +13,8 @@ from flask import jsonify, send_file, current_app, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
-from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.styles import Font, Alignment, Border, Side, PatternFill, Color
+from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -239,6 +240,29 @@ def _copy_template_row(ws, source_row, target_row, start_col=2, end_col=17, incl
 
 def _sum_sheet_column_formula(sheet_ref, column_letter, start_row, end_row):
     return f'=SUM({sheet_ref}!{column_letter}{start_row}:{column_letter}{end_row})'
+
+
+def _to_float(value, default=0.0):
+    """Converts a value to float safely."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+def _add_image_to_sheet(ws, img_path, anchor, width=None, height=None):
+    """Safely add an image to an openpyxl worksheet."""
+    if not os.path.exists(img_path):
+        logger.warning(f"Image not found for Excel: {img_path}")
+        return
+    try:
+        img = OpenpyxlImage(img_path)
+        if width: img.width = width
+        if height: img.height = height
+        ws.add_image(img, anchor)
+    except Exception as e:
+        logger.error(f"Failed to add image {img_path} to Excel: {e}")
 
 
 def _is_true(value):
@@ -1747,17 +1771,25 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             ws_lr.cell(row=r, column=5).number_format = '#,##0'
             ws_lr.cell(row=r, column=10).number_format = '#,##0'
 
-        # ✅ COMPACT COLUMN WIDTHS: Lock widths to match Gambar 2 proportions
-        ws_lr.column_dimensions['A'].width = 2
-        ws_lr.column_dimensions['B'].width = 5  # Indent col
-        ws_lr.column_dimensions['C'].width = 30 # Label col
-        ws_lr.column_dimensions['D'].width = 4  # Rp col
-        ws_lr.column_dimensions['E'].width = 18 # Amount col
-        ws_lr.column_dimensions['F'].width = 3  # Middle spacer
-        ws_lr.column_dimensions['G'].width = 5  # Indent col
-        ws_lr.column_dimensions['H'].width = 30 # Label col
-        ws_lr.column_dimensions['I'].width = 4  # Rp col
-        ws_lr.column_dimensions['J'].width = 18 # Amount col
+        # ✅ EXACT ORIGINAL PROPORTIONS: Match Gambar 2 (from 2024 backup template)
+        # Row Heights for the header gap
+        ws_lr.row_dimensions[1].height = 15.0
+        ws_lr.row_dimensions[2].height = 37.25 # Logo area
+        ws_lr.row_dimensions[3].height = 33.6  # PT. EXSPAN header
+        ws_lr.row_dimensions[4].height = 20.45 # Title row
+        ws_lr.row_dimensions[5].height = 6.0   # Small gap before table
+
+        # Column Widths
+        ws_lr.column_dimensions['A'].width = 1.13
+        ws_lr.column_dimensions['B'].width = 5.53  # Indent col
+        ws_lr.column_dimensions['C'].width = 38.33 # Label col
+        ws_lr.column_dimensions['D'].width = 3.66  # Rp col
+        ws_lr.column_dimensions['E'].width = 30.13 # Amount col
+        ws_lr.column_dimensions['F'].width = 1.13  # Middle spacer
+        ws_lr.column_dimensions['G'].width = 5.53  # Indent col
+        ws_lr.column_dimensions['H'].width = 38.33 # Label col
+        ws_lr.column_dimensions['I'].width = 3.66  # Rp col
+        ws_lr.column_dimensions['J'].width = 30.13 # Amount col
 
         # Just clean up old metadata values if they somehow persist
         ws_lr['A3'] = None
@@ -1953,14 +1985,43 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         # Place signature below the table
         last_row = max(row + 4, 52)
+        sig_name_row = last_row
+        sig_title_row = last_row + 1
 
-        ws_lr[f'C{last_row}'] = 'Direktur'
-        ws_lr[f'C{last_row}'].font = Font(bold=True)
-        ws_lr[f'C{last_row}'].alignment = Alignment(horizontal='center')
+        # ✅ ALIGNED BRANDING & MERGED SIGNATURES
+        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+        profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
-        ws_lr[f'H{last_row}'] = 'Direktur'
-        ws_lr[f'H{last_row}'].font = Font(bold=True)
-        ws_lr[f'H{last_row}'].alignment = Alignment(horizontal='center')
+        # Top Logos - Enlarged to ~6.5cm (approx 250 pixels)
+        _add_image_to_sheet(ws_lr, logo_path, 'D1', width=250, height=75)
+        _add_image_to_sheet(ws_lr, logo_path, 'I1', width=250, height=75)
+
+        # Left Side Signature (Merge B-E and Center)
+        ws_lr.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
+        ws_lr[f'B{sig_name_row}'] = 'Nama Lengkap'
+        ws_lr[f'B{sig_name_row}'].font = Font(bold=True, underline='single')
+        ws_lr[f'B{sig_name_row}'].alignment = Alignment(horizontal='center')
+
+        ws_lr.merge_cells(f'B{sig_title_row}:E{sig_title_row}')
+        ws_lr[f'B{sig_title_row}'] = 'Direktur'
+        ws_lr[f'B{sig_title_row}'].font = Font(bold=True)
+        ws_lr[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
+
+        # Right Side Signature (Merge G-J and Center)
+        ws_lr.merge_cells(f'G{sig_name_row}:J{sig_name_row}')
+        ws_lr[f'G{sig_name_row}'] = 'Nama Lengkap'
+        ws_lr[f'G{sig_name_row}'].font = Font(bold=True, underline='single')
+        ws_lr[f'G{sig_name_row}'].alignment = Alignment(horizontal='center')
+
+        ws_lr.merge_cells(f'G{sig_title_row}:J{sig_title_row}')
+        ws_lr[f'G{sig_title_row}'] = 'Direktur'
+        ws_lr[f'G{sig_title_row}'].font = Font(bold=True)
+        ws_lr[f'G{sig_title_row}'].alignment = Alignment(horizontal='center')
+
+        # Bottom Footers - Mepet below Direktur
+        footer_row = sig_title_row + 1
+        _add_image_to_sheet(ws_lr, profile_path, f'B{footer_row}', width=550, height=45)
+        _add_image_to_sheet(ws_lr, profile_path, f'G{footer_row}', width=550, height=45)
 
         # input dan formula neraca
         ws_lr['J10'] = opening_cash_balance
@@ -2660,6 +2721,31 @@ def get_annual_report_excel():
     logger.debug(f'Rendering Table 3 (Expenses) starting at row {expense_start_row}')
     total_row = _render_expense_section_from_data(ws, expenses, cat_names, category_by_id_map, year, start_row=expense_start_row)
     logger.debug(f'Table 3 rendered up to row {total_row}')
+
+    # ✅ ALIGNED BRANDING & MERGED SIGNATURES
+    logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+    profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
+
+    # Top Logo - Enlarged to ~6.5cm (approx 250 pixels)
+    _add_image_to_sheet(ws, logo_path, 'K2', width=250, height=75)
+
+    # Signature & Footer at the bottom of Table 3
+    sig_name_row = total_row + 4
+    sig_title_row = total_row + 5
+    
+    ws.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
+    ws[f'B{sig_name_row}'] = 'Nama Lengkap'
+    ws[f'B{sig_name_row}'].font = Font(bold=True, underline='single')
+    ws[f'B{sig_name_row}'].alignment = Alignment(horizontal='center')
+    
+    ws.merge_cells(f'B{sig_title_row}:E{sig_title_row}')
+    ws[f'B{sig_title_row}'] = 'Direktur'
+    ws[f'B{sig_title_row}'].font = Font(bold=True)
+    ws[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
+    
+    footer_row = sig_title_row + 2
+    # Width 550 to span the table width edge-to-edge
+    _add_image_to_sheet(ws, profile_path, f'B{footer_row}', width=550, height=45)
 
     # DO NOT REMOVE TABLES - Keep template structure intact
     logger.debug('Keeping Excel tables for proper Alt+A behavior')
