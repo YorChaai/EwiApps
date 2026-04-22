@@ -81,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen>
             labelText: 'API Base URL',
             hintText: 'http://192.168.1.8:5000/api',
           ),
-          style: const TextStyle(color: AppTheme.textPrimary),
+          style: TextStyle(color: _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
         ),
         actions: [
           TextButton(
@@ -673,12 +673,14 @@ class _LoginHintCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 10 : 12),
       decoration: BoxDecoration(
-        color: AppTheme.surface,
+        color: isDark ? AppTheme.surface : AppTheme.lightSurface,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isDark ? Colors.transparent : AppTheme.lightDivider),
       ),
       child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,

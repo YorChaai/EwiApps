@@ -95,22 +95,24 @@ class DashboardSidebar extends StatelessWidget {
                       ),
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Row(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        AppBrandLogo(size: 30, padding: 5),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'ExspanApp',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
+                        const AppBrandLogo(size: 30, padding: 5),
+                        const SizedBox(width: 12),
+                        if (_showFull)
+                          const Expanded(
+                            child: Text(
+                              'ExspanApp',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),

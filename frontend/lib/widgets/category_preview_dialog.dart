@@ -88,12 +88,12 @@ class _CategoryPreviewDialogState extends State<CategoryPreviewDialog> {
                       ),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: surfaceColor,
+                          color: isDark ? surfaceColor : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: isPending
                                 ? AppTheme.warning.withValues(alpha: 0.3)
-                                : Colors.transparent,
+                                : (isDark ? Colors.transparent : AppTheme.lightDivider),
                           ),
                         ),
                         child: ExpansionTile(

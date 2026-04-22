@@ -430,6 +430,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      constraints: const BoxConstraints(minWidth: 150),
       decoration: BoxDecoration(
         color: _surfaceColor(context),
         borderRadius: BorderRadius.circular(12),
@@ -447,31 +448,28 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: SizedBox(
-          width: 80,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                padding: EdgeInsets.zero,
-                icon: Icon(Icons.edit_rounded, size: 18, color: AppTheme.accent),
-                tooltip: 'Edit',
-                onPressed: () => _showEditCategoryDialog(context, cat),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.edit_rounded, size: 18, color: AppTheme.accent),
+              tooltip: 'Edit',
+              onPressed: () => _showEditCategoryDialog(context, cat),
+            ),
+            IconButton(
+              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+              padding: EdgeInsets.zero,
+              icon: Icon(
+                Icons.delete_outline,
+                size: 18,
+                color: AppTheme.danger,
               ),
-              IconButton(
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                padding: EdgeInsets.zero,
-                icon: Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: AppTheme.danger,
-                ),
-                tooltip: 'Hapus',
-                onPressed: () => _deleteCategory(cat['id']),
-              ),
-            ],
-          ),
+              tooltip: 'Hapus',
+              onPressed: () => _deleteCategory(cat['id']),
+            ),
+          ],
         ),
         children: children
             .map<Widget>(

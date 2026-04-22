@@ -208,16 +208,16 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
               padding: const EdgeInsets.all(16),
               children: [
                 Card(
-                  color: AppTheme.card,
+                  color: _cardColor(context),
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Setting Neraca Tahunan',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: _textColor(context),
                             fontWeight: FontWeight.w700,
                             fontSize: 18,
                           ),

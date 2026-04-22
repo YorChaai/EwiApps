@@ -388,6 +388,8 @@ class _SettlementListViewState extends State<_SettlementListView> {
       context.isDark ? AppTheme.cream : AppTheme.lightTextPrimary;
   Color _bodyColorLocal(BuildContext context) =>
       context.isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+  Color _dividerColor(BuildContext context) =>
+      context.isDark ? AppTheme.divider : AppTheme.lightDivider;
   Color _primaryTextLocal(BuildContext context) =>
       context.isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
 
@@ -1179,7 +1181,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
       decoration: BoxDecoration(
         color: Colors.teal.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.teal.withValues(alpha: 0.25)),
+        border: Border.all(color: _dividerColor(context)),
       ),
       child: Row(
         children: [
@@ -1221,7 +1223,12 @@ class _SettlementListViewState extends State<_SettlementListView> {
         ],
       ),
     );
-    return isNarrow ? card : Row(children: [Expanded(child: card)]);
+
+    // Gunakan Row + Expanded hanya jika layar lebar (desktop) untuk memenuhi ruang horizontal
+    if (!isNarrow) {
+      return Row(children: [Expanded(child: card)]);
+    }
+    return card;
   }
 
   Future<void> _deleteSettlement(int id) async {

@@ -325,24 +325,26 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
         ? dividendDistributed / recipientCount
         : 0.0;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     Widget metric(String label, String value) {
       return Expanded(
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppTheme.surface,
+            color: isDark ? AppTheme.surface : AppTheme.lightSurface,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppTheme.divider),
+            border: Border.all(color: isDark ? AppTheme.divider : AppTheme.lightDivider),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: TextStyle(color: AppTheme.textSecondary)),
+              Text(label, style: TextStyle(color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary)),
               const SizedBox(height: 6),
               Text(
                 value,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : AppTheme.lightTextPrimary,
                   fontWeight: FontWeight.w700,
                   fontSize: 16,
                 ),
@@ -354,16 +356,16 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
     }
 
     return Card(
-      color: AppTheme.card,
+      color: isDark ? AppTheme.card : AppTheme.lightCard,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Hitung Dividen',
               style: TextStyle(
-                color: Colors.white,
+                color: isDark ? Colors.white : AppTheme.lightTextPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 18,
               ),

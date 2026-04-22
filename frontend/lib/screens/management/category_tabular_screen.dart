@@ -193,7 +193,7 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
       decoration: BoxDecoration(
         color: _cardColor(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _dividerColor(context).withValues(alpha: 0.5)),
+        border: Border.all(color: _dividerColor(context)),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

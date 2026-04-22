@@ -65,7 +65,7 @@ class AppTheme {
   static const Color lightCardHover = Color(0xFFF1F5F9);
   static const Color lightTextPrimary = Color(0xFF0F172A);
   static const Color lightTextSecondary = Color(0xFF475569);
-  static const Color lightDivider = Color(0xFFE2E8F0);
+  static const Color lightDivider = Color(0xFF718096); // Abu-abu gelap agar garis kotak sangat jelas di mode terang
 
   /// Helper untuk cek mobile
   static bool get isMobile => defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;

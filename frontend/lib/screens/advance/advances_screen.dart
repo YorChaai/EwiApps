@@ -35,6 +35,7 @@ class AdvancesScreenState extends State<AdvancesScreen> {
   Color _cardColor(BuildContext context) => context.isDark ? AppTheme.card : AppTheme.lightCard;
   Color _titleColor(BuildContext context) => context.isDark ? AppTheme.cream : AppTheme.lightTextPrimary;
   Color _bodyColor(BuildContext context) => context.isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+  Color _dividerColor(BuildContext context) => context.isDark ? AppTheme.divider : AppTheme.lightDivider;
   Color _primaryText(BuildContext context) => context.isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
 
   void _handleListScroll() {
@@ -401,31 +402,31 @@ class AdvancesScreenState extends State<AdvancesScreen> {
         children: [
           Row(children: [
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(auth.isManager ? 'Semua Kasbon' : 'Kasbon Saya', style: TextStyle(fontSize: useCompact ? 18 : (isNarrow ? 20 : 24), fontWeight: FontWeight.w700, color: _titleColor(context))),
+              Text(auth.isManager ? 'Semua Kasbon' : 'Kasbon Saya', style: TextStyle(fontSize: useCompact ? 18 : (isNarrow ? 20 : 24), fontWeight: FontWeight.bold, color: _titleColor(context))),
               Text('${prov.advances.length} total', style: TextStyle(color: _bodyColor(context), fontSize: useCompact ? 10 : 13)),
             ])),
             ElevatedButton.icon(
               onPressed: _selectionMode ? null : () => _showCreateDialog(context),
-              icon: Icon(Icons.add, size: useCompact ? 18 : 20),
-              label: Text(isNarrow ? 'Buat' : 'Buat Kasbon', style: TextStyle(fontSize: useCompact ? 13 : 14)),
+              icon: Icon(Icons.add, size: useCompact ? 16 : 20),
+              label: Text(isNarrow ? 'Buat' : 'Buat Kasbon', style: TextStyle(fontSize: useCompact ? 12 : 14)),
               style: ElevatedButton.styleFrom(
-                padding: useCompact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8) : null,
+                padding: useCompact ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : null,
                 minimumSize: useCompact ? const Size(0, 36) : null,
               ),
             ),
           ]),
-          SizedBox(height: useCompact ? 12 : 16),
+          SizedBox(height: useCompact ? 10 : 16),
           _buildYearSummaryCard(context, prov.reportYear == 0 ? DateTime.now().year : prov.reportYear, useCompact),
-          SizedBox(height: useCompact ? 12 : 16),
+          SizedBox(height: useCompact ? 10 : 16),
           TextField(
             controller: _searchCtrl,
             style: TextStyle(fontSize: useCompact ? 13 : 14),
             decoration: InputDecoration(
               isDense: useCompact,
               hintText: 'Cari kasbon...',
-              prefixIcon: Icon(Icons.search, size: useCompact ? 20 : 24),
-              contentPadding: useCompact ? const EdgeInsets.symmetric(vertical: 8) : null,
-              suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: Icon(Icons.clear, size: useCompact ? 18 : 20), onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); _reloadAdvances(); }) : null
+              prefixIcon: Icon(Icons.search, size: useCompact ? 18 : 24),
+              contentPadding: useCompact ? const EdgeInsets.symmetric(vertical: 6) : null,
+              suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: Icon(Icons.clear, size: useCompact ? 16 : 20), onPressed: () { _searchCtrl.clear(); setState(() => _searchQuery = ''); _reloadAdvances(); }) : null
             ),
             onChanged: (v) { setState(() => _searchQuery = v); _scheduleAdvanceReload(); }
           ),
@@ -481,9 +482,16 @@ class AdvancesScreenState extends State<AdvancesScreen> {
 
   Widget _buildYearSummaryCard(BuildContext context, int year, bool useCompact) {
     final total = _annualAdvanceTotal ?? 0;
-    return Container(
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 750;
+
+    final card = Container(
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: useCompact ? 8 : 14),
-      decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.teal.withValues(alpha: 0.25))),
+      decoration: BoxDecoration(
+        color: Colors.teal.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _dividerColor(context)),
+      ),
       child: Row(children: [
         Container(padding: EdgeInsets.all(useCompact ? 6 : 8), decoration: BoxDecoration(color: Colors.teal.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.account_balance_wallet_rounded, color: Colors.teal, size: useCompact ? 18 : 20)),
         SizedBox(width: useCompact ? 10 : 12),
@@ -493,6 +501,11 @@ class AdvancesScreenState extends State<AdvancesScreen> {
         ]),
       ]),
     );
+
+    if (!isNarrow) {
+      return Row(children: [Expanded(child: card)]);
+    }
+    return card;
   }
 
 }

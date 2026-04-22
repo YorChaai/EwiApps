@@ -53,12 +53,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
   Color _cardColor(BuildContext context) =>
       _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+  Color _creamColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _primaryText(BuildContext context) =>
+      _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+  Color _secondaryText(BuildContext context) =>
+      _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _bodyColor(BuildContext context) =>
       _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _titleColor(BuildContext context) =>
       _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
-  Color _creamColor(BuildContext context) =>
-      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _dividerColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
 
   void _handleMobilePageSelection(int index) {
     if (index == 1) {
@@ -482,7 +488,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
       ),
-      child: Text(text, style: TextStyle(color: AppTheme.cream)),
+      child: Text(text, style: TextStyle(color: _creamColor(context))),
     );
   }
 
@@ -800,8 +806,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                       ),
                       isExpanded: true,
-                      dropdownColor: AppTheme.card,
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      dropdownColor: _cardColor(ctx),
+                      style: TextStyle(color: _primaryText(ctx)),
                       initialValue: effectiveParentId,
                       items: categories.map((c) {
                         final isPending = c['status'] == 'pending';
@@ -810,7 +816,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           child: Text(
                             isPending ? '${c['name']} (Pending)' : c['name'],
                             style: TextStyle(
-                              color: isPending ? AppTheme.warning : null,
+                              color: isPending ? AppTheme.warning : _primaryText(ctx),
                             ),
                           ),
                         );
@@ -828,8 +834,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           children.isNotEmpty ? 'Pilih Sub Kategori:' : 'Hanya Kategori Utama',
-                          style: const TextStyle(
-                            color: AppTheme.textSecondary,
+                          style: TextStyle(
+                            color: _secondaryText(ctx),
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -842,7 +848,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.divider),
+                            border: Border.all(color: _dividerColor(ctx)),
                           ),
                           child: SingleChildScrollView(
                             child: Column(
@@ -861,7 +867,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                     style: TextStyle(
                                       color: isSelected
                                           ? AppTheme.primary
-                                          : (isPending ? AppTheme.warning : AppTheme.textPrimary),
+                                          : (isPending ? AppTheme.warning : _primaryText(ctx)),
                                       fontSize: 13,
                                     ),
                                   ),
@@ -937,7 +943,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     TextField(
                       controller: descCtrl,
                       decoration: const InputDecoration(labelText: 'Deskripsi'),
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: _primaryText(ctx)),
                       onChanged: (val) {
                         final lower = val.toLowerCase();
                         for (final p in categories) {
@@ -1056,9 +1062,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         labelText: 'Amount ($selectedCurrency)',
                         floatingLabelBehavior: FloatingLabelBehavior.always,
                         hintText: '10.000',
-                        hintStyle: const TextStyle(color: AppTheme.textSecondary),
+                        hintStyle: TextStyle(color: _secondaryText(ctx).withValues(alpha: 0.5)),
                       ),
-                      style: const TextStyle(color: AppTheme.textPrimary),
+                      style: TextStyle(color: _primaryText(ctx)),
                       keyboardType: TextInputType.number,
                       inputFormatters: [CurrencyInputFormatter()],
                     ),
@@ -1366,13 +1372,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             context: context,
             builder: (ctx) => AlertDialog(
               backgroundColor: _cardColor(ctx),
-              title: const Text(
+              title: Text(
                 'Hapus Kasbon Kosong?',
-                style: TextStyle(color: AppTheme.cream),
+                style: TextStyle(color: _creamColor(ctx)),
               ),
-              content: const Text(
+              content: Text(
                 'Kasbon ini belum memiliki item. Hapus kasbon kosong ini?',
-                style: TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _secondaryText(ctx)),
               ),
               actions: [
                 TextButton(
@@ -1594,7 +1600,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           adv != null
                               ? _displayAdvanceTitle(adv)
                               : 'Detail Kasbon',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: _creamColor(context),
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                         actions: [
@@ -1733,7 +1742,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     List<Map<String, dynamic>> items,
   ) {
     final approved = adv['approved_amount'] ?? 0;
-    final title = _displayAdvanceTitle(adv);
     final warnings = List<String>.from(adv['policy_warnings'] ?? []);
     final canEditItems =
         auth.user?['id'] == adv['user_id'] &&
@@ -1752,24 +1760,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!useCompact) ...[
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.cream,
-              ),
-            ),
-            if ((adv['description'] ?? '').toString().trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                adv['description'],
-                style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
-              ),
-            ],
-            const SizedBox(height: 20),
-          ],
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 650;
@@ -1875,7 +1865,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   Expanded(
                     child: Text(
                       adv['notes'],
-                      style: TextStyle(color: AppTheme.cream),
+                      style: TextStyle(color: _creamColor(context)),
                     ),
                   ),
                 ],
@@ -1887,12 +1877,12 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ...warnings.map(_buildWarningBox),
           ],
           const SizedBox(height: 28),
-          const Text(
+          Text(
             'Rincian Item Kasbon',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppTheme.cream,
+              color: _titleColor(context),
             ),
           ),
           const SizedBox(height: 16),
@@ -1982,7 +1972,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'No',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -1991,7 +1981,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Subkategori',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2000,7 +1990,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Tanggal',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2009,7 +1999,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Deskripsi',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2018,7 +2008,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Estimasi Biaya',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                       numeric: true,
@@ -2028,7 +2018,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Status',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2037,7 +2027,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Berkas',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2046,7 +2036,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         'Aksi',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.cream,
+                          color: _creamColor(context),
                         ),
                       ),
                     ),
@@ -2318,13 +2308,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
-        title: const Text(
+        title: Text(
           'Kembalikan ke Draft?',
-          style: TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(ctx)),
         ),
-        content: const Text(
+        content: Text(
           'Apakah Anda yakin ingin menarik kembali kasbon ini ke status Draft untuk melakukan perbaikan?',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: _secondaryText(ctx)),
         ),
         actions: [
           TextButton(
@@ -2380,9 +2370,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            title: const Text(
+            title: Text(
               'Tolak Item',
-              style: TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
               width: 500,
@@ -2644,11 +2634,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         backgroundColor: _cardColor(ctx),
         title: Text(
           'Hapus $count Item',
-          style: const TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(ctx)),
         ),
         content: Text(
           'Hapus $count item yang dipilih? Tindakan ini tidak bisa dibatalkan.',
-          style: const TextStyle(color: Colors.white70),
+          style: TextStyle(color: _secondaryText(ctx)),
         ),
         actions: [
           TextButton(
@@ -2953,7 +2943,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             )
           : Text(
               item['text'] ?? '',
-              style: const TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(context)),
             ),
       activeColor: AppTheme.success,
       checkColor: Colors.white,

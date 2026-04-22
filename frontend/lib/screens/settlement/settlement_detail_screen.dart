@@ -46,6 +46,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
   Color _surfaceColor(BuildContext context) => _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
   Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
   Color _creamColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _primaryText(BuildContext context) => _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+  Color _secondaryText(BuildContext context) => _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+  Color _dividerColor(BuildContext context) => _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
 
   @override
   void initState() {
@@ -409,13 +412,13 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             context: context,
             builder: (ctx) => AlertDialog(
               backgroundColor: _cardColor(ctx),
-              title: const Text(
+              title: Text(
                 'Hapus Settlement Kosong?',
-                style: TextStyle(color: AppTheme.cream),
+                style: TextStyle(color: _creamColor(ctx)),
               ),
-              content: const Text(
+              content: Text(
                 'Settlement ini belum memiliki expense. Hapus settlement kosong ini?',
-                style: TextStyle(color: AppTheme.textSecondary),
+                style: TextStyle(color: _secondaryText(ctx)),
               ),
               actions: [
                 TextButton(
@@ -526,7 +529,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               appBar: AppBar(
                       title: Text(
                         _displaySettlementTitle(s),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _creamColor(context),
+                        ),
                       ),
                       actions: [
                         if (_selectedExpenses.isNotEmpty)
@@ -797,11 +803,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 24),
           if (advanceSummary != null) ...[
+            const SizedBox(height: 16),
             Container(
               width: double.infinity,
-              margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppTheme.card,
@@ -829,10 +834,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             ),
           ],
           if (policyWarnings.isNotEmpty) ...[
+            const SizedBox(height: 16),
             ...policyWarnings.map(
               (warning) => Container(
                 width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: AppTheme.warning.withValues(alpha: 0.1),
@@ -841,11 +846,21 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     color: AppTheme.warning.withValues(alpha: 0.3),
                   ),
                 ),
-                child: Text(warning, style: TextStyle(color: AppTheme.cream)),
+                child: Text(warning, style: TextStyle(color: _creamColor(context))),
               ),
             ),
-            const SizedBox(height: 16),
           ],
+
+          const SizedBox(height: 28),
+          Text(
+            'Rincian Item Settlement',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: _creamColor(context),
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // tabel expense
           expenses.isEmpty
@@ -887,85 +902,85 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                 }),
                                 showCheckboxColumn: true,
                                 columns: [
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'No',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Tanggal',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Subkategori',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Sumber',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Deskripsi',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Amount',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                     numeric: true,
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Evidence',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Status',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
-                                  const DataColumn(
+                                  DataColumn(
                                     label: Text(
                                       'Aksi',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: AppTheme.cream,
+                                        color: _creamColor(context),
                                       ),
                                     ),
                                   ),
@@ -1253,9 +1268,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text(
+          title: Text(
             'Tambah Expense',
-            style: TextStyle(color: AppTheme.cream),
+            style: TextStyle(color: _creamColor(ctx)),
           ),
           content: SizedBox(
             width: screenWidth > 600 ? 500 : screenWidth * 0.9,
@@ -1338,7 +1353,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                   style: TextStyle(
                                     color: isSelected
                                         ? AppTheme.primary
-                                        : (isPending ? AppTheme.warning : AppTheme.textPrimary),
+                                        : (isPending ? AppTheme.warning : _primaryText(ctx)),
                                     fontSize: 13,
                                   ),
                                 ),
@@ -1359,11 +1374,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         ),
                       )
                     else
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                         child: Text(
                           'Kategori ini tidak memiliki sub-kategori.',
-                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                          style: TextStyle(color: _secondaryText(ctx), fontSize: 12),
                         ),
                       ),
                   ],
@@ -1416,7 +1431,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   TextField(
                     controller: descCtrl,
                     decoration: const InputDecoration(labelText: 'Deskripsi'),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     onChanged: (val) {
                       final lower = val.toLowerCase();
                       for (final p in allCats) {
@@ -1449,9 +1464,12 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       Expanded(
                         flex: 2,
                         child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(labelText: 'Mata Uang'),
-                          dropdownColor: AppTheme.card,
-                          style: TextStyle(color: AppTheme.textPrimary),
+                          decoration: const InputDecoration(
+                            labelText: 'Mata Uang',
+                            floatingLabelBehavior: FloatingLabelBehavior.always,
+                          ),
+                          dropdownColor: _cardColor(ctx),
+                          style: TextStyle(color: _primaryText(ctx)),
                           initialValue: selectedCurrency,
                           items: const [
                             DropdownMenuItem(value: 'IDR', child: Text('IDR')),
@@ -1483,8 +1501,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                             controller: exchangeRateCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Kurs (ke IDR)',
+                              floatingLabelBehavior: FloatingLabelBehavior.always,
                             ),
-                            style: TextStyle(color: AppTheme.textPrimary),
+                            style: TextStyle(color: _primaryText(ctx)),
                             keyboardType: TextInputType.number,
                             inputFormatters: [CurrencyInputFormatter()],
                           ),
@@ -1499,11 +1518,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       labelText: 'Amount ($selectedCurrency)',
                       floatingLabelBehavior: FloatingLabelBehavior.always,
                       hintText: '10.000',
-                      hintStyle: const TextStyle(
-                        color: Color(0xFF9CA3AF),
+                      hintStyle: TextStyle(
+                        color: _secondaryText(ctx).withValues(alpha: 0.5),
                       ),
                     ),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     keyboardType: TextInputType.number,
                     inputFormatters: [CurrencyInputFormatter()],
                   ),
@@ -1512,6 +1531,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     controller: dateCtrl,
                     decoration: InputDecoration(
                       labelText: 'Tanggal',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.calendar_today, size: 18),
                         onPressed: () async {
@@ -1529,15 +1549,18 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         },
                       ),
                     ),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     readOnly: true,
                   ),
                   const SizedBox(height: 12),
                   // dropdown sumber
                   DropdownButtonFormField<String>(
-                    decoration: InputDecoration(labelText: 'Sumber Pembayaran'),
-                    dropdownColor: AppTheme.card,
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    decoration: const InputDecoration(
+                      labelText: 'Sumber Pembayaran',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                    ),
+                    dropdownColor: _cardColor(ctx),
+                    style: TextStyle(color: _primaryText(ctx)),
                     initialValue: selectedSource,
                     items: const [
                       DropdownMenuItem(value: 'BCA', child: Text('BCA')),
@@ -1893,7 +1916,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             return AlertDialog(
               backgroundColor: _cardColor(ctx),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: const Text('Tolak Item', style: TextStyle(color: AppTheme.cream)),
+              title: Text('Tolak Item', style: TextStyle(color: _creamColor(ctx))),
               content: SizedBox(
                 width: 500,
                 child: Column(
@@ -1928,7 +1951,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                         isDense: true,
                                         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
                                       ),
-                                      style: const TextStyle(color: AppTheme.cream, fontSize: 14),
+                                      style: TextStyle(color: _creamColor(ctx), fontSize: 14),
                                       maxLines: null,
                                       minLines: 1,
                                       keyboardType: TextInputType.multiline,
@@ -2055,8 +2078,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   child: const Icon(Icons.error_outline_rounded, color: AppTheme.danger, size: 28),
                 ),
                 const SizedBox(width: 12),
-                const Text('Akses Ditolak',
-                    style: TextStyle(color: AppTheme.cream, fontWeight: FontWeight.bold)),
+                Text('Akses Ditolak',
+                    style: TextStyle(color: _creamColor(ctx), fontWeight: FontWeight.bold)),
               ],
             ),
             content: Column(
@@ -2068,9 +2091,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'Silakan setujui kategori ini terlebih dahulu di halaman Manajemen Kategori agar item ini bisa diproses.',
-                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                  style: TextStyle(color: _secondaryText(ctx), fontSize: 14),
                 ),
               ],
             ),
@@ -2139,10 +2162,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
-        title: const Text('Kembalikan ke Draft?', style: TextStyle(color: AppTheme.cream)),
-        content: const Text(
+        title: Text('Kembalikan ke Draft?', style: TextStyle(color: _creamColor(ctx))),
+        content: Text(
           'Apakah Anda yakin ingin menarik kembali pengeluaran ini ke status Draft untuk melakukan perbaikan?',
-          style: TextStyle(color: Colors.white70),
+          style: TextStyle(color: _secondaryText(ctx)),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
@@ -2174,7 +2197,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
-        title: Text('Hapus $count Item', style: const TextStyle(color: AppTheme.cream)),
+        title: Text('Hapus $count Item', style: TextStyle(color: _creamColor(ctx))),
         content: Text('Hapus $count pengeluaran yang dipilih? Tindakan ini tidak bisa dibatalkan.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
@@ -2302,9 +2325,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Tolak Settlement', style: TextStyle(color: AppTheme.cream)),
+        title: Text('Tolak Settlement', style: TextStyle(color: _creamColor(ctx))),
         content: SizedBox(
-          width: 400,
+          width: 500,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2329,7 +2352,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     borderSide: BorderSide(color: AppTheme.divider),
                   ),
                 ),
-                style: const TextStyle(color: AppTheme.cream, fontSize: 14),
+                style: TextStyle(color: _creamColor(ctx), fontSize: 14),
               ),
             ],
           ),
@@ -2431,9 +2454,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
+        title: Text(
           'Edit Settlement',
-          style: TextStyle(color: AppTheme.cream),
+          style: TextStyle(color: _creamColor(ctx)),
         ),
         content: SizedBox(
           width: 400,
@@ -2550,9 +2573,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
-            title: const Text(
+            title: Text(
               'Edit Expense',
-              style: TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(ctx)),
             ),
             content: SizedBox(
               width: 500,
@@ -2569,8 +2592,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                     ),
                     isExpanded: true,
-                    dropdownColor: AppTheme.card,
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    dropdownColor: _cardColor(ctx),
+                    style: TextStyle(color: _primaryText(ctx)),
                     initialValue: selectedParentId,
                     items: allCats
                         .map(
@@ -2608,8 +2631,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           final children = (parent['children'] as List?) ?? [];
                           return Text(
                             children.isNotEmpty ? 'Pilih Sub Kategori:' : 'Hanya Kategori Utama',
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
+                            style: TextStyle(
+                              color: _secondaryText(ctx),
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
@@ -2627,11 +2650,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         final children = (parent['children'] as List?) ?? [];
 
                         if (children.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Text(
                               'Kategori ini tidak memiliki sub-kategori.',
-                              style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                              style: TextStyle(color: _secondaryText(ctx), fontSize: 12),
                             ),
                           );
                         }
@@ -2641,7 +2664,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.divider),
+                            border: Border.all(color: _dividerColor(ctx)),
                           ),
                           child: SingleChildScrollView(
                             child: Column(
@@ -2660,7 +2683,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                     style: TextStyle(
                                       color: isSelected
                                           ? AppTheme.primary
-                                          : (isPending ? AppTheme.warning : AppTheme.textPrimary),
+                                          : (isPending ? AppTheme.warning : _primaryText(ctx)),
                                       fontSize: 13,
                                     ),
                                   ),
@@ -2734,7 +2757,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   TextField(
                     controller: descCtrl,
                     decoration: const InputDecoration(labelText: 'Deskripsi'),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     onChanged: (val) {
                       final lower = val.toLowerCase();
                       for (final p in allCats) {
@@ -2764,9 +2787,12 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       Expanded(
                         flex: 2,
                         child: DropdownButtonFormField<String>(
-                          decoration: InputDecoration(labelText: 'Mata Uang'),
-                          dropdownColor: AppTheme.card,
-                          style: TextStyle(color: AppTheme.textPrimary),
+                          decoration: const InputDecoration(
+                            labelText: 'Mata Uang',
+                            floatingLabelBehavior: FloatingLabelBehavior.always,
+                          ),
+                          dropdownColor: _cardColor(ctx),
+                          style: TextStyle(color: _primaryText(ctx)),
                           initialValue: selectedCurrency,
                           items: const [
                             DropdownMenuItem(value: 'IDR', child: Text('IDR')),
@@ -2798,8 +2824,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                             controller: exchangeRateCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Kurs (ke IDR)',
+                              floatingLabelBehavior: FloatingLabelBehavior.always,
                             ),
-                            style: TextStyle(color: AppTheme.textPrimary),
+                            style: TextStyle(color: _primaryText(ctx)),
                             keyboardType: TextInputType.number,
                             inputFormatters: [CurrencyInputFormatter()],
                           ),
@@ -2814,11 +2841,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       labelText: 'Amount ($selectedCurrency)',
                       floatingLabelBehavior: FloatingLabelBehavior.always,
                       hintText: '10.000',
-                      hintStyle: const TextStyle(
-                        color: Color(0xFF9CA3AF),
+                      hintStyle: TextStyle(
+                        color: _secondaryText(ctx).withValues(alpha: 0.5),
                       ),
                     ),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     keyboardType: TextInputType.number,
                     inputFormatters: [CurrencyInputFormatter()],
                   ),
@@ -2827,6 +2854,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     controller: dateCtrl,
                     decoration: InputDecoration(
                       labelText: 'Tanggal',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
                       suffixIcon: IconButton(
                         icon: const Icon(Icons.calendar_today, size: 18),
                         onPressed: () async {
@@ -2844,15 +2872,18 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         },
                       ),
                     ),
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    style: TextStyle(color: _primaryText(ctx)),
                     readOnly: true,
                   ),
                   const SizedBox(height: 12),
                   // dropdown sumber
                   DropdownButtonFormField<String>(
-                    decoration: InputDecoration(labelText: 'Sumber Pembayaran'),
-                    dropdownColor: AppTheme.card,
-                    style: TextStyle(color: AppTheme.textPrimary),
+                    decoration: const InputDecoration(
+                      labelText: 'Sumber Pembayaran',
+                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                    ),
+                    dropdownColor: _cardColor(ctx),
+                    style: TextStyle(color: _primaryText(ctx)),
                     initialValue: selectedSource,
                     items: const [
                       DropdownMenuItem(value: 'BCA', child: Text('BCA')),
@@ -3227,7 +3258,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             )
           : Text(
               item['text'] ?? '',
-              style: const TextStyle(color: AppTheme.cream),
+              style: TextStyle(color: _creamColor(context)),
             ),
       activeColor: AppTheme.success,
       checkColor: Colors.white,

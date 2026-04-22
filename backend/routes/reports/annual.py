@@ -954,64 +954,57 @@ def _expense_subcategory_label(expense):
     3. 'Subcategory: X' in notes
     4. Keyword matching from description (fallback)
     """
+    label = ""
     # ✅ PRIORITY 1: Database value (populated as combined_subcategory_label in payload)
     subcategory_name = _safe_text(expense.get('subcategory_name')).strip()
     if subcategory_name:
-        return subcategory_name
+        label = subcategory_name
+    else:
+        raw_desc = _safe_text(expense.get('description')).strip()
 
-    raw_desc = _safe_text(expense.get('description')).strip()
+        # ✅ PRIORITY 2: Check [SubCategory] prefix in description (same as Flutter)
+        prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
+        if prefixed:
+            prefix = _safe_text(prefixed.group(1)).strip()
+            if prefix:
+                label = prefix
 
-    # ✅ PRIORITY 2: Check [SubCategory] prefix in description (same as Flutter)
-    prefixed = re.match(r'^\[(.*?)\]\s*(.*)$', raw_desc)
-    if prefixed:
-        prefix = _safe_text(prefixed.group(1)).strip()
-        if prefix:
-            return prefix
+        if not label:
+            # ✅ PRIORITY 3: Check notes for "Subcategory: X" pattern (same as Flutter)
+            notes = _safe_text(expense.get('notes')).strip()
+            note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
+            if note_match:
+                note_subcategory = _safe_text(note_match.group(1)).strip()
+                if note_subcategory:
+                    label = note_subcategory
 
-    # ✅ PRIORITY 3: Check notes for "Subcategory: X" pattern (same as Flutter)
-    notes = _safe_text(expense.get('notes')).strip()
-    note_match = re.search(r'\bSubcategory:\s*([^|]+)', notes, flags=re.IGNORECASE)
-    if note_match:
-        note_subcategory = _safe_text(note_match.group(1)).strip()
-        if note_subcategory:
-            return note_subcategory
+        if not label:
+            # ✅ PRIORITY 4: Keyword matching from description (EXACTLY LIKE FLUTTER)
+            desc = raw_desc.lower()
 
-    # ✅ PRIORITY 4: Keyword matching from description (EXACTLY LIKE FLUTTER)
-    desc = raw_desc.lower()
+            # Match Flutter's keyword order exactly
+            if 'rental tool' in desc: label = 'Rental Tool'
+            elif 'sales' in desc: label = 'Sales'
+            elif 'gaji' in desc or 'bonus' in desc: label = 'Gaji'
+            elif 'pembuatan alat' in desc or 'mesin retort' in desc: label = 'Pembuatan Alat'
+            elif 'thr' in desc or 'allowance' in desc: label = 'Allowance'
+            elif 'data processing' in desc: label = 'Data Processing'
+            elif 'moving slickline' in desc or 'project lampu' in desc: label = 'Project Operation'
+            elif 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc: label = 'Sparepart'
+            elif 'repair esor' in desc: label = 'Maintenance'
+            elif 'licence' in desc or 'license' in desc: label = 'Software License'
+            elif 'handphone operational' in desc: label = 'Operation'
+            elif 'sewa ruangan' in desc or 'virtual office' in desc: label = 'Sewa Ruangan'
+            elif 'modal kerja' in desc: label = 'Modal Kerja'
+            elif 'team building' in desc: label = 'Team Building'
+            elif 'biaya transaksi bank' in desc: label = 'Biaya Bank'
 
-    # Match Flutter's keyword order exactly
-    if 'rental tool' in desc:
-        return 'Rental Tool'
-    if 'sales' in desc:
-        return 'Sales'
-    if 'gaji' in desc or 'bonus' in desc:
-        return 'Gaji'
-    if 'pembuatan alat' in desc or 'mesin retort' in desc:
-        return 'Pembuatan Alat'
-    if 'thr' in desc or 'allowance' in desc:
-        return 'Allowance'
-    if 'data processing' in desc:
-        return 'Data Processing'
-    if 'moving slickline' in desc or 'project lampu' in desc:
-        return 'Project Operation'
-    if 'sampling tool' in desc or 'sparepart' in desc or 'ups biaya import' in desc:
-        return 'Sparepart'
-    if 'repair esor' in desc:
-        return 'Maintenance'
-    if 'licence' in desc or 'license' in desc:
-        return 'Software License'
-    if 'handphone operational' in desc:
-        return 'Operation'
-    if 'sewa ruangan' in desc or 'virtual office' in desc:
-        return 'Sewa Ruangan'
-    if 'modal kerja' in desc:
-        return 'Modal Kerja'
-    if 'team building' in desc:
-        return 'Team Building'
-    if 'biaya transaksi bank' in desc:
-        return 'Biaya Bank'
+    # ✅ STEP 5: Strip internal suffixes like (A), (Q), (J), etc. for clean output
+    # This regex matches a space followed by a bracketed uppercase string at the end of the label
+    if label:
+        label = re.sub(r'\s*\([A-Z]+\)$', '', label.strip())
 
-    return ''
+    return label or ''
 
 def _group_expenses_by_subcategory(expenses):
     """
@@ -1054,196 +1047,126 @@ def _render_expense_section_from_data(
 ) -> int:
     """
     Render expense section from data.
-
-    Args:
-        ws: Worksheet object
-        expenses: List of expense dictionaries
-        cat_names: List of category names
-        category_by_id_map: Category ID to object mapping
-        year: Report year
-        start_row: Starting row number
-
-    Returns:
-        Total row number
     """
     logger.debug('Starting data-driven expense rendering')
-    logger.debug(f'Total expenses: {len(expenses)}, Categories: {cat_names}')
-
     last_category_col = 9 + len(cat_names) - 1
     white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
     green_fill = GREEN_FILL
     blue_fill = BLUE_FILL
 
-    # STEP 1: Separate single vs batch expenses
-    single_expenses = [
-        e for e in expenses
-        if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
-    ]
+    # ✅ STEP 1: Separate batch vs single expenses
     batch_expenses = [
         e for e in expenses
         if _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
     ]
+    single_expenses = [
+        e for e in expenses
+        if not _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
+    ]
 
-    logger.debug(f'Single: {len(single_expenses)}, Batch: {len(batch_expenses)}')
+    row_cursor = start_row
+    seq_counter = 1
 
-    # STEP 2: Sort single expenses
+    # ✅ STEP 2: Render Single Expenses FIRST
     single_expenses.sort(key=lambda e: (
         _extract_imported_row(e.get('notes')) is None,
         _extract_imported_row(e.get('notes')) or 10**9,
         int(e.get('id') or 0),
     ))
-
-    # STEP 3: Group by subcategory
     single_grouped = _group_expenses_by_subcategory(single_expenses)
-    logger.debug(f'Single subcategories: {list(single_grouped["groups"].keys())}')
 
-    # STEP 4: Render single expenses
-    row_cursor = start_row
-    seq_counter = 1
     has_single_data = bool(single_grouped['groups']) or bool(single_grouped['uncategorized'])
-
     if has_single_data:
-        # Render single expenses with subcategories
         for subcat, items in single_grouped['groups'].items():
-            # ✅ CLONE style from start_row template
             _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
-            # Render subcategory header (bold, white fill)
             _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
-                if isinstance(cell, MergedCell):
-                    continue
                 cell.fill = copy(white_fill)
                 cell.border = THIN_BORDER
-
             _safe_set_cell(ws, row_cursor, 4, subcat)
-            # ✅ FIX: Use .copy() on existing font, don't create new Font()
-            cell = ws.cell(row=row_cursor, column=4)
-            cell.font = cell.font.copy(bold=True)
+            ws.cell(row=row_cursor, column=4).font = ws.cell(row=row_cursor, column=4).font.copy(bold=True)
             row_cursor += 1
 
-            # Render expense items
             for expense in items:
-                # ✅ CLONE style from start_row template
                 _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
                 _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-
-                # ✅ FIX: Set font to NORMAL for expense items (not bold like subcategory header)
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
                     if not isinstance(cell, MergedCell):
                         cell.fill = copy(white_fill)
                         cell.border = THIN_BORDER
-                        # ✅ Explicitly set font to normal (bold=False)
                         cell.font = cell.font.copy(bold=False)
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                 date_val = _format_date_dd_mmm_yy(expense.get('date'))
                 _safe_set_cell(ws, row_cursor, 2, date_val)
-                # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                 ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
-
-                # ✅ FIX: Merged Detail/Description for expense items
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-                _safe_set_number(
-                    ws, row_cursor, 8,
-                    _to_float(expense.get('currency_exchange'), default=1) or 1,
-                    number_format='#,##0',  # No decimals, thousand separator
-                )
-
-                # Center align Currency and Currency Exchange columns
+                _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
                 ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
                 ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
                 root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
                 cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
                 if cat_idx is not None:
-                    fallback_col = 9 + cat_idx
-                    nominal_idr = _expense_amount_for_display(expense)
-                    _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                    _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
                 row_cursor += 1
                 seq_counter += 1
 
-        # Render uncategorized single expenses
         for expense in single_grouped['uncategorized']:
-            # ✅ CLONE style from start_row template
             _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
             _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-            # ✅ FIX: Set font to NORMAL for expense items
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
                 if not isinstance(cell, MergedCell):
                     cell.fill = copy(white_fill)
                     cell.border = THIN_BORDER
-                    # ✅ Explicitly set font to normal (bold=False)
                     cell.font = cell.font.copy(bold=False)
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
             date_val = _format_date_dd_mmm_yy(expense.get('date'))
             _safe_set_cell(ws, row_cursor, 2, date_val)
-            # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
             ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
-
-            # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
             _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
             _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-            _safe_set_number(
-                ws, row_cursor, 8,
-                _to_float(expense.get('currency_exchange'), default=1) or 1,
-                number_format='#,##0',  # No decimals, thousand separator
-            )
-
-            # Center align Currency and Currency Exchange columns
+            _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
             ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
             ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
             root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
             cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
             if cat_idx is not None:
-                fallback_col = 9 + cat_idx
-                nominal_idr = _expense_amount_for_display(expense)
-                _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
             row_cursor += 1
             seq_counter += 1
     else:
-        # ✅ No single data - show empty state message
-        # ✅ FIX: Clone style FIRST, then clear and write
         _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
         _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row_cursor, column=col)
             if not isinstance(cell, MergedCell):
                 cell.border = THIN_BORDER
-
         _safe_set_cell(ws, row_cursor, 4, 'Belum ada data single pengeluaran')
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
         row_cursor += 1
 
-    single_end_row = row_cursor - 1
-    logger.debug(f'Single expenses rendered: rows {start_row}-{single_end_row}')
-
-    # ✅ STEP 5: Render separator (green fill)
+    # ✅ STEP 3: Render separator (green fill)
     separator_row = row_cursor
     _clear_range(ws, separator_row, separator_row, 2, last_category_col)
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=separator_row, column=col)
-        cell.value = None
         cell.fill = green_fill
         cell.border = THIN_BORDER
 
@@ -1251,7 +1174,7 @@ def _render_expense_section_from_data(
     ws.cell(row=separator_row, column=4).font = Font(bold=True)
     row_cursor += 1
 
-    # ✅ STEP 6: Group batch expenses by settlement
+    # ✅ STEP 4: Render Batch Expenses SECOND
     batch_by_settlement = {}
     for e in batch_expenses:
         settlement_id = e.get('settlement_id')
@@ -1261,19 +1184,12 @@ def _render_expense_section_from_data(
             batch_by_settlement[key] = []
         batch_by_settlement[key].append(e)
 
-    # Sort batches by settlement_id (or title if no id)
     sorted_batches = sorted(
         batch_by_settlement.items(),
         key=lambda x: (int(x[0].split(':')[0]) if x[0].split(':')[0].isdigit() else 0, x[0])
     )
 
-    logger.debug(f'Batch settlements: {len(sorted_batches)}')
-
-    # ✅ Check if there's any batch data BEFORE rendering
-    has_batch_data = bool(sorted_batches)
-
-    if has_batch_data:
-        # ✅ STEP 7: Render each batch
+    if sorted_batches:
         batch_counter = 0
         for settlement_key, batch_items in sorted_batches:
             batch_counter += 1
@@ -1295,20 +1211,12 @@ def _render_expense_section_from_data(
             ws.cell(row=batch_header_row, column=4).alignment = Alignment(wrap_text=False, vertical='center')
             row_cursor += 1
 
-
             # Group batch items by subcategory
             batch_grouped = _group_expenses_by_subcategory(batch_items)
-            logger.debug(f'Batch #{batch_counter} ({settlement_title}): subcategories={list(batch_grouped["groups"].keys())}')
-
-            # Render batch subcategories
-            batch_item_counter = 1
             for subcat, items in batch_grouped['groups'].items():
-                # Subcategory header (bold, white fill)
                 _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
-                    if isinstance(cell, MergedCell):
-                        continue
                     cell.fill = copy(white_fill)
                     cell.border = THIN_BORDER
 
@@ -1317,180 +1225,73 @@ def _render_expense_section_from_data(
                 ws.cell(row=row_cursor, column=4).alignment = Alignment(wrap_text=False, vertical='center')
                 row_cursor += 1
 
-                # Render expense items
                 for expense in items:
-                    # ✅ CLONE style from start_row template
                     _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
                     _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-                    # ✅ FIX: Set font to NORMAL for expense items
                     for col in range(2, last_category_col + 1):
                         cell = ws.cell(row=row_cursor, column=col)
                         if not isinstance(cell, MergedCell):
                             cell.fill = copy(white_fill)
                             cell.border = THIN_BORDER
-                            # ✅ Explicitly set font to normal (bold=False)
                             cell.font = cell.font.copy(bold=False)
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                     date_val = _format_date_dd_mmm_yy(expense.get('date'))
                     _safe_set_cell(ws, row_cursor, 2, date_val)
-                    # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
                     ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
-                    _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-
-                    # ✅ FIX: Explicitly split Activity (4) and Source (5) for Table 3
+                    _safe_set_cell(ws, row_cursor, 3, seq_counter)
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                     _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                     _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-                    _safe_set_number(
-                        ws, row_cursor, 8,
-                        _to_float(expense.get('currency_exchange'), default=1) or 1,
-                        number_format='#,##0',  # No decimals, thousand separator
-                    )
-
-                    # Center align Currency and Currency Exchange columns
+                    _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
                     ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
                     ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
 
-                    # Map to category column
                     root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
                     cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
                     if cat_idx is not None:
-                        fallback_col = 9 + cat_idx
-                        nominal_idr = _expense_amount_for_display(expense)
-                        _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
+                        _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
                     row_cursor += 1
-                    batch_item_counter += 1
+                    seq_counter += 1
 
-            # Render uncategorized batch items
-            for expense in batch_grouped['uncategorized']:
-                # ✅ CLONE style from start_row template
-                _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
-                _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-                # ✅ FIX: Set font to NORMAL for expense items
-                for col in range(2, last_category_col + 1):
-                    cell = ws.cell(row=row_cursor, column=col)
-                    if not isinstance(cell, MergedCell):
-                        cell.fill = copy(white_fill)
-                        cell.border = THIN_BORDER
-                        # ✅ Explicitly set font to normal (bold=False)
-                        cell.font = cell.font.copy(bold=False)
-
-                clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
-                date_val = _format_date_dd_mmm_yy(expense.get('date'))
-                _safe_set_cell(ws, row_cursor, 2, date_val)
-                # Format date column as dd-mmm-yy (e.g., 10-Dec-24)
-                ws.cell(row=row_cursor, column=2).number_format = 'dd-mmm-yy'
-                _safe_set_cell(ws, row_cursor, 3, batch_item_counter)
-
-                # ✅ FIX: Merged Detail/Description for expense items
-                _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-
-                _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-                _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
-                _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
-                _safe_set_number(
-                    ws, row_cursor, 8,
-                    _to_float(expense.get('currency_exchange'), default=1) or 1,
-                    number_format='#,##0',  # No decimals, thousand separator
-                )
-
-                # Center align Currency and Currency Exchange columns
-                ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
-                ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
-
-                root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
-                cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
-                if cat_idx is not None:
-                    fallback_col = 9 + cat_idx
-                    nominal_idr = _expense_amount_for_display(expense)
-                    _safe_set_number(ws, row_cursor, fallback_col, nominal_idr)
-
-                row_cursor += 1
-                batch_item_counter += 1
-    else:
-        # ✅ No batch data - show empty state message
-        # ✅ FIX: Clone style FIRST, then clear and write
-        _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-
-        _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
-        for col in range(2, last_category_col + 1):
-            cell = ws.cell(row=row_cursor, column=col)
-            if not isinstance(cell, MergedCell):
-                cell.border = THIN_BORDER
-
-        # ✅ FIX: Explicitly split for empty state
-        _safe_set_cell(ws, row_cursor, 4, 'Belum ada data batch pengeluaran')
-
-        cell = ws.cell(row=row_cursor, column=4)
-        cell.font = cell.font.copy(italic=True, color='808080')
-        cell.alignment = cell.alignment.copy(horizontal='center')
-        row_cursor += 1
-
-    batch_end_row = row_cursor - 1
-    logger.debug(f'Batch expenses rendered: rows {separator_row + 1}-{batch_end_row}')
-
-    # ✅ STEP 9: Render TOTAL row
+    # ✅ STEP 5: Render TOTAL row
     total_row = row_cursor
-
-    # Clear total row first to remove garbage data (meta columns 2-5)
     _clear_range(ws, total_row, total_row, 2, 5)
-
-    # ✅ FIX: Merge columns B to H (Date to Amount) for TOTAL row
-    # Column B=2, H=8, so merge B{total_row}:H{total_row}
     merge_range = f'B{total_row}:H{total_row}'
     try:
         ws.unmerge_cells(merge_range)
-    except Exception:
-        pass
+    except Exception: pass
     ws.merge_cells(merge_range)
-
-    # Place TOTAL label in merged cell (starts at column B)
     _safe_set_cell(ws, total_row, 2, 'TOTAL')
     ws.cell(row=total_row, column=2).font = Font(bold=True)
     ws.cell(row=total_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
 
-    # ✅ FIX: Use pre-calculated cost totals to ensure accuracy across all columns
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
     for i, total_val in enumerate(cost_totals):
         col = 9 + i
         _safe_set_number(ws, total_row, col, total_val)
         ws.cell(row=total_row, column=col).font = Font(bold=True)
 
-    # ✅ Apply border to TOTAL row
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=total_row, column=col)
         if not isinstance(cell, MergedCell):
             cell.border = THIN_BORDER
 
-    # Apply border to all expense rows
     for row in range(start_row, total_row + 1):
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row, column=col)
             if not isinstance(cell, MergedCell):
                 cell.border = THIN_BORDER
 
-    # ✅ CRITICAL: Unhide all used rows (start_row to total_row)
     _set_rows_hidden(ws, start_row, total_row, False)
-    logger.debug(f'Unhid rows {start_row}-{total_row}')
-
-    # ✅ CRITICAL: Hide all rows after TOTAL to prevent old template data showing
-    # Find max row in worksheet
     max_row = ws.max_row
     if total_row < max_row:
         _set_rows_hidden(ws, total_row + 1, max_row, True)
-        logger.debug(f'Hid rows {total_row + 1}-{max_row}')
 
-    logger.debug(f'TOTAL row at {total_row}')
     logger.debug('Expense rendering completed successfully')
-
     return total_row
-
-
 
 
 
