@@ -1,13 +1,15 @@
 import os
-import sqlite3
 from datetime import timedelta, datetime, timezone
 from flask import Flask, send_from_directory, request
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager, verify_jwt_in_request, get_jwt_identity
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from config import Config
 from models import db, User, Category, Revenue, Tax, Dividend, DividendSetting, Notification
 from werkzeug.security import generate_password_hash
+from sqlalchemy import text as sql_text
 
 migrate = Migrate()
 
@@ -19,7 +21,20 @@ def create_app():
     # init extensions
     db.init_app(app)
     migrate.init_app(app, db)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+    # Keamanan Anti-Bot & Brute Force (Rate Limiting)
+    # Ini mencegah hacker melakukan "Jailbreak" dengan serangan massal
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["500 per day", "100 per hour"],
+        storage_uri="memory://",
+    )
+    app.limiter = limiter
+
+    # Keamanan CORS yang lebih ketat berdasarkan konfigurasi .env
+    CORS(app, resources={r"/api/*": {"origins": app.config.get('ALLOWED_ORIGINS', '*')}})
+
     JWTManager(app)
 
     # buat folder jika belum ada
@@ -98,28 +113,16 @@ def create_app():
 def run_database_integrity_maintenance(app: Flask):
     """
     Menangani normalisasi data ringan yang tidak bisa dihandle Flask-Migrate.
-    Hapus fungsi ini jika database sudah benar-benar mature.
+    Menggunakan SQLAlchemy agar kompatibel dengan SQLite dan PostgreSQL.
     """
-    target_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-    prefix = 'sqlite:///'
-    if not target_uri.startswith(prefix):
-        return
-
-    target_db = target_uri[len(prefix):]
-    if not os.path.exists(target_db):
-        return
-
-    conn = sqlite3.connect(target_db)
-    try:
-        # 1. Normalize status completed -> approved
-        conn.execute("UPDATE settlements SET status = 'approved' WHERE status = 'completed'")
-
-        # 2. Ensure default bank/tool subcategories (Opsional - sebaiknya di seed_data)
-        conn.commit()
-    except Exception as e:
-        print(f"❌ Database Maintenance Error: {e}")
-    finally:
-        conn.close()
+    with app.app_context():
+        try:
+            # 1. Normalize status completed -> approved
+            db.session.execute(sql_text("UPDATE settlements SET status = 'approved' WHERE status = 'completed'"))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ Database Maintenance Error: {e}")
 
 
 def seed_data():

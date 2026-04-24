@@ -9,7 +9,10 @@ class UserDetailDialog extends StatefulWidget {
   final int? userId;
 
   const UserDetailDialog({super.key, this.user, this.userId})
-      : assert(user != null || userId != null, 'Harus sedia data user atau userId');
+    : assert(
+        user != null || userId != null,
+        'Harus sedia data user atau userId',
+      );
 
   @override
   State<UserDetailDialog> createState() => _UserDetailDialogState();
@@ -38,12 +41,8 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
 
     try {
       final auth = context.read<AuthProvider>();
-      final users = await auth.getUsers();
-      final found = users.firstWhere(
-        (u) => u['id'] == widget.userId,
-        orElse: () => throw Exception('User tidak ditemukan'),
-      );
-      if (mounted) setState(() => _userData = found);
+      final res = await auth.api.getUserDetail(widget.userId!);
+      if (mounted) setState(() => _userData = res['user']);
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -51,9 +50,12 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
     }
   }
 
-  bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
-  Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
-  Color _creamColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+  Color _cardColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+  Color _creamColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
 
   @override
   Widget build(BuildContext context) {
@@ -65,18 +67,23 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
         decoration: BoxDecoration(
           color: _cardColor(context),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: _isDark(context) ? AppTheme.divider : AppTheme.lightDivider),
+          border: Border.all(
+            color: _isDark(context) ? AppTheme.divider : AppTheme.lightDivider,
+          ),
         ),
         child: _loading
             ? _buildLoading()
             : _error != null
-                ? _buildError()
-                : _buildContent(context),
+            ? _buildError()
+            : _buildContent(context),
       ),
     );
   }
 
-  Widget _buildLoading() => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()));
+  Widget _buildLoading() => const Padding(
+    padding: EdgeInsets.all(40),
+    child: Center(child: CircularProgressIndicator()),
+  );
 
   Widget _buildError() => Padding(
     padding: const EdgeInsets.all(40),
@@ -107,25 +114,66 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: AppTheme.primary.withValues(alpha: 0.1),
-            borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
           ),
           child: Row(
             children: [
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 32,
-                    backgroundColor: AppTheme.primary,
-                    backgroundImage: user['profile_image'] != null
-                        ? NetworkImage('${ApiService.baseUrl}/uploads/${user['profile_image']}')
-                        : null,
-                    child: user['profile_image'] == null
-                        ? Text(((user['full_name'] as String?)?.isNotEmpty == true ? user['full_name'][0] : 'U').toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold))
-                        : null,
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).brightness == Brightness.light
+                            ? Colors.black.withValues(alpha: 0.4)
+                            : Colors.white.withValues(alpha: 0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: CircleAvatar(
+                      radius: 32,
+                      backgroundColor: AppTheme.primary,
+                      backgroundImage: user['profile_image'] != null
+                          ? NetworkImage(
+                              '${ApiService.baseUrl}/uploads/${user['profile_image']}',
+                            )
+                          : null,
+                      child: user['profile_image'] == null
+                          ? Text(
+                              ((user['full_name'] as String?)?.isNotEmpty ==
+                                          true
+                                      ? user['full_name'][0]
+                                      : 'U')
+                                  .toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
                   ),
                   Positioned(
-                    right: 0, bottom: 0,
-                    child: Container(width: 16, height: 16, decoration: BoxDecoration(color: isOnline ? AppTheme.success : AppTheme.textSecondary, shape: BoxShape.circle, border: Border.all(color: _cardColor(context), width: 2))),
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: isOnline
+                            ? AppTheme.success
+                            : AppTheme.textSecondary,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _cardColor(context),
+                          width: 2,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -134,20 +182,50 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user['full_name'] ?? '-', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _creamColor(context))),
-                    Text('@${user['username']}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    Text(
+                      user['full_name'] ?? '-',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _creamColor(context),
+                      ),
+                    ),
+                    Text(
+                      '@${user['username']}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        const Icon(Icons.work_outline, size: 14, color: AppTheme.primary),
+                        const Icon(
+                          Icons.work_outline,
+                          size: 14,
+                          color: AppTheme.primary,
+                        ),
                         const SizedBox(width: 4),
-                        Expanded(child: Text(workplace, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Expanded(
+                          child: Text(
+                            workplace,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
-              _badge(isOnline ? 'Online' : 'Offline', isOnline ? AppTheme.success : AppTheme.textSecondary),
+              _badge(
+                isOnline ? 'Online' : 'Offline',
+                isOnline ? AppTheme.success : AppTheme.textSecondary,
+              ),
             ],
           ),
         ),
@@ -157,13 +235,19 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              _detailItem(Icons.badge_outlined, 'Role', _getRoleName(user['role'] ?? 'staff')),
+              _detailItem(
+                Icons.badge_outlined,
+                'Role',
+                _getRoleName(user['role'] ?? 'staff'),
+              ),
               const SizedBox(height: 12),
-              _detailItem(Icons.phone_outlined, 'No HP', user['phone_number'] ?? '-'),
+              _detailItem(
+                Icons.phone_outlined,
+                'No HP',
+                user['phone_number'] ?? '-',
+              ),
               const SizedBox(height: 12),
               _detailItem(Icons.access_time, 'Last Login', lastLogin),
-              const SizedBox(height: 12),
-              _detailItem(Icons.calendar_today_outlined, 'Member Since', _formatDate(user['created_at'])),
             ],
           ),
         ),
@@ -175,7 +259,12 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
             width: double.infinity,
             child: OutlinedButton(
               onPressed: () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               child: const Text('Tutup'),
             ),
           ),
@@ -186,21 +275,36 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
 
   Widget _badge(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-    child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+    ),
   );
 
   Widget _detailItem(IconData icon, String label, String value) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           Icon(icon, size: 18, color: AppTheme.primary),
           const SizedBox(width: 12),
-          Text(label, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+          ),
           const Spacer(),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -210,13 +314,5 @@ class _UserDetailDialogState extends State<UserDetailDialog> {
     if (role == 'manager') return 'Manager';
     if (role == 'mitra_eks') return 'Mitra';
     return 'Staff';
-  }
-
-  String _formatDate(dynamic dateStr) {
-    if (dateStr == null) return '-';
-    try {
-      final date = DateTime.parse(dateStr.toString());
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (_) { return '-'; }
   }
 }

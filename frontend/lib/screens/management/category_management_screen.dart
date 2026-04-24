@@ -27,6 +27,14 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
   Color _bodyText(BuildContext context) =>
       _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
 
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -43,198 +51,229 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
 
     return Container(
       color: _surfaceColor(context),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(useCompact ? 16 : 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // header
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 750;
-                final headerInfo = Text(
-                  'Manajemen Kategori',
-                  style: TextStyle(
-                    fontSize: useCompact ? 18 : (isNarrow ? 20 : 24),
-                    fontWeight: FontWeight.w700,
-                    color: _titleColor(context),
-                  ),
-                );
-                final action = ElevatedButton.icon(
-                  onPressed: () => _showAddCategoryDialog(context),
-                  icon: Icon(Icons.add_rounded, size: useCompact ? 16 : 18),
-                  label: Text(isNarrow ? 'Tambah' : 'Tambah Kategori', style: TextStyle(fontSize: useCompact ? 12 : 14)),
-                  style: ElevatedButton.styleFrom(
-                    padding: useCompact ? const EdgeInsets.symmetric(horizontal: 12, vertical: 8) : null,
-                    minimumSize: useCompact ? const Size(0, 36) : null,
-                  ),
-                );
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        interactive: true,
+        thickness: 8,
+        radius: const Radius.circular(4),
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          padding: EdgeInsets.all(useCompact ? 16 : 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // header
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 750;
+                  final headerInfo = Text(
+                    'Manajemen Kategori',
+                    style: TextStyle(
+                      fontSize: useCompact ? 18 : (isNarrow ? 20 : 24),
+                      fontWeight: FontWeight.w700,
+                      color: _titleColor(context),
+                    ),
+                  );
+                  final action = ElevatedButton.icon(
+                    onPressed: () => _showAddCategoryDialog(context),
+                    icon: Icon(Icons.add_rounded, size: useCompact ? 16 : 18),
+                    label: Text(
+                      isNarrow ? 'Tambah' : 'Tambah Kategori',
+                      style: TextStyle(fontSize: useCompact ? 12 : 14),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: useCompact
+                          ? const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            )
+                          : null,
+                      minimumSize: useCompact ? const Size(0, 36) : null,
+                    ),
+                  );
 
-                if (isNarrow) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  if (isNarrow) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        headerInfo,
+                        const SizedBox(height: 12),
+                        SizedBox(width: double.infinity, child: action),
+                      ],
+                    );
+                  }
+
+                  return Row(
                     children: [
-                      headerInfo,
-                      const SizedBox(height: 12),
-                      SizedBox(width: double.infinity, child: action),
+                      Expanded(child: headerInfo),
+                      action,
                     ],
                   );
-                }
+                },
+              ),
+              SizedBox(height: useCompact ? 16 : 24),
+              // kategori pending
+              if (prov.pendingCategories.isNotEmpty) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warning.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppTheme.warning.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.pending_actions,
+                            color: AppTheme.warning,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Kategori Pending',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.warning,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...(() {
+                        final List<Widget> treeItems = [];
 
-                return Row(children: [Expanded(child: headerInfo), action]);
-              },
-            ),
-            SizedBox(height: useCompact ? 16 : 24),
-            // kategori pending
-            if (prov.pendingCategories.isNotEmpty) ...[
+                        // Semua kategori pending (baik induk maupun anak)
+                        final pending = prov.pendingCategories;
+                        if (pending.isEmpty) return <Widget>[];
+
+                        // Pisahkan induk pending dan anak pending
+                        final pendingParents = pending
+                            .where((c) => c['parent_id'] == null)
+                            .toList();
+                        final pendingChildren = pending
+                            .where((c) => c['parent_id'] != null)
+                            .toList();
+
+                        // 1. Tampilkan Induk Pending dan anak-anaknya yang juga pending
+                        for (var p in pendingParents) {
+                          treeItems.add(_buildPendingItem(p, isSub: false));
+                          final subs = pendingChildren
+                              .where((c) => c['parent_id'] == p['id'])
+                              .toList();
+                          for (var s in subs) {
+                            treeItems.add(_buildPendingItem(s, isSub: true));
+                            pendingChildren.remove(s);
+                          }
+                        }
+
+                        // 2. Tampilkan Sisa anak pending (yang induknya sudah approved)
+                        // Kelompokkan berdasarkan parentId agar tidak duplikat header parentnya
+                        final orphansByParent =
+                            <int, List<Map<String, dynamic>>>{};
+                        for (var s in pendingChildren) {
+                          final pid = s['parent_id'] as int;
+                          orphansByParent.putIfAbsent(pid, () => []).add(s);
+                        }
+
+                        for (var entry in orphansByParent.entries) {
+                          final parentId = entry.key;
+                          final subs = entry.value;
+
+                          // Cari info parent di list categories
+                          final parent = prov.categories.firstWhere(
+                            (c) => c['id'] == parentId,
+                            orElse: () => {
+                              'name': 'Kategori Induk',
+                              'code': '?',
+                            },
+                          );
+
+                          // Tampilkan header parent (versi kecil/berbeda)
+                          treeItems.add(
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, bottom: 4),
+                              child: Text(
+                                '${parent['code']} - ${parent['name']} (Sudah Approved)',
+                                style: TextStyle(
+                                  color: _bodyText(context),
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          );
+
+                          for (var s in subs) {
+                            treeItems.add(_buildPendingItem(s, isSub: true));
+                          }
+                        }
+
+                        return treeItems;
+                      })(),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(useCompact ? 12 : 20),
                 decoration: BoxDecoration(
-                  color: AppTheme.warning.withValues(alpha: 0.08),
+                  color: _cardColor(context),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppTheme.warning.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: _dividerColor(context)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(
-                          Icons.pending_actions,
-                          color: AppTheme.warning,
-                          size: 20,
+                        Expanded(
+                          child: Text(
+                            'Semua Kategori',
+                            style: TextStyle(
+                              fontSize: useCompact ? 14 : 16,
+                              fontWeight: FontWeight.w600,
+                              color: _titleColor(context),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Kategori Pending',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.warning,
+                        TextButton.icon(
+                          onPressed: () => _showGroupManagementDialog(context),
+                          icon: Icon(
+                            Icons.swap_horiz_rounded,
+                            size: useCompact ? 16 : 18,
+                          ),
+                          label: Text(
+                            'Atur Grup',
+                            style: TextStyle(fontSize: useCompact ? 11 : 13),
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppTheme.accent,
+                            padding: useCompact
+                                ? const EdgeInsets.symmetric(horizontal: 8)
+                                : null,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    ...(() {
-                      final List<Widget> treeItems = [];
-
-                      // Semua kategori pending (baik induk maupun anak)
-                      final pending = prov.pendingCategories;
-                      if (pending.isEmpty) return <Widget>[];
-
-                      // Pisahkan induk pending dan anak pending
-                      final pendingParents = pending
-                          .where((c) => c['parent_id'] == null)
-                          .toList();
-                      final pendingChildren = pending
-                          .where((c) => c['parent_id'] != null)
-                          .toList();
-
-                      // 1. Tampilkan Induk Pending dan anak-anaknya yang juga pending
-                      for (var p in pendingParents) {
-                        treeItems.add(_buildPendingItem(p, isSub: false));
-                        final subs = pendingChildren
-                            .where((c) => c['parent_id'] == p['id'])
-                            .toList();
-                        for (var s in subs) {
-                          treeItems.add(_buildPendingItem(s, isSub: true));
-                          pendingChildren.remove(s);
-                        }
-                      }
-
-                      // 2. Tampilkan Sisa anak pending (yang induknya sudah approved)
-                      // Kelompokkan berdasarkan parentId agar tidak duplikat header parentnya
-                      final orphansByParent =
-                          <int, List<Map<String, dynamic>>>{};
-                      for (var s in pendingChildren) {
-                        final pid = s['parent_id'] as int;
-                        orphansByParent.putIfAbsent(pid, () => []).add(s);
-                      }
-
-                      for (var entry in orphansByParent.entries) {
-                        final parentId = entry.key;
-                        final subs = entry.value;
-
-                        // Cari info parent di list categories
-                        final parent = prov.categories.firstWhere(
-                          (c) => c['id'] == parentId,
-                          orElse: () => {'name': 'Kategori Induk', 'code': '?'},
-                        );
-
-                        // Tampilkan header parent (versi kecil/berbeda)
-                        treeItems.add(
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8, bottom: 4),
-                            child: Text(
-                              '${parent['code']} - ${parent['name']} (Sudah Approved)',
-                              style: TextStyle(
-                                color: _bodyText(context),
-                                fontSize: 12,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ),
-                        );
-
-                        for (var s in subs) {
-                          treeItems.add(_buildPendingItem(s, isSub: true));
-                        }
-                      }
-
-                      return treeItems;
-                    })(),
+                    SizedBox(height: useCompact ? 8 : 16),
+                    ...prov.categories.map((cat) => _buildCategoryTile(cat)),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
             ],
-
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(useCompact ? 12 : 20),
-              decoration: BoxDecoration(
-                color: _cardColor(context),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: _dividerColor(context)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Semua Kategori',
-                          style: TextStyle(
-                            fontSize: useCompact ? 14 : 16,
-                            fontWeight: FontWeight.w600,
-                            color: _titleColor(context),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _showGroupManagementDialog(context),
-                        icon: Icon(Icons.swap_horiz_rounded, size: useCompact ? 16 : 18),
-                        label: Text('Atur Grup', style: TextStyle(fontSize: useCompact ? 11 : 13)),
-                        style: TextButton.styleFrom(
-                          foregroundColor: AppTheme.accent,
-                          padding: useCompact ? const EdgeInsets.symmetric(horizontal: 8) : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: useCompact ? 8 : 16),
-                  ...prov.categories.map((cat) => _buildCategoryTile(cat)),
-                ],
-              ),
-            ),
-
-          ],
+          ),
         ),
       ),
     );
@@ -243,23 +282,30 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
   void _showGroupManagementDialog(BuildContext context) {
     final prov = context.read<SettlementProvider>();
     // Clone categories to avoid direct modification before save
-    List<Map<String, dynamic>> localCats =
-        List<Map<String, dynamic>>.from(prov.categories.map((c) => {...c}));
+    List<Map<String, dynamic>> localCats = List<Map<String, dynamic>>.from(
+      prov.categories.map((c) => {...c}),
+    );
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          final langsung = localCats
-              .where((c) => c['main_group'] == 'BEBAN LANGSUNG')
-              .toList()
-            ..sort((a, b) =>
-                (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0));
-          final admin = localCats
-              .where((c) => c['main_group'] != 'BEBAN LANGSUNG')
-              .toList()
-            ..sort((a, b) =>
-                (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0));
+          final langsung =
+              localCats
+                  .where((c) => c['main_group'] == 'BEBAN LANGSUNG')
+                  .toList()
+                ..sort(
+                  (a, b) =>
+                      (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0),
+                );
+          final admin =
+              localCats
+                  .where((c) => c['main_group'] != 'BEBAN LANGSUNG')
+                  .toList()
+                ..sort(
+                  (a, b) =>
+                      (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0),
+                );
 
           return AlertDialog(
             backgroundColor: _cardColor(context),
@@ -392,30 +438,31 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
               onReorder(items);
             },
             children: items
-                .map((cat) => Card(
-                      key: ValueKey(cat['id']),
-                      color: _surfaceColor(context),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ListTile(
-                        dense: true,
-                        title: Text(
-                          cat['name'],
-                          style: TextStyle(
-                            color: _primaryText(context),
-                            fontSize: 13,
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon:
-                              const Icon(Icons.arrow_forward_rounded, size: 16),
-                          onPressed: () => onMove(cat),
-                          tooltip: 'Pindah ke grup lain',
+                .map(
+                  (cat) => Card(
+                    key: ValueKey(cat['id']),
+                    color: _surfaceColor(context),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: ListTile(
+                      dense: true,
+                      title: Text(
+                        cat['name'],
+                        style: TextStyle(
+                          color: _primaryText(context),
+                          fontSize: 13,
                         ),
                       ),
-                    ))
+                      trailing: IconButton(
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        onPressed: () => onMove(cat),
+                        tooltip: 'Pindah ke grup lain',
+                      ),
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -437,7 +484,8 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
       ),
       child: ExpansionTile(
         initiallyExpanded: children.isNotEmpty,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        tilePadding: EdgeInsets.symmetric(horizontal: isNarrow ? 8 : 16),
+        childrenPadding: EdgeInsets.only(bottom: isNarrow ? 4 : 8),
         title: Text(
           '${cat['code']} - ${cat['name']}',
           style: TextStyle(
@@ -448,34 +496,51 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-              padding: EdgeInsets.zero,
-              icon: Icon(Icons.edit_rounded, size: 18, color: AppTheme.accent),
-              tooltip: 'Edit',
-              onPressed: () => _showEditCategoryDialog(context, cat),
-            ),
-            IconButton(
-              constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.delete_outline,
-                size: 18,
-                color: AppTheme.danger,
+        trailing: SizedBox(
+          width: isNarrow ? 56 : 84,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                constraints: BoxConstraints.tightFor(
+                  width: isNarrow ? 28 : 36,
+                  height: isNarrow ? 28 : 36,
+                ),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.edit_rounded,
+                  size: isNarrow ? 16 : 18,
+                  color: AppTheme.accent,
+                ),
+                tooltip: 'Edit',
+                onPressed: () => _showEditCategoryDialog(context, cat),
               ),
-              tooltip: 'Hapus',
-              onPressed: () => _deleteCategory(cat['id']),
-            ),
-          ],
+              if (!isNarrow) const SizedBox(width: 4),
+              IconButton(
+                constraints: BoxConstraints.tightFor(
+                  width: isNarrow ? 28 : 36,
+                  height: isNarrow ? 28 : 36,
+                ),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: isNarrow ? 16 : 18,
+                  color: AppTheme.danger,
+                ),
+                tooltip: 'Hapus',
+                onPressed: () => _deleteCategory(cat['id']),
+              ),
+            ],
+          ),
         ),
         children: children
             .map<Widget>(
               (child) => ListTile(
-                minVerticalPadding: 8,
-                contentPadding: const EdgeInsets.only(left: 48, right: 16),
+                minVerticalPadding: isNarrow ? 4 : 8,
+                contentPadding: EdgeInsets.only(
+                  left: isNarrow ? 28 : 48,
+                  right: isNarrow ? 8 : 16,
+                ),
                 title: Text(
                   '${child['code']} - ${child['name']}',
                   style: TextStyle(
@@ -486,32 +551,34 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: SizedBox(
-                  width: 80,
+                  width: isNarrow ? 52 : 72,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       IconButton(
-                        constraints: const BoxConstraints.tightFor(
-                          width: 32,
-                          height: 32,
+                        constraints: BoxConstraints.tightFor(
+                          width: isNarrow ? 24 : 32,
+                          height: isNarrow ? 24 : 32,
                         ),
                         padding: EdgeInsets.zero,
                         icon: Icon(
                           Icons.edit_rounded,
-                          size: 16,
+                          size: isNarrow ? 14 : 16,
                           color: AppTheme.accent,
                         ),
-                        onPressed: () => _showEditCategoryDialog(context, child),
+                        onPressed: () =>
+                            _showEditCategoryDialog(context, child),
                       ),
+                      if (!isNarrow) const SizedBox(width: 4),
                       IconButton(
-                        constraints: const BoxConstraints.tightFor(
-                          width: 32,
-                          height: 32,
+                        constraints: BoxConstraints.tightFor(
+                          width: isNarrow ? 24 : 32,
+                          height: isNarrow ? 24 : 32,
                         ),
                         padding: EdgeInsets.zero,
                         icon: Icon(
                           Icons.delete_outline,
-                          size: 16,
+                          size: isNarrow ? 14 : 16,
                           color: AppTheme.danger,
                         ),
                         onPressed: () => _deleteCategory(child['id']),
@@ -705,7 +772,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                 if (isSubCategory) ...[
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int?>(
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Pilih Kategori Utama',
                     ),
                     dropdownColor: _cardColor(context),
@@ -744,7 +811,9 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                 if (isSubCategory && selectedParentId == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Pilih Kategori Utama terlebih dahulu'),
+                      content: const Text(
+                        'Pilih Kategori Utama terlebih dahulu',
+                      ),
                       backgroundColor: AppTheme.warning,
                     ),
                   );
@@ -758,7 +827,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                 if (success && context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Kategori ditambahkan ✓'),
+                      content: const Text('Kategori ditambahkan ✓'),
                       backgroundColor: AppTheme.success,
                     ),
                   );
@@ -810,7 +879,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
               if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Kategori diupdate ✓'),
+                    content: const Text('Kategori diupdate ✓'),
                     backgroundColor: AppTheme.success,
                   ),
                 );

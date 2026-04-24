@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -16,26 +17,48 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
+  final ScrollController _tableVerticalController = ScrollController();
   int _selectedYear = 2024;
   DateTime? _startDate;
   DateTime? _endDate;
   Map<String, dynamic>? _summary;
   bool _loading = false;
   final _currencyFormat = NumberFormat('#,##0', 'id_ID');
-  final _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
+  final _months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'Mei',
+    'Jun',
+    'Jul',
+    'Agt',
+    'Sep',
+    'Okt',
+    'Nov',
+    'Des',
+  ];
 
-  bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
-  Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
-  Color _surfaceColor(BuildContext context) => _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
-  Color _dividerColor(BuildContext context) => _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
-  Color _titleColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
-  Color _bodyColor(BuildContext context) => _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
-  Color _primaryText(BuildContext context) => _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+  bool _isDark(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark;
+  Color _cardColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.card : AppTheme.lightCard;
+  Color _surfaceColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
+  Color _dividerColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
+  Color _titleColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
+  Color _bodyColor(BuildContext context) =>
+      _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+  Color _primaryText(BuildContext context) =>
+      _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
 
   @override
   void dispose() {
     _verticalController.dispose();
     _horizontalController.dispose();
+    _tableVerticalController.dispose();
     super.dispose();
   }
 
@@ -61,22 +84,51 @@ class _ReportScreenState extends State<ReportScreen> {
       final prov = context.read<SettlementProvider>();
       final data = await prov.getSummary(
         year: _selectedYear,
-        startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null,
-        endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null,
+        startDate: _startDate != null
+            ? DateFormat('yyyy-MM-dd').format(_startDate!)
+            : null,
+        endDate: _endDate != null
+            ? DateFormat('yyyy-MM-dd').format(_endDate!)
+            : null,
       );
       setState(() => _summary = data);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
     }
     setState(() => _loading = false);
   }
 
   Future<void> _pickDateRange() async {
-    final range = await showDateRangePicker(context: context, firstDate: DateTime(2020), lastDate: DateTime(2035), initialDateRange: (_startDate != null && _endDate != null) ? DateTimeRange(start: _startDate!, end: _endDate!) : null);
-    if (range != null) { setState(() { _startDate = range.start; _endDate = range.end; }); _loadSummary(); }
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      initialDateRange: (_startDate != null && _endDate != null)
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+    );
+    if (range != null) {
+      setState(() {
+        _startDate = range.start;
+        _endDate = range.end;
+      });
+      _loadSummary();
+    }
   }
 
-  void _clearDateRange() { setState(() { _startDate = null; _endDate = null; }); _loadSummary(); }
+  void _clearDateRange() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+    });
+    _loadSummary();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,20 +136,34 @@ class _ReportScreenState extends State<ReportScreen> {
     final useCompact = screenWidth < 550;
     final isNarrow = screenWidth < 800;
 
-    if (_loading) return Center(child: CircularProgressIndicator(color: AppTheme.primary));
-    if (_summary == null) return Center(child: Text('Tidak ada data', style: TextStyle(color: _bodyColor(context))));
+    if (_loading)
+      return Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    if (_summary == null)
+      return Center(
+        child: Text(
+          'Tidak ada data',
+          style: TextStyle(color: _bodyColor(context)),
+        ),
+      );
 
     return Scrollbar(
       controller: _verticalController,
       thumbVisibility: true,
+      interactive: true,
       thickness: 8,
+      radius: const Radius.circular(4),
       child: SingleChildScrollView(
         controller: _verticalController,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: EdgeInsets.fromLTRB(useCompact ? 16 : 32, useCompact ? 20 : 28, useCompact ? 16 : 32, 20),
+              padding: EdgeInsets.fromLTRB(
+                useCompact ? 16 : 32,
+                useCompact ? 20 : 28,
+                useCompact ? 16 : 32,
+                20,
+              ),
               child: isNarrow
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +184,12 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const Divider(height: 1),
             Padding(
-              padding: EdgeInsets.fromLTRB(useCompact ? 12 : 24, useCompact ? 12 : 24, useCompact ? 12 : 24, 48),
+              padding: EdgeInsets.fromLTRB(
+                useCompact ? 12 : 16,
+                useCompact ? 12 : 16,
+                useCompact ? 12 : 16,
+                64,
+              ),
               child: _buildSummaryTableScrollableBody(useCompact),
             ),
           ],
@@ -142,13 +213,19 @@ class _ReportScreenState extends State<ReportScreen> {
         const SizedBox(height: 4),
         Text(
           'Per kategori per bulan',
-          style: TextStyle(color: _bodyColor(context), fontSize: useCompact ? 11 : 14),
+          style: TextStyle(
+            color: _bodyColor(context),
+            fontSize: useCompact ? 11 : 14,
+          ),
         ),
         if (_startDate != null && _endDate != null) ...[
           const SizedBox(height: 4),
           Text(
             '${DateFormat('dd MMM yyyy').format(_startDate!)} - ${DateFormat('dd MMM yyyy').format(_endDate!)}',
-            style: TextStyle(color: AppTheme.accent, fontSize: useCompact ? 11 : 13),
+            style: TextStyle(
+              color: AppTheme.accent,
+              fontSize: useCompact ? 11 : 13,
+            ),
           ),
         ],
       ],
@@ -169,9 +246,20 @@ class _ReportScreenState extends State<ReportScreen> {
           child: DropdownButton<int>(
             value: _selectedYear,
             dropdownColor: _cardColor(context),
-            style: TextStyle(color: _primaryText(context), fontSize: useCompact ? 12 : 14),
-            items: { ...List.generate(21, (i) => 2020 + i), _selectedYear }.where((y) => y != 0).map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
-            onChanged: (v) { if (v != null) { setState(() => _selectedYear = v); _loadSummary(); } },
+            style: TextStyle(
+              color: _primaryText(context),
+              fontSize: useCompact ? 12 : 14,
+            ),
+            items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
+                .where((y) => y != 0)
+                .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
+                .toList(),
+            onChanged: (v) {
+              if (v != null) {
+                setState(() => _selectedYear = v);
+                _loadSummary();
+              }
+            },
           ),
         ),
       ),
@@ -183,7 +271,15 @@ class _ReportScreenState extends State<ReportScreen> {
         isOutlined: true,
       ),
       if (_startDate != null)
-        IconButton(onPressed: _clearDateRange, tooltip: 'Clear Range', icon: Icon(Icons.close_rounded, color: AppTheme.danger, size: useCompact ? 20 : 24)),
+        IconButton(
+          onPressed: _clearDateRange,
+          tooltip: 'Clear Range',
+          icon: Icon(
+            Icons.close_rounded,
+            color: AppTheme.danger,
+            size: useCompact ? 20 : 24,
+          ),
+        ),
       _actionButton(
         onPressed: _exportSummaryPdf,
         icon: Icons.picture_as_pdf_rounded,
@@ -197,7 +293,10 @@ class _ReportScreenState extends State<ReportScreen> {
         useCompact: useCompact,
       ),
       _actionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AnnualReportScreen())),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => AnnualReportScreen()),
+        ),
         icon: Icons.assessment_rounded,
         label: 'Tahunan',
         useCompact: useCompact,
@@ -212,11 +311,23 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _actionButton({required VoidCallback onPressed, required IconData icon, required String label, required bool useCompact, bool isOutlined = false}) {
+  Widget _actionButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required bool useCompact,
+    bool isOutlined = false,
+  }) {
     final style = ElevatedButton.styleFrom(
-      padding: EdgeInsets.symmetric(horizontal: useCompact ? 10 : 16, vertical: 0),
+      padding: EdgeInsets.symmetric(
+        horizontal: useCompact ? 10 : 16,
+        vertical: 0,
+      ),
       minimumSize: Size(0, useCompact ? 36 : 42),
-      textStyle: TextStyle(fontSize: useCompact ? 12 : 14, fontWeight: FontWeight.w600),
+      textStyle: TextStyle(
+        fontSize: useCompact ? 12 : 14,
+        fontWeight: FontWeight.w600,
+      ),
     );
 
     if (isOutlined) {
@@ -225,7 +336,10 @@ class _ReportScreenState extends State<ReportScreen> {
         icon: Icon(icon, size: useCompact ? 16 : 18),
         label: Text(label),
         style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: useCompact ? 10 : 16, vertical: 0),
+          padding: EdgeInsets.symmetric(
+            horizontal: useCompact ? 10 : 16,
+            vertical: 0,
+          ),
           minimumSize: Size(0, useCompact ? 36 : 42),
         ),
       );
@@ -239,89 +353,298 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  Widget _buildSummaryCell({
+    required String value,
+    required double width,
+    required bool isBold,
+    TextAlign align = TextAlign.right,
+    Color? color,
+    double fontSize = 12,
+  }) {
+    return Container(
+      width: width,
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      alignment: align == TextAlign.right
+          ? Alignment.centerRight
+          : Alignment.centerLeft,
+      child: Text(
+        value,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          color:
+              color ?? (isBold ? _titleColor(context) : _primaryText(context)),
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
   Widget _buildSummaryTableScrollableBody(bool useCompact) {
-    final summaryList = List<Map<String, dynamic>>.from(_summary!['summary'] ?? []);
+    final summaryList = List<Map<String, dynamic>>.from(
+      _summary!['summary'] ?? [],
+    );
     final grandTotal = (_summary!['grand_total'] ?? 0).toDouble();
 
-    return Scrollbar(
-      controller: _horizontalController,
-      thumbVisibility: true,
-      thickness: 8,
-      child: SingleChildScrollView(
-        controller: _horizontalController,
-        scrollDirection: Axis.horizontal,
+    const double leftScrollbarSpace = 4;
+    final double colKategori = 180;
+    final double colMonth = 110;
+    final double colTotal = 140;
+    final double totalWidth = colKategori + (colMonth * 12) + colTotal;
+    final double rowHeight = 48.0;
+    final double bodyHeight = math
+        .min((summaryList.length + 1) * rowHeight, useCompact ? 650.0 : 800.0)
+        .toDouble();
+
+    return Card(
+      color: _cardColor(context),
+      margin: const EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: _dividerColor(context)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: useCompact ? 6 : 10,
+          vertical: useCompact ? 8 : 12,
+        ),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 16),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: _cardColor(context),
-            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: _dividerColor(context)),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(_surfaceColor(context)),
-                  columnSpacing: useCompact ? 12 : 20,
-                  horizontalMargin: useCompact ? 12 : 16,
-                  headingRowHeight: useCompact ? 40 : 56,
-                  dataRowMinHeight: useCompact ? 32 : 48,
-                  dataRowMaxHeight: useCompact ? 48 : 56,
-                  columns: [
-                    DataColumn(label: Text('Kategori', style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor(context), fontSize: useCompact ? 12 : 14))),
-                    ..._months.map((m) => DataColumn(label: Text(m, style: TextStyle(fontWeight: FontWeight.w600, color: _titleColor(context), fontSize: useCompact ? 11 : 13)), numeric: true)),
-                    DataColumn(label: Text('TOTAL', style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.accent, fontSize: useCompact ? 12 : 14)), numeric: true),
-                  ],
-                  rows: [
-                    ...summaryList.map((cat) {
-                      final monthly = cat['monthly'] as Map<String, dynamic>;
-                      final isParent = cat['is_parent'] ?? false;
-                      return DataRow(
-                        cells: [
-                          DataCell(
-                            SizedBox(
-                              width: useCompact ? 120 : 180,
-                              child: Padding(
-                                padding: EdgeInsets.only(left: (cat['level'] ?? 0) * 12.0),
-                                child: Text(
-                                  cat['category'],
-                                  style: TextStyle(
-                                    fontWeight: isParent ? FontWeight.w700 : FontWeight.w500,
-                                    fontSize: useCompact ? (isParent ? 12 : 11) : (isParent ? 14 : 13),
-                                    color: isParent ? _titleColor(context) : _primaryText(context),
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+          child: Padding(
+            padding: const EdgeInsets.only(left: leftScrollbarSpace),
+            child: Scrollbar(
+              controller: _horizontalController,
+              thumbVisibility: true,
+              interactive: true,
+              thickness: 6,
+              radius: const Radius.circular(4),
+              notificationPredicate: (notification) =>
+                  notification.metrics.axis == Axis.horizontal,
+              child: SingleChildScrollView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
+                physics: const ClampingScrollPhysics(),
+                child: SizedBox(
+                  width: totalWidth,
+                  child: Column(
+                    children: [
+                      Container(
+                        color: _surfaceColor(context),
+                        height: 48,
+                        child: Row(
+                          children: [
+                            _buildSummaryCell(
+                              value: 'Kategori',
+                              width: colKategori,
+                              isBold: true,
+                              align: TextAlign.left,
+                              fontSize: 13,
+                            ),
+                            ..._months.map(
+                              (m) => _buildSummaryCell(
+                                value: m,
+                                width: colMonth,
+                                isBold: true,
+                                fontSize: 13,
+                              ),
+                            ),
+                            _buildSummaryCell(
+                              value: 'TOTAL',
+                              width: colTotal,
+                              isBold: true,
+                              color: AppTheme.accent,
+                              fontSize: 13,
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(
+                        height: bodyHeight + 4,
+                        child: RepaintBoundary(
+                          child: Scrollbar(
+                            controller: _tableVerticalController,
+                            thumbVisibility: true,
+                            interactive: true,
+                            thickness: 6,
+                            scrollbarOrientation: ScrollbarOrientation.left,
+                            notificationPredicate: (notification) =>
+                                notification.metrics.axis == Axis.vertical,
+                            radius: const Radius.circular(4),
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                if (notification.metrics.axis == Axis.vertical) {
+                                  final m = notification.metrics;
+                                  if (notification is ScrollUpdateNotification &&
+                                      notification.scrollDelta != null) {
+                                    final d = notification.scrollDelta!;
+                                    if ((d > 0 && m.pixels >= m.maxScrollExtent) ||
+                                        (d < 0 && m.pixels <= 0)) {
+                                      _verticalController.position.jumpTo(
+                                        (_verticalController.offset + d).clamp(
+                                          0,
+                                          _verticalController
+                                              .position
+                                              .maxScrollExtent,
+                                        ),
+                                      );
+                                    }
+                                  } else if (notification
+                                      is OverscrollNotification) {
+                                    _verticalController.position.jumpTo(
+                                      (_verticalController.offset +
+                                              notification.overscroll)
+                                          .clamp(
+                                            0,
+                                            _verticalController
+                                                .position
+                                                .maxScrollExtent,
+                                          ),
+                                    );
+                                  }
+                                }
+                                return false;
+                              },
+                              child: ListView.builder(
+                                controller: _tableVerticalController,
+                                itemCount: summaryList.length + 1,
+                                itemExtent: rowHeight,
+                                cacheExtent: 1000,
+                                padding: const EdgeInsets.fromLTRB(2, 0, 0, 4),
+                                physics: const ClampingScrollPhysics(),
+                                itemBuilder: (context, index) {
+                                  if (index < summaryList.length) {
+                                    final cat = summaryList[index];
+                                    final monthly =
+                                        cat['monthly'] as Map<String, dynamic>;
+                                    final isParent = cat['is_parent'] ?? false;
+                                    final level = (cat['level'] ?? 0) as int;
+
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: index.isEven
+                                            ? (_isDark(context)
+                                                  ? const Color(0xFF1E293B)
+                                                  : const Color(0xFFF1F5F9))
+                                            : (_isDark(context)
+                                                  ? const Color(0xFF0F172A)
+                                                  : Colors.white),
+                                        border: Border(
+                                          bottom: BorderSide(
+                                            color: _dividerColor(context),
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: colKategori,
+                                            padding: EdgeInsets.only(
+                                              left: 8.0 + (level * 12.0),
+                                              right: 8.0,
+                                            ),
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              cat['category'],
+                                              style: TextStyle(
+                                                fontWeight: isParent
+                                                    ? FontWeight.bold
+                                                    : FontWeight.normal,
+                                                fontSize: isParent ? 13 : 12,
+                                                color: isParent
+                                                    ? _titleColor(context)
+                                                    : _primaryText(context),
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          for (int i = 1; i <= 12; i++)
+                                            _buildSummaryCell(
+                                              value: _currencyFormat.format(
+                                                (monthly['$i'] ?? 0).toDouble(),
+                                              ),
+                                              width: colMonth,
+                                              isBold: false,
+                                              align: TextAlign.right,
+                                            ),
+                                          _buildSummaryCell(
+                                            value: _currencyFormat.format(
+                                              cat['yearly_total'] ?? 0,
+                                            ),
+                                            width: colTotal,
+                                            isBold: true,
+                                            color: AppTheme.accent,
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
+
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      color: _surfaceColor(context),
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: _dividerColor(context),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _buildSummaryCell(
+                                          value: 'GRAND TOTAL',
+                                          width: colKategori,
+                                          isBold: true,
+                                          align: TextAlign.left,
+                                        ),
+                                        ...List.generate(12, (mIdx) {
+                                          double monthTotal = 0;
+                                          for (final cat in summaryList) {
+                                            monthTotal +=
+                                                ((cat['monthly']
+                                                                as Map<String, dynamic>)['${mIdx + 1}'] ??
+                                                            0)
+                                                    .toDouble();
+                                          }
+                                          return _buildSummaryCell(
+                                            value: monthTotal > 0
+                                                ? _currencyFormat.format(monthTotal)
+                                                : '-',
+                                            width: colMonth,
+                                            isBold: true,
+                                          );
+                                        }),
+                                        _buildSummaryCell(
+                                          value:
+                                              'Rp ${_currencyFormat.format(grandTotal)}',
+                                          width: colTotal,
+                                          isBold: true,
+                                          color: AppTheme.accent,
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
                               ),
                             ),
                           ),
-                          ...List.generate(12, (i) {
-                            final val = (monthly['${i + 1}'] ?? 0).toDouble();
-                            return DataCell(Text(val > 0 ? _currencyFormat.format(val) : '-', style: TextStyle(color: val > 0 ? _primaryText(context) : _bodyColor(context), fontSize: useCompact ? 10 : 12)));
-                          }),
-                          DataCell(Text(_currencyFormat.format(cat['yearly_total'] ?? 0), style: TextStyle(fontWeight: FontWeight.w700, color: AppTheme.accent, fontSize: useCompact ? 11 : 13))),
-                        ],
-                      );
-                    }),
-                    DataRow(
-                      color: WidgetStateProperty.all(AppTheme.primary.withValues(alpha: 0.08)),
-                      cells: [
-                        DataCell(Text('GRAND TOTAL', style: TextStyle(fontWeight: FontWeight.w700, color: _titleColor(context), fontSize: useCompact ? 11 : 13))),
-                        ...List.generate(12, (i) {
-                          double monthTotal = 0;
-                          for (final cat in summaryList) {
-                            monthTotal += ((cat['monthly'] as Map<String, dynamic>)['${i + 1}'] ?? 0).toDouble();
-                          }
-                          return DataCell(Text(monthTotal > 0 ? _currencyFormat.format(monthTotal) : '-', style: TextStyle(fontWeight: FontWeight.w600, fontSize: useCompact ? 10 : 12)));
-                        }),
-                        DataCell(Text('Rp ${_currencyFormat.format(grandTotal)}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: useCompact ? 12 : 14, color: AppTheme.accent))),
-                      ],
-                    ),
-                  ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+        ),
+      ),
     );
   }
 
@@ -330,23 +653,61 @@ class _ReportScreenState extends State<ReportScreen> {
       final prov = context.read<SettlementProvider>();
       final start = _startDate ?? DateTime(_selectedYear, 1, 1);
       final end = _endDate ?? DateTime(_selectedYear, 12, 31);
-      final bytes = await prov.exportExcel(startDate: DateFormat('yyyy-MM-dd').format(start), endDate: DateFormat('yyyy-MM-dd').format(end));
-      final filename = 'summary_${DateFormat('yyyyMMdd').format(start)}_${DateFormat('yyyyMMdd').format(end)}.xlsx';
-      if (mounted) await FileHelper.saveAndOpenFolder(context: context, bytes: bytes, filename: filename, successMessage: 'Excel Summary berhasil disimpan.');
+      final bytes = await prov.exportExcel(
+        startDate: DateFormat('yyyy-MM-dd').format(start),
+        endDate: DateFormat('yyyy-MM-dd').format(end),
+      );
+      final filename =
+          'summary_${DateFormat('yyyyMMdd').format(start)}_${DateFormat('yyyyMMdd').format(end)}.xlsx';
+      if (mounted)
+        await FileHelper.saveAndOpenFolder(
+          context: context,
+          bytes: bytes,
+          filename: filename,
+          successMessage: 'Excel Summary berhasil disimpan.',
+        );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export: $e'), backgroundColor: AppTheme.danger));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal export: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
     }
   }
 
   Future<void> _exportSummaryPdf() async {
     try {
       final prov = context.read<SettlementProvider>();
-      final bytes = await prov.getSummaryPdf(year: _selectedYear, startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null, endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null);
-      final suffix = (_startDate != null && _endDate != null) ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}' : '$_selectedYear';
+      final bytes = await prov.getSummaryPdf(
+        year: _selectedYear,
+        startDate: _startDate != null
+            ? DateFormat('yyyy-MM-dd').format(_startDate!)
+            : null,
+        endDate: _endDate != null
+            ? DateFormat('yyyy-MM-dd').format(_endDate!)
+            : null,
+      );
+      final suffix = (_startDate != null && _endDate != null)
+          ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}'
+          : '$_selectedYear';
       final filename = 'summary_$suffix.pdf';
-      if (mounted) await FileHelper.saveAndOpenFile(context: context, bytes: bytes, filename: filename, successMessage: 'PDF Summary berhasil disimpan.');
+      if (mounted)
+        await FileHelper.saveAndOpenFile(
+          context: context,
+          bytes: bytes,
+          filename: filename,
+          successMessage: 'PDF Summary berhasil disimpan.',
+        );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export PDF: $e'), backgroundColor: AppTheme.danger));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal export PDF: $e'),
+            backgroundColor: AppTheme.danger,
+          ),
+        );
     }
   }
 }

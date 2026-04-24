@@ -67,6 +67,7 @@ class StatusFilterChip extends StatelessWidget {
     );
   }
 }
+
 class SettlementCard extends StatefulWidget {
   final Map<String, dynamic> settlement;
   final VoidCallback onTap;
@@ -185,9 +186,14 @@ class _SettlementCardState extends State<SettlementCard> {
       child: GestureDetector(
         onTap: widget.selectionMode
             ? (widget.canSelect
-                  ? () => widget.onSelectionChanged?.call(!widget.selected)
-                  : null)
+                ? () => widget.onSelectionChanged?.call(!widget.selected)
+                : null)
             : widget.onTap,
+        onLongPress: () {
+          if (!widget.selectionMode && widget.onSelectionChanged != null) {
+            widget.onSelectionChanged!(true);
+          }
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
@@ -286,41 +292,27 @@ class _SettlementCardState extends State<SettlementCard> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                final creatorId = s['creator_id'];
-                                if (creatorId != null) {
-                                  // Sertakan data user lengkap termasuk foto profil
-                                  final userData = {
-                                    'id': creatorId,
-                                    'full_name': s['creator_name'],
-                                    'role': s['creator_role'],
-                                    'username': s['username'] ?? '',
-                                    'profile_image': s['creator_profile_image'],
-                                    'phone_number': s['phone_number'],
-                                    'workplace': s['workplace'],
-                                  };
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => UserDetailDialog(user: userData),
-                                  );
-                                }
-                              },
-                              child: Text(
-                                s['creator_name'] ?? '-',
-                                style: TextStyle(
-                                  fontSize: isMobile ? 11 : 12,
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: AppTheme.primary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        GestureDetector(
+                          onTap: () {
+                            final creatorId = s['creator_id'];
+                            if (creatorId != null) {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => UserDetailDialog(userId: creatorId),
+                              );
+                            }
+                          },
+                          child: Text(
+                            s['creator_name'] ?? '-',
+                            style: TextStyle(
+                              fontSize: isMobile ? 11 : 12,
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w500,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppTheme.primary,
                             ),
-                          ],
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -339,19 +331,12 @@ class _SettlementCardState extends State<SettlementCard> {
                         ),
                       ),
                     )
-                  else ...[
-                    if (widget.onDelete != null &&
-                        ((widget.isManager && !['approved', 'completed'].contains(status)) ||
-                            (!widget.isManager && status == 'draft')))
-                      IconButton(
-                        onPressed: widget.onDelete,
-                        icon: Icon(Icons.delete_outline, size: isMobile ? 18 : 20, color: AppTheme.danger),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Hapus Settlement',
-                      ),
-                    Icon(Icons.chevron_right_rounded, size: isMobile ? 18 : 20, color: _bodyText(context)),
-                  ],
+                  else
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: isMobile ? 18 : 20,
+                      color: _bodyText(context),
+                    ),
                 ],
               );
             },
@@ -473,6 +458,11 @@ class _AdvanceCardState extends State<AdvanceCard> {
                 ? () => widget.onSelectionChanged?.call(!widget.selected)
                 : null)
             : widget.onTap,
+        onLongPress: () {
+          if (!widget.selectionMode && widget.onSelectionChanged != null) {
+            widget.onSelectionChanged!(true);
+          }
+        },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           margin: EdgeInsets.only(bottom: isMobile ? 8 : 12),
@@ -557,41 +547,27 @@ class _AdvanceCardState extends State<AdvanceCard> {
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                final creatorId = a['requester_id'];
-                                if (creatorId != null) {
-                                  // Sertakan data user lengkap termasuk foto profil
-                                  final userData = {
-                                    'id': creatorId,
-                                    'full_name': a['requester_name'],
-                                    'role': a['requester_role'],
-                                    'username': a['username'] ?? '',
-                                    'profile_image': a['requester_profile_image'],
-                                    'phone_number': a['phone_number'],
-                                    'workplace': a['workplace'],
-                                  };
-                                  showDialog(
-                                    context: context,
-                                    builder: (ctx) => UserDetailDialog(user: userData),
-                                  );
-                                }
-                              },
-                              child: Text(
-                                a['requester_name'] ?? '-',
-                                style: TextStyle(
-                                  fontSize: isMobile ? 11 : 12,
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w500,
-                                  decoration: TextDecoration.underline,
-                                  decorationColor: AppTheme.primary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        GestureDetector(
+                          onTap: () {
+                            final creatorId = a['requester_id'];
+                            if (creatorId != null) {
+                              showDialog(
+                                context: context,
+                                builder: (ctx) => UserDetailDialog(userId: creatorId),
+                              );
+                            }
+                          },
+                          child: Text(
+                            a['requester_name'] ?? '-',
+                            style: TextStyle(
+                              fontSize: isMobile ? 11 : 12,
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.w500,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppTheme.primary,
                             ),
-                          ],
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
@@ -610,19 +586,12 @@ class _AdvanceCardState extends State<AdvanceCard> {
                         ),
                       ),
                     )
-                  else ...[
-                    if (widget.onDelete != null &&
-                        ((widget.isManager && !['approved', 'in_settlement', 'settled', 'completed'].contains(status)) ||
-                            (!widget.isManager && status == 'draft')))
-                      IconButton(
-                        onPressed: widget.onDelete,
-                        icon: Icon(Icons.delete_outline, size: isMobile ? 18 : 20, color: AppTheme.danger),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: 'Hapus Kasbon',
-                      ),
-                    Icon(Icons.chevron_right_rounded, size: isMobile ? 18 : 20, color: _bodyText(context)),
-                  ],
+                  else
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: isMobile ? 18 : 20,
+                      color: _bodyText(context),
+                    ),
                 ],
               );
             },

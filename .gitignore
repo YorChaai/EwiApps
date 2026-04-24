@@ -190,3 +190,9 @@ frontend/analyze_output.txt
 ~$*.xls
 **/~$*.xlsx
 **/~$*.xls
+
+# Large files and backups
+backup/
+*.rar
+*.zip
+*.7z

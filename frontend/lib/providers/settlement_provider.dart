@@ -96,23 +96,21 @@ class SettlementProvider extends ChangeNotifier {
 
     // Set filters
     _statusFilter = status;
-    if (startDate != null) _startDate = startDate;
-    if (endDate != null) _endDate = endDate;
+    _startDate = startDate;
+    _endDate = endDate;
     if (reportYear != null) {
       _reportYear = reportYear;
     }
 
-    // âœ… Centralized Sanitization
-    if (search != null) {
-      _searchQuery = search
-            .replaceAll('<', '')
-            .replaceAll('>', '')
-            .replaceAll('"', '')
-            .replaceAll("'", '')
-            .replaceAll('&', '')
-            .replaceAll(';', '')
-            .trim();
-    }
+    // ✅ Centralized Sanitization
+    _searchQuery = search
+        ?.replaceAll('<', '')
+        .replaceAll('>', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .replaceAll('&', '')
+        .replaceAll(';', '')
+        .trim();
 
     _loading = true;
     if (notify) notifyListeners();

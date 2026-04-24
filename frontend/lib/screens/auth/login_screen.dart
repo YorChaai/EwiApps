@@ -353,16 +353,83 @@ class _PortraitLoginContent extends StatelessWidget {
           onToggleObscure: onToggleObscure,
           onSubmitted: onLogin,
         ),
-        SizedBox(height: compact ? 24 : 28),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () {
+              // TODO: Implement Forgot Password Screen
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Fitur Lupa Password sedang disiapkan')),
+              );
+            },
+            child: const Text(
+              'Lupa password?',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.accent,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: compact ? 12 : 16),
         _LoginButton(
           loading: loading,
           onPressed: loading ? null : onLogin,
         ),
         SizedBox(height: spacingMedium),
         _RegisterLink(onTap: onRegister),
-        SizedBox(height: spacingMedium),
-        const _LoginHintCard(),
+        SizedBox(height: spacingLarge),
+        _GmailLoginButton(
+          onPressed: () {
+            // TODO: Implement Google Sign In
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Fitur Login Gmail sedang disiapkan')),
+            );
+          },
+        ),
       ],
+    );
+  }
+}
+
+class _GmailLoginButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const _GmailLoginButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.surface : AppTheme.lightSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppTheme.divider : AppTheme.lightDivider,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.mail_outline, size: 20, color: AppTheme.danger),
+            const SizedBox(width: 12),
+            Text(
+              'Login Gmail',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -425,7 +492,14 @@ class _LandscapeLoginContent extends StatelessWidget {
                   onToggleObscure: onToggleObscure,
                   onSubmitted: onLogin,
                 ),
-                const SizedBox(height: 24),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () {},
+                    child: const Text('Lupa password?', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 _LoginButton(
                   loading: loading,
                   onPressed: loading ? null : onLogin,
@@ -433,7 +507,7 @@ class _LandscapeLoginContent extends StatelessWidget {
                 const SizedBox(height: 14),
                 _RegisterLink(onTap: onRegister, compact: true),
                 const SizedBox(height: 14),
-                const _LoginHintCard(compact: true),
+                _GmailLoginButton(onPressed: () {}),
               ],
             ),
           ),
@@ -661,47 +735,6 @@ class _RegisterLink extends StatelessWidget {
             color: AppTheme.accent,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _LoginHintCard extends StatelessWidget {
-  final bool compact;
-
-  const _LoginHintCard({this.compact = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(compact ? 10 : 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.surface : AppTheme.lightSurface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isDark ? Colors.transparent : AppTheme.lightDivider),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 16,
-            color: AppTheme.accent,
-          ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'EWIAPPS',
-              style: TextStyle(
-                fontSize: 11,
-                color: AppTheme.textSecondary,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

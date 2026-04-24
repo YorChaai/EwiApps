@@ -8,11 +8,11 @@ from typing import Optional, List, Dict, Any, Tuple
 from flask import jsonify, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
 # Setup logging
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import joinedload
 from models import User, Expense, Category, Settlement, db, Advance
 from . import reports_bp
-from .helpers import _default_report_year, _parse_iso_date
+from .helpers import _default_report_year, _parse_iso_date, _year_date_bounds
 
 COMMON_SUBCATEGORY_ORDER = [
     'Rental Tool',
@@ -74,12 +74,14 @@ def _get_summary_approved_expenses(
     if end_date:
         validated = _validate_date(end_date)
         if validated:
-            # Include entire end date (until 23:59:59)
-            end_datetime = validated.replace(hour=23, minute=59, second=59)
-            query = query.filter(Expense.date <= end_datetime)
+            query = query.filter(Expense.date <= validated.date())
 
     if not start_date and not end_date:
-        query = query.filter(db.extract('year', Expense.date) == year)
+        year_start, next_year_start = _year_date_bounds(year)
+        query = query.filter(
+            Expense.date >= year_start,
+            Expense.date < next_year_start,
+        )
 
     return query.all()
 
@@ -119,16 +121,18 @@ def _summary_display_category(expense, category_by_id, children_by_parent_name):
 
 
 def _build_summary_payload(expenses):
-    # Ambil kategori akar (parent_id is None) - Urutkan alami (A, B, C...)
-    root_categories = Category.query.filter_by(parent_id=None).order_by(db.func.length(Category.code).asc(), Category.code.asc()).all()
     all_categories = Category.query.order_by(db.func.length(Category.code).asc(), Category.code.asc()).all()
+    # Ambil kategori akar (parent_id is None) - Urutkan alami (A, B, C...)
+    root_categories = [cat for cat in all_categories if cat.parent_id is None]
     category_by_id = {cat.id: cat for cat in all_categories}
+    children_by_parent_id = {}
+    for cat in all_categories:
+        if cat.parent_id is not None:
+            children_by_parent_id.setdefault(cat.parent_id, []).append(cat)
+
     children_by_parent_name = {}
     for root in root_categories:
-        children = Category.query.filter_by(parent_id=root.id).order_by(
-            db.func.length(Category.code).asc(),
-            Category.code.asc(),
-        ).all()
+        children = children_by_parent_id.get(root.id, [])
         ordered_children = []
         used_ids = set()
         for child_name in COMMON_SUBCATEGORY_ORDER:
@@ -143,22 +147,32 @@ def _build_summary_payload(expenses):
 
     summary_data = []
     grand_total = 0
+    expense_map_by_root = {
+        root.id: {'root_expenses': [], 'child_expense_map': {}}
+        for root in root_categories
+    }
+
+    for expense in expenses:
+        mapped_root, mapped_child = _summary_display_category(
+            expense,
+            category_by_id,
+            children_by_parent_name,
+        )
+        if not mapped_root:
+            continue
+        root_bucket = expense_map_by_root.setdefault(
+            mapped_root.id,
+            {'root_expenses': [], 'child_expense_map': {}},
+        )
+        if mapped_child:
+            root_bucket['child_expense_map'].setdefault(mapped_child.id, []).append(expense)
+        else:
+            root_bucket['root_expenses'].append(expense)
 
     for root in root_categories:
-        root_expenses = []
-        child_expense_map = {}
-        for expense in expenses:
-            mapped_root, mapped_child = _summary_display_category(
-                expense,
-                category_by_id,
-                children_by_parent_name,
-            )
-            if not mapped_root or mapped_root.id != root.id:
-                continue
-            if mapped_child:
-                child_expense_map.setdefault(mapped_child.id, []).append(expense)
-            else:
-                root_expenses.append(expense)
+        root_bucket = expense_map_by_root.get(root.id, {})
+        root_expenses = root_bucket.get('root_expenses', [])
+        child_expense_map = root_bucket.get('child_expense_map', {})
 
         children = list(children_by_parent_name.get(root.name, {}).values())
         children_list = []
@@ -181,15 +195,30 @@ def _build_summary_payload(expenses):
                 'level': 1
             })
 
-        # Tambahkan pengeluaran langsung kategori induk ke grand_total
-        for e in root_expenses:
-            grand_total += _expense_amount_for_summary(e)
+        # Hitung total bulanan & tahunan kategori induk dari seluruh anak + root direct expenses
+        parent_monthly = {str(i): 0 for i in range(1, 13)}
+        parent_yearly_total = 0.0
 
-        # Masukkan baris INDUK (User minta angka di kategori induk dikosongkan/0)
+        # Kontribusi dari anak-anak (sudah terakumulasi di children_list)
+        for child_row in children_list:
+            for i in range(1, 13):
+                month_key = str(i)
+                parent_monthly[month_key] += child_row['monthly'].get(month_key, 0) or 0
+            parent_yearly_total += child_row.get('yearly_total', 0) or 0
+
+        # Kontribusi dari expense langsung ke kategori induk
+        for e in root_expenses:
+            amount = _expense_amount_for_summary(e)
+            month_key = str(e.date.month)
+            parent_monthly[month_key] += amount
+            parent_yearly_total += amount
+            grand_total += amount
+
+        # Masukkan baris INDUK dengan total riil (bukan nol)
         summary_data.append({
             'category': f"{root.code} - {root.name}",
-            'monthly': {str(i): 0 for i in range(1, 13)},
-            'yearly_total': 0,
+            'monthly': parent_monthly,
+            'yearly_total': parent_yearly_total,
             'is_parent': True,
             'level': 0
         })

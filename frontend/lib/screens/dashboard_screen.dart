@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settlement_provider.dart';
-import '../providers/advance_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/file_helper.dart';
 import '../utils/context_extensions.dart';
@@ -217,11 +216,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onNavTap: (i) {
                   // Trigger reload jika klik menu yang sama atau pindah tab
                   if (i == 0) {
-                    context.read<SettlementProvider>().loadSettlements();
-                    _settlementListKey.currentState?.scrollToTop();
+                    _settlementListKey.currentState?.resetFilters();
                   } else if (i == 1) {
-                    context.read<AdvanceProvider>().loadAdvances();
-                    _advancesListKey.currentState?.scrollToTop();
+                    _advancesListKey.currentState?.resetFilters();
                   }
 
                   setState(() {
@@ -262,10 +259,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             height: useCompact ? 32 : 36,
                             decoration: BoxDecoration(
                               color: AppTheme.primary,
-                              borderRadius: BorderRadius.circular(6),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.light
+                                    ? Colors.black.withValues(alpha: 0.4)
+                                    : Colors.white.withValues(alpha: 0.2),
+                                width: 1,
+                              ),
                               image: auth.profileImageUrl != null
                                   ? DecorationImage(
-                                      image: NetworkImage(auth.profileImageUrl!),
+                                      image: NetworkImage(
+                                        auth.profileImageUrl!,
+                                      ),
                                       fit: BoxFit.cover,
                                     )
                                   : null,
@@ -321,11 +328,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             compact: true,
                             onChanged: (index) {
                               if (index == 0) {
-                                context.read<SettlementProvider>().loadSettlements();
-                                _settlementListKey.currentState?.scrollToTop();
+                                _settlementListKey.currentState?.resetFilters();
                               } else if (index == 1) {
-                                context.read<AdvanceProvider>().loadAdvances();
-                                _advancesListKey.currentState?.scrollToTop();
+                                _advancesListKey.currentState?.resetFilters();
                               }
                               setState(() => _navIndex = index);
                             },
@@ -379,8 +384,9 @@ class _SettlementListViewState extends State<_SettlementListView> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _showScrollToTop = false;
-  final bool _selectionMode = false;
+  bool _selectionMode = false;
   final Set<int> _selectedSettlementIds = {};
+  String _selectedType = 'single';
 
   Color _cardColor(BuildContext context) =>
       context.isDark ? AppTheme.card : AppTheme.lightCard;
@@ -415,6 +421,21 @@ class _SettlementListViewState extends State<_SettlementListView> {
     _searchDebounce = Timer(_searchDebounceDuration, _reloadSettlements);
   }
 
+  /// Reset semua filter dan pencarian
+  void resetFilters() {
+    if (!mounted) return;
+    setState(() {
+      _statusFilter = null;
+      _searchQuery = '';
+      _searchCtrl.clear();
+      _startDate = null;
+      _endDate = null;
+      _selectedType = 'single';
+    });
+    context.read<SettlementProvider>().clearFilters();
+    scrollToTop();
+  }
+
   void _toggleSettlementSelection(int id, bool selected) {
     setState(() {
       if (selected) {
@@ -422,7 +443,71 @@ class _SettlementListViewState extends State<_SettlementListView> {
       } else {
         _selectedSettlementIds.remove(id);
       }
+      if (_selectedSettlementIds.isEmpty) _selectionMode = false;
     });
+  }
+
+  Future<void> _bulkDeleteSettlements() async {
+    if (_selectedSettlementIds.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardColor(context),
+        title: const Text('Hapus Masal'),
+        content: Text(
+          'Apakah Anda yakin ingin menghapus ${_selectedSettlementIds.length} settlement terpilih?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Batal',
+              style: TextStyle(color: _bodyColorLocal(context)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final prov = context.read<SettlementProvider>();
+      final ids = _selectedSettlementIds.toList();
+      for (final id in ids) {
+        await prov.deleteSettlement(id, reload: false);
+      }
+      await prov.loadSettlements();
+      if (mounted) {
+        Navigator.pop(context); // hide loading
+        setState(() {
+          _selectedSettlementIds.clear();
+          _selectionMode = false;
+        });
+        AppSnackbar.show('Berhasil menghapus ${ids.length} settlement');
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // hide loading
+        AppSnackbar.show(
+          'Gagal menghapus beberapa settlement: $e',
+          isError: true,
+        );
+      }
+    }
   }
 
   @override
@@ -745,7 +830,9 @@ class _SettlementListViewState extends State<_SettlementListView> {
                         child: Scrollbar(
                           controller: _listScrollController,
                           thumbVisibility: true,
+                          interactive: true,
                           thickness: 8,
+                          radius: const Radius.circular(4),
                           child: RefreshIndicator(
                             onRefresh: () async => _reloadSettlements(),
                             child: Builder(
@@ -764,20 +851,17 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                           'batch',
                                     )
                                     .toList();
-                                final items = <dynamic>[];
-                                if (singles.isNotEmpty) {
-                                  items.add('__header_single__');
-                                  items.addAll(singles);
-                                }
-                                if (batches.isNotEmpty) {
-                                  items.add('__header_batch__');
-                                  items.addAll(batches);
-                                }
+                                final displayList =
+                                    _selectedType == 'single'
+                                        ? singles
+                                        : batches;
+                                final items = <dynamic>[...displayList];
 
                                 return CustomScrollView(
                                   key: const PageStorageKey('settlement_list'),
                                   controller: _listScrollController,
-                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
                                   slivers: [
                                     SliverToBoxAdapter(
                                       child: _buildScrollableSettlementHeader(
@@ -791,7 +875,8 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                         useCompact,
                                       ),
                                     ),
-                                    if (prov.loading && prov.settlements.isEmpty)
+                                    if (prov.loading &&
+                                        prov.settlements.isEmpty)
                                       const SliverFillRemaining(
                                         child: Center(
                                           child: CircularProgressIndicator(
@@ -799,7 +884,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                           ),
                                         ),
                                       )
-                                    else if (prov.settlements.isEmpty)
+                                    else if (items.isEmpty)
                                       SliverFillRemaining(
                                         hasScrollBody: false,
                                         child: Center(
@@ -809,14 +894,19 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                               Icon(
                                                 Icons.inbox_rounded,
                                                 size: 64,
-                                                color: _bodyColorLocal(context)
-                                                    .withValues(alpha: 0.3),
+                                                color: _bodyColorLocal(
+                                                  context,
+                                                ).withValues(alpha: 0.3),
                                               ),
                                               const SizedBox(height: 16),
                                               Text(
-                                                'Belum ada settlement',
+                                                _selectedType == 'single'
+                                                    ? 'Belum ada pengeluaran sendiri'
+                                                    : 'Belum ada pengeluaran batch',
                                                 style: TextStyle(
-                                                  color: _bodyColorLocal(context),
+                                                  color: _bodyColorLocal(
+                                                    context,
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -828,64 +918,58 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                         padding: EdgeInsets.only(
                                           left: isNarrow ? 16 : 24,
                                           right: isNarrow ? 16 : 24,
-                                          bottom: isNarrow ? 16 : 24,
+                                          bottom: _selectionMode
+                                              ? 100
+                                              : (isNarrow ? 16 : 24),
                                         ),
                                         sliver: SliverList(
-                                          delegate: SliverChildBuilderDelegate(
-                                            (context, i) {
-                                              final item = items[i];
-                                              if (item == '__header_single__') {
-                                                return _buildGroupHeader(
-                                                  Icons.receipt_long_rounded,
-                                                  'Pengeluaran Sendiri (${singles.length})',
-                                                  AppTheme.primary,
-                                                );
-                                              }
-                                              if (item == '__header_batch__') {
-                                                return _buildGroupHeader(
-                                                  Icons.folder_rounded,
-                                                  'Pengeluaran Batch (${batches.length})',
-                                                  AppTheme.warning,
-                                                );
-                                              }
-                                              final s =
-                                                  item as Map<String, dynamic>;
-                                              return RepaintBoundary(
-                                                child: SettlementCard(
-                                                  key: ValueKey(
-                                                    'settlement_${s['id']}',
-                                                  ),
-                                                  settlement: s,
-                                                  isManager: auth.isManager,
-                                                  onDelete: _selectionMode
-                                                      ? null
-                                                      : () => _deleteSettlement(
-                                                            s['id'],
-                                                          ),
-                                                  selectionMode: _selectionMode,
-                                                  selected:
-                                                      _selectedSettlementIds
-                                                          .contains(s['id']),
-                                                  onSelectionChanged: (v) =>
-                                                      _toggleSettlementSelection(
+                                          delegate: SliverChildBuilderDelegate((
+                                            context,
+                                            i,
+                                          ) {
+                                            final s =
+                                                items[i] as Map<String, dynamic>;
+                                            return RepaintBoundary(
+                                              child: SettlementCard(
+                                                key: ValueKey(
+                                                  'settlement_${s['id']}',
+                                                ),
+                                                settlement: s,
+                                                canSelect:
+                                                    auth.isManager ||
+                                                    (s['status']
+                                                                ?.toString()
+                                                                .toLowerCase() !=
+                                                            'approved' &&
+                                                        s['status']
+                                                                ?.toString()
+                                                                .toLowerCase() !=
+                                                            'completed'),
+                                                onDelete: _selectionMode
+                                                    ? null
+                                                    : () => _deleteSettlement(
                                                         s['id'],
-                                                        v,
                                                       ),
-                                                  onTap: () => Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          SettlementDetailScreen(
-                                                            settlementId:
-                                                                s['id'],
-                                                          ),
+                                                selectionMode: _selectionMode,
+                                                selected: _selectedSettlementIds
+                                                    .contains(s['id']),
+                                                onSelectionChanged: (v) =>
+                                                    _toggleSettlementSelection(
+                                                      s['id'],
+                                                      v,
                                                     ),
+                                                onTap: () => Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        SettlementDetailScreen(
+                                                          settlementId: s['id'],
+                                                        ),
                                                   ),
                                                 ),
-                                              );
-                                            },
-                                            childCount: items.length,
-                                          ),
+                                              ),
+                                            );
+                                          }, childCount: items.length),
                                         ),
                                       ),
                                   ],
@@ -898,16 +982,42 @@ class _SettlementListViewState extends State<_SettlementListView> {
                     ],
                   ),
                   if (_showScrollToTop && !_selectionMode)
-                  Positioned(
-                  right: 16,
-                  bottom: 16,
-                  child: FloatingActionButton.small(
-                    onPressed: scrollToTop,                        backgroundColor: _cardColor(
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: FloatingActionButton.small(
+                        heroTag: 'settlement_scroll_to_top',
+                        onPressed: scrollToTop,
+                        backgroundColor: _cardColor(
                           context,
                         ).withValues(alpha: 0.9),
                         child: const Icon(
                           Icons.keyboard_arrow_up_rounded,
                           color: AppTheme.primary,
+                        ),
+                      ),
+                    ),
+                  if (_selectionMode && _selectedSettlementIds.isNotEmpty)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: Center(
+                        child: FloatingActionButton.extended(
+                          heroTag: 'settlement_bulk_delete',
+                          onPressed: _bulkDeleteSettlements,
+                          backgroundColor: AppTheme.danger,
+                          icon: const Icon(
+                            Icons.delete_sweep_rounded,
+                            color: Colors.white,
+                          ),
+                          label: Text(
+                            'Hapus (${_selectedSettlementIds.length})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -920,22 +1030,116 @@ class _SettlementListViewState extends State<_SettlementListView> {
     );
   }
 
-  Widget _buildGroupHeader(IconData icon, String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, top: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: _titleColorLocal(context),
+  Widget _buildTypeToggle(bool useCompact) {
+    final prov = context.read<SettlementProvider>();
+    final singlesCount = prov.settlements
+        .where((s) => (s['settlement_type'] ?? 'single') == 'single')
+        .length;
+    final batchesCount = prov.settlements
+        .where((s) => (s['settlement_type'] ?? 'batch') == 'batch')
+        .length;
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: _cardColor(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: context.isDark ? AppTheme.divider : AppTheme.lightDivider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildToggleButton(
+              label: 'Pengeluaran Sendiri',
+              count: singlesCount,
+              value: 'single',
+              useCompact: useCompact,
+            ),
+            const SizedBox(width: 4),
+            _buildToggleButton(
+              label: 'Pengeluaran Batch',
+              count: batchesCount,
+              value: 'batch',
+              useCompact: useCompact,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleButton({
+    required String label,
+    required int count,
+    required String value,
+    required bool useCompact,
+  }) {
+    final isActive = _selectedType == value;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _selectedType = value),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: useCompact
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+                : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isActive ? AppTheme.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      )
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: useCompact ? 11 : 13,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                    color: isActive
+                        ? Colors.white
+                        : (context.isDark
+                            ? AppTheme.textSecondary
+                            : AppTheme.lightTextSecondary),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : (context.isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.05)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: useCompact ? 10 : 12,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.white : AppTheme.primary,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -979,21 +1183,45 @@ class _SettlementListViewState extends State<_SettlementListView> {
                   ],
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: _selectionMode
-                    ? null
-                    : () => _showCreateDialog(context),
-                icon: Icon(Icons.add, size: useCompact ? 16 : 20),
-                label: Text(
-                  isNarrow ? 'Buat' : 'Buat Settlement',
-                  style: TextStyle(fontSize: useCompact ? 12 : 14),
-                ),
-                style: ElevatedButton.styleFrom(
-                  padding: useCompact
-                      ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8)
-                      : null,
-                  minimumSize: useCompact ? const Size(0, 36) : null,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectionMode = !_selectionMode;
+                        if (!_selectionMode) _selectedSettlementIds.clear();
+                      });
+                    },
+                    icon: Icon(
+                      _selectionMode
+                          ? Icons.close_rounded
+                          : Icons.delete_outline_rounded,
+                      color: _selectionMode ? AppTheme.danger : AppTheme.danger,
+                      size: useCompact ? 22 : 26,
+                    ),
+                    tooltip: _selectionMode ? 'Batal' : 'Pilih Banyak',
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton.icon(
+                    onPressed: _selectionMode
+                        ? null
+                        : () => _showCreateDialog(context),
+                    icon: Icon(Icons.add, size: useCompact ? 16 : 20),
+                    label: Text(
+                      isNarrow ? 'Buat' : 'Buat Settlement',
+                      style: TextStyle(fontSize: useCompact ? 12 : 14),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: useCompact
+                          ? const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            )
+                          : null,
+                      minimumSize: useCompact ? const Size(0, 36) : null,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1165,6 +1393,8 @@ class _SettlementListViewState extends State<_SettlementListView> {
               ],
             ),
           ),
+          SizedBox(height: useCompact ? 12 : 16),
+          _buildTypeToggle(useCompact),
         ],
       ),
     );

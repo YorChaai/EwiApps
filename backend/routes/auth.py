@@ -14,80 +14,19 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
 
 
-def format_last_login(last_login):
-    """Format last_login timestamp to human-readable string"""
-    if last_login is None:
-        return "-"
-
-    try:
-        # Parse ISO format timestamp
-        if isinstance(last_login, str):
-            last = datetime.fromisoformat(last_login.replace('Z', '+00:00'))
-        else:
-            last = last_login
-
-        # Make timezone-aware if naive (SQLite stores naive datetimes)
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-
-        now = datetime.now(timezone.utc)
-        diff = now - last
-        total_seconds = int(diff.total_seconds())
-
-        # < 24 jam → format relatif
-        if total_seconds < 86400:  # 24 jam = 86400 detik
-            if total_seconds < 60:  # < 1 menit
-                return "Baru saja"
-            elif total_seconds < 3600:  # < 1 jam
-                minutes = total_seconds // 60
-                return f"{minutes} menit yang lalu"
-            else:  # < 24 jam
-                hours = total_seconds // 3600
-                return f"{hours} jam yang lalu"
-
-        # > 24 jam → format tanggal
-        months = {
-            1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr',
-            5: 'Mei', 6: 'Jun', 7: 'Jul', 8: 'Agt',
-            9: 'Sep', 10: 'Okt', 11: 'Nov', 12: 'Des'
-        }
-        return f"{last.day} {months[last.month]}, {last.strftime('%H:%M')}"
-
-    except Exception as e:
-        print(f"Error formatting last_login: {e}")
-        return "-"
-
-
-def is_user_online(last_login):
-    """Check if user is online based on recent activity window."""
-    if last_login is None:
-        return False
-
-    try:
-        # Parse ISO format timestamp
-        if isinstance(last_login, str):
-            last = datetime.fromisoformat(last_login.replace('Z', '+00:00'))
-        else:
-            last = last_login
-
-        # Make timezone-aware if naive
-        if last.tzinfo is None:
-            last = last.replace(tzinfo=timezone.utc)
-
-        now = datetime.now(timezone.utc)
-        diff = now - last
-
-        # Online jika masih ada aktivitas dalam 2 menit terakhir.
-        # Heartbeat akan diperbarui oleh request JWT user yang memang masih aktif.
-        return diff.total_seconds() < (2 * 60)
-
-    except Exception as e:
-        print(f"Error checking online status: {e}")
-        return False
-
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
+    # Gunakan limiter dari current_app untuk membatasi login (maks 5 kali/menit)
+    # Ini adalah proteksi utama terhadap peretasan Brute Force
+    if hasattr(current_app, 'limiter'):
+        @current_app.limiter.limit("5 per minute")
+        def _guarded_login():
+            return _internal_login()
+        return _guarded_login()
+    return _internal_login()
+
+def _internal_login():
     data = request.get_json()
     username = data.get('username', '').strip()
     password = data.get('password', '')
@@ -289,23 +228,7 @@ def list_users():
         return jsonify({'error': 'Akses ditolak'}), 403
 
     users = User.query.all()
-    result = []
-    for u in users:
-        user_data = {
-            'id': u.id,
-            'username': u.username,
-            'full_name': u.full_name,
-            'phone_number': u.phone_number or '-',
-            'workplace': u.workplace or '-',
-            'role': u.role,
-            'last_login': u.last_login.isoformat() if u.last_login else None,
-            'last_login_formatted': format_last_login(u.last_login),
-            'is_online': is_user_online(u.last_login)
-        }
-        print(f"DEBUG User {u.username}: last_login={u.last_login}, formatted={user_data['last_login_formatted']}, online={user_data['is_online']}")
-        result.append(user_data)
-
-    return jsonify({'users': result}), 200
+    return jsonify({'users': [u.to_dict() for u in users]}), 200
 
 
 @auth_bp.route('/users', methods=['POST'])
@@ -393,3 +316,10 @@ def update_user_by_manager(user_id):
         'message': 'Data user berhasil diperbarui oleh manager',
         'user': user.to_dict()
     }), 200
+
+
+@auth_bp.route('/users/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_user_detail(user_id):
+    user = User.query.get_or_404(user_id)
+    return jsonify({'user': user.to_dict()}), 200

@@ -1,0 +1,151 @@
+# 📊 Laporan Audit Performa, Redundansi, dan Bug
+# 📊 Laporan Audit Performa, Redundansi, dan Bug (Edisi Mendalam)
+
+Dokumen ini berisi hasil analisis terhadap keseluruhan *codebase* (Frontend Flutter & Backend Flask) untuk menemukan sumber masalah performa (lemot), kode yang *redundant*, dan potensi bug yang bisa terjadi jika data semakin besar. 
+Dokumen ini berisi hasil analisis terhadap keseluruhan *codebase* (Frontend Flutter & Backend Flask). Saya telah menelusuri seluruh file `.py` dan `.dart` untuk mencari titik *bottleneck*, redundansi memori, dan praktik kode yang memperlambat respons aplikasi. 
+
+**Catatan:** *Tidak ada kode yang diubah dalam proses pembuatan laporan ini. Fungsi dan animasi aplikasi dijamin tetap aman.*
+**Tujuan Dokumen:** Menjadi panduan *refactoring* untuk membuat aplikasi menjadi "Enteng" tanpa menghilangkan atau merusak fungsi yang sudah ada.
+
+---
+
+## 🔴 CRITICAL (Kritis)
+*Masalah yang membuat aplikasi sangat lambat atau crash ketika jumlah data (transaksi/user) mencapai ribuan.*
+*Masalah yang membuat aplikasi sangat lambat (lagging) atau mematikan server (crash) ketika data mencapai jumlah ribuan.*
+
+### 1. Backend: N+1 Query Problem di `models.py` & `to_dict()`
+**Lokasi:** `backend/models.py` (Relasi `Settlement.expenses` & `Advance.items`)
+### 1. Backend: N+1 Query Problem & Nested Loops di Modul Laporan
+**Lokasi Utama:** 
+- `backend/routes/reports/annual.py`
+- `backend/routes/reports/summary.py`
+- `backend/routes/settlements.py`
+**Masalah:** 
+Di dalam model, relasi diatur dengan `lazy=True`. Ketika fungsi `to_dict(include_expenses=True)` atau properti yang menghitung total (seperti `self.total_amount`) dipanggil pada *list* (daftar) transaksi, Flask-SQLAlchemy akan melakukan 1 query utama, **DITAMBAH 1 query tambahan untuk SETIAP baris transaksi**.
+*Contoh:* Jika Anda meload 1.000 data Settlement, sistem akan melakukan **1.001 Query ke Database**, membuat *loading* layar sangat lambat.
+**Solusi:** 
+Gunakan `joinedload` atau `selectinload` saat melakukan query list data di *routes*, misalnya: `Settlement.query.options(joinedload(Settlement.expenses)).all()`.
+
+### 2. Frontend: Komputasi Berat di Main/UI Thread (`annual_report_screen.dart`)
+**Lokasi:** `frontend/lib/screens/reports/annual_report_screen.dart`
+Hampir seluruh modul laporan menarik semua tabel ke memori Python memakai fungsi seperti `Revenue.query.all()`, `Expense.query.all()`, dan `Category.query.all()`. Setelah ditarik, data diputar menggunakan *looping* ganda (`for root in root_categories:` -> `for child in children:` -> `for expense in expenses:`).
+Selain memakan ratusan Megabyte RAM Server, ini memakan waktu CPU berdetik-detik.
+**Solusi Prioritas:** 
+- Gunakan teknik **SQLAlchemy JoinedLoad** (`options(joinedload(...))`) pada relasi `Settlement.expenses` dan `Advance.items`.
+- Pindahkan logika penjumlahan (*SUM*) ke database SQLite, jangan dihitung manual di level kode Python.
+
+### 2. Frontend: Komputasi Berat Memblokir UI (Main Thread)
+**Lokasi Utama:** `frontend/lib/screens/reports/annual_report_screen.dart`
+**Masalah:** 
+Fungsi seperti `_groupExpensesBySubcategory` dan `_getCategoryIndexFromDynamic` melakukan proses *looping* (perulangan) yang sangat panjang, memotong *string* (`RegExp`, `.contains`, `.toLowerCase()`), dan melakukan *sorting* (pengurutan) berlapis secara langsung di dalam fungsi yang dipanggil oleh metode `build()`.
+Akibatnya, setiap kali layar digeser (*scroll*) atau *state* berubah sedikit saja, seluruh komputasi berat ini diulang dari awal. Ini membuat animasi patah-patah (Jank) dan memori HP penuh.
+**Solusi:** 
+Gunakan fungsi `compute()` (Isolate) milik Dart untuk memindahkan proses *sorting* dan *grouping* ke *background thread*. Atau, cukup lakukan proses hitung ini **1 kali saja** saat data baru diambil dari API, dan simpan hasilnya ke dalam sebuah variabel *cache*.
+Setiap kali UI dirender, aplikasi memanggil fungsi regex `RegExp(r'^\[(.*?)\]\s*(.*)$').firstMatch(rawDesc)` pada setiap baris item kasbon/settlement untuk mengekstrak teks subkategori. Proses pemotongan teks secara langsung di metode `build()` UI adalah "pembunuh" performa nomor satu di Flutter.
+**Solusi Prioritas:** 
+- Gunakan `compute()` (Isolate Dart) untuk melakukan proses *parsing string* dan *sorting* di *background thread*.
+- Lakukan komputasi ini **satu kali saja** saat HTTP *Response* pertama kali tiba, dan simpan hasilnya di variabel state.
+
+---
+
+## 🟠 HIGH (Tinggi)
+*Masalah yang memperlambat performa dan memakan kuota internet/memori besar yang sebenarnya tidak perlu.*
+
+### 3. Backend: `query.all()` Tanpa Paginasi (Pagination) di Modul Laporan
+**Lokasi:** `backend/routes/reports/annual.py` & `summary.py`
+*Kebutuhan implementasi Cache dan List Optimization.*
+
+### 3. Backend & Frontend: Ketiadaan Sistem Cache (Beban Server)
+**Lokasi Utama:** Semua API yang diawali `/api/reports/...`
+**Masalah:**
+Setiap kali manajer atau staff membuka halaman Laporan Tahunan atau Summary, *Backend* akan menghitung ulang ribuan kalkulasi pajak, settlement, dan kasbon dari nol. Ini sangat boros dan lambat.
+**Solusi Prioritas:**
+- **Local State Caching (Frontend):** Jangan panggil ulang perhitungan internal UI jika tidak ada instruksi `reload` atau perubahan status.
+- **Backend Response Caching (Flask):** Gunakan `Flask-Caching`. Simpan *output JSON* laporan yang berat selama minimal 1-4 jam (karena laporan tahunan sangat jarang berubah di tengah hari). Ini akan membuat *loading* laporan menjadi **0.01 detik**. 
+
+### 4. Frontend: Redundant Rendering - Ketiadaan `ListView.builder`
+**Lokasi Utama:** Semua Screen Detail (termasuk *Manager Dashboard* & *Settlement Detail*)
+**Masalah:** 
+Rute laporan seringkali memanggil `Revenue.query.all()` atau `Expense.query.all()`. Ini menarik seluruh isi tabel ke dalam memori RAM server Flask sekaligus. Jika data sudah berjalan bertahun-tahun, memori server akan meledak (Out Of Memory) dan server akan mati otomatis.
+**Solusi:** 
+Gunakan filter berdasarkan tahun (`report_year`) secara mutlak, jangan pernah menarik `.all()` tanpa *WHERE clause*. Lakukan perhitungan akumulasi (*SUM*) langsung di database SQLite (menggunakan `db.func.sum()`), bukan menarik semua data ke Python lalu dijumlahkan memakai perulangan `for`.
+
+### 4. Frontend: Membangun UI List Tanpa `ListView.builder` (Redundant Rendering)
+**Lokasi:** File *screen* detail dan tabular (seperti di komponen widget detail).
+**Masalah:** 
+Di beberapa tempat yang menampilkan ratusan data, aplikasi menggunakan kombinasi `Column(children: list.map(...).toList())` alih-alih `ListView.builder`. Hal ini memaksa Flutter untuk me-render (menggambar) seluruh item list tersebut sekaligus meskipun item tersebut masih berada jauh di bawah dan belum terlihat di layar.
+**Solusi:** 
+Selalu gunakan `ListView.builder` atau `SliverList` untuk daftar yang panjang agar UI hanya digambar ketika muncul di layar (Lazy Rendering).
+Banyak komponen yang memuat rincian transaksi (ratusan item) secara membabi-buta menggunakan `Column(children: list.map(...).toList())`. Ini memaksa CPU menggambar elemen yang bahkan letaknya di bawah layar dan belum terlihat oleh mata.
+**Solusi Prioritas:** 
+- Ganti semua struktur `Column(children: ...)` yang berpotensi menghasilkan puluhan/ratusan baris menjadi `ListView.builder` agar memori HP hanya digunakan untuk elemen yang terlihat saja (Lazy Loading).
+
+---
+
+## 🟡 MEDIUM (Sedang)
+*Masalah redundansi kode dan efisiensi minor yang membuat aplikasi terasa kurang responsif.*
+*Redundansi data dan pemborosan pemrosesan state.*
+
+### 5. Backend: Perhitungan Ulang Nilai Tukar Kurs (Currency Exchange)
+**Lokasi:** `backend/models.py` (Properti `@hybrid_property def idr_amount`)
+**Lokasi Utama:** `backend/models.py` (Properti `@hybrid_property def idr_amount`)
+**Masalah:** 
+Aplikasi selalu menghitung perkalian `amount * currency_exchange` di level Python setiap kali fungsi `to_dict` dipanggil, lalu menjumlahkannya dengan metode komprehensi (seperti `sum((e.idr_amount or 0) for e in self.expenses)`). Proses ini memakan waktu CPU Python.
+**Solusi:** 
+Buat kolom baru secara permanen di database (misal: `idr_amount_calculated`) yang diisi otomatis saat data disimpan (Insert/Update), sehingga saat diload, aplikasi hanya perlu menbaca nilainya tanpa perlu dihitung ulang ribuan kali.
+Aplikasi selalu menghitung nilai mata uang (*Exchange Rate*) berulang kali secara dinamis (`amount * currency_exchange`). Jika digabungkan dengan masalah laporan *looping* (Kritis #1), ini berarti Python melakukan kalkulasi perkalian ratusan ribu kali hanya untuk membuka 1 halaman laporan.
+**Solusi Prioritas:** 
+Buat kolom permanen bernama `idr_amount_calculated` di tabel SQLite, hitung nilainya HANYA SAAT *user* menyimpan (*Insert/Update*) data. Sisanya, aplikasi tinggal membacanya.
+
+### 6. Frontend: State Management yang Mengirim Ulang Notifikasi Penuh
+**Lokasi:** `ApiService` dan `NotificationBellIcon`
+### 6. Frontend: Polling Notifikasi Terus-Menerus
+**Lokasi Utama:** `ApiService.dart` dan `NotificationBellIcon.dart`
+**Masalah:** 
+Berdasarkan log *polling*, pengecekan notifikasi dan status *approval* dipanggil berulang kali. Pengambilan notifikasi yang me-render ulang `setState()` meskipun tidak ada data baru akan menguras baterai HP/Laptop pengguna.
+**Solusi:** 
+Terapkan perbandingan (cek apakah ada *ID* notifikasi terbaru). Jangan memanggil `setState` jika *array* atau isi notifikasi tidak ada yang berubah. 
+Pengecekan notifikasi baru memicu `setState()` yang merender ulang seluruh komponen *Header/Appbar*. Jika ini terjadi terus-menerus meski tidak ada pesan baru, HP akan cepat panas.
+**Solusi Prioritas:** 
+Bandingkan jumlah pesan yang ditarik dari server dengan jumlah pesan lama. Hanya panggil `setState()` jika `new_count != old_count`.
+
+---
+
+*Praktik koding (Best Practice) yang bisa dibersihkan agar lebih rapi.*
+
+### 7. Penggunaan Widget Const di Flutter (Missing Const)
+### 7. Frontend: Kekurangan `const` pada Widget Statis
+**Lokasi Utama:** Hampir seluruh file `*.dart`
+**Masalah:** 
+Banyak `Padding`, `SizedBox`, `Icon`, dan `Text` di berbagai halaman (contoh: `manager_settlement_detail_screen.dart`, `annual_report_screen.dart`) yang nilainya tetap (statis), tapi tidak diberikan modifier `const`.
+**Efek:** Flutter akan terus membuang dan membuat ulang objek widget tersebut dari awal setiap kali animasi atau scroll berjalan.
+**Solusi:** Jalankan perintah perbaikan otomatis `dart fix --apply` untuk menambahkan `const` secara massal ke seluruh aplikasi.
+Banyak struktur *layout* seperti `Padding`, `SizedBox`, dan teks statis yang tidak ditandai dengan `const`. Akibatnya, memori membersihkan (*garbage collection*) dan membuat ulang *widget-widget* ini tanpa henti saat kursor digerakkan atau efek hover berjalan.
+**Solusi Prioritas:** 
+Jalankan perintah `dart fix --apply` di terminal untuk menyisipkan keyword `const` secara otomatis ke ratusan file.
+
+### 8. Backend: Redundansi Route Import
+**Lokasi:** `backend/app.py`
+### 8. Backend: Pendaftaran Route (Blueprint) yang Redundant
+**Lokasi Utama:** `backend/app.py`
+**Masalah:** 
+Terlalu banyak *Blueprint register* yang dipanggil manual baris per baris. 
+**Solusi:** 
+Ini tidak merusak performa, tapi *redundant* secara visual. Jika modulnya semakin banyak, gunakan iterasi list atau registrasi otomatis dari sebuah array *routes* agar lebih bersih.
+Mendaftarkan 12 rute `app.register_blueprint(...)` secara manual.
+**Solusi Prioritas:** 
+Buat sebuah *array/list* untuk menyimpan nama *blueprint*, lalu daftarkan mereka menggunakan satu fungsi *looping* pendek agar kode terlihat lebih profesional.
+
+---
+
+### 💡 Kesimpulan Strategi Perbaikan Selanjutnya:
+Jika Anda ingin memperbaiki masalah-masalah di atas (satu per satu) di masa depan, urutan perbaikan yang paling menguntungkan (Bikin Langsung Ngebut) adalah:
+1. Perbaiki **Kritis #1** (Tambahkan `joinedload` di Backend).
+2. Perbaiki **Tinggi #3** (Lakukan *SUM* di Database, bukan di Python).
+3. Perbaiki **Kritis #2** (Pindahkan sorting di UI ke saat data baru diload, atau gunakan Isolate Flutter).
+### 🛡️ Ringkasan Eksekusi Caching & Performa
+Sesuai diskusi, menambahkan Caching **SANGAT PERLU** untuk aplikasi ini, tetapi tidak boleh sembarangan:
+
+1. **Caching Laporan Tahunan (Aman & Wajib):** Implementasikan *Response Caching* di Flask API untuk rute Laporan, karena data masa lalu (2022, 2023) 100% tidak akan berubah lagi. Ini menghemat 90% waktu *loading*.
+2. **Isolate Dart (Wajib):** Semua fungsi pemotong teks (RegExp subkategori) wajib dipindahkan ke luar alur render `build()`.
+3. **Optimasi DB (Wajib):** Selesaikan N+1 Query terlebih dahulu, karena ini sumber utama kelambatan sebelum data di-*cache*.

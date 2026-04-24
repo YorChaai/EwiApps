@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 import '../../utils/context_extensions.dart';
 import '../../utils/file_helper.dart';
+import '../../utils/app_snackbar.dart';
 import 'advance_detail_screen.dart';
 
 class AdvancesScreen extends StatefulWidget {
@@ -29,8 +30,9 @@ class AdvancesScreenState extends State<AdvancesScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   bool _showScrollToTop = false;
-  final bool _selectionMode = false;
+  bool _selectionMode = false;
   final Set<int> _selectedAdvanceIds = {};
+  String _selectedType = 'single';
 
   Color _cardColor(BuildContext context) => context.isDark ? AppTheme.card : AppTheme.lightCard;
   Color _titleColor(BuildContext context) => context.isDark ? AppTheme.cream : AppTheme.lightTextPrimary;
@@ -54,6 +56,23 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     );
   }
 
+  /// Reset semua filter dan pencarian
+  void resetFilters() {
+    if (!mounted) return;
+    setState(() {
+      _statusFilter = null;
+      _startDate = null;
+      _endDate = null;
+      _searchQuery = '';
+      _searchCtrl.clear();
+      _selectedType = 'single';
+    });
+    final prov = context.read<AdvanceProvider>();
+    prov.clearFilters(); // Ini akan memicu loadAdvances secara internal
+    _loadAnnualAdvanceSummary();
+    scrollToTop();
+  }
+
   void _scheduleAdvanceReload() {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(_searchDebounceDuration, _reloadAdvances);
@@ -74,7 +93,63 @@ class AdvancesScreenState extends State<AdvancesScreen> {
       } else {
         _selectedAdvanceIds.remove(id);
       }
+      if (_selectedAdvanceIds.isEmpty) _selectionMode = false;
     });
+  }
+
+  Future<void> _bulkDeleteAdvances() async {
+    if (_selectedAdvanceIds.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardColor(context),
+        title: const Text('Hapus Masal'),
+        content: Text('Apakah Anda yakin ingin menghapus ${_selectedAdvanceIds.length} kasbon terpilih?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Batal', style: TextStyle(color: _bodyColor(context))),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final prov = context.read<AdvanceProvider>();
+      final ids = _selectedAdvanceIds.toList();
+      for (final id in ids) {
+        await prov.deleteAdvance(id, reload: false);
+      }
+      await prov.loadAdvances();
+      if (mounted) {
+        Navigator.pop(context); // hide loading
+        setState(() {
+          _selectedAdvanceIds.clear();
+          _selectionMode = false;
+        });
+        AppSnackbar.show('Berhasil menghapus ${ids.length} kasbon');
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // hide loading
+        AppSnackbar.show('Gagal menghapus beberapa kasbon: $e', isError: true);
+      }
+    }
   }
 
 
@@ -294,16 +369,17 @@ class AdvancesScreenState extends State<AdvancesScreen> {
                         child: Scrollbar(
                             controller: _listScrollController,
                             thumbVisibility: true,
+                            interactive: true,
                             thickness: 8,
+                            radius: const Radius.circular(4),
                             child: RefreshIndicator(
                               onRefresh: () async => _reloadAdvances(),
                               child: Builder(
                                 builder: (context) {
                                   final singles = prov.advances.where((a) => (a['advance_type'] ?? 'single') == 'single').toList();
                                   final batches = prov.advances.where((a) => (a['advance_type'] ?? 'single') == 'batch').toList();
-                                  final items = <dynamic>[];
-                                  if (singles.isNotEmpty) { items.add('__header_single__'); items.addAll(singles); }
-                                  if (batches.isNotEmpty) { items.add('__header_batch__'); items.addAll(batches); }
+                                  final displayList = _selectedType == 'single' ? singles : batches;
+                                  final items = <dynamic>[...displayList];
 
                                   return CustomScrollView(
                                     key: const PageStorageKey('advance_list'),
@@ -315,21 +391,18 @@ class AdvancesScreenState extends State<AdvancesScreen> {
                                         const SliverFillRemaining(
                                           child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
                                         )
-                                      else if (prov.advances.isEmpty)
+                                      else if (items.isEmpty)
                                         SliverFillRemaining(
                                           hasScrollBody: false,
-                                          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.inbox_rounded, size: 64, color: _bodyColor(context).withValues(alpha: 0.3)), const SizedBox(height: 16), Text('Belum ada kasbon', style: TextStyle(color: _bodyColor(context)))]))
+                                          child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.inbox_rounded, size: 64, color: _bodyColor(context).withValues(alpha: 0.3)), const SizedBox(height: 16), Text(_selectedType == 'single' ? 'Belum ada kasbon mandiri' : 'Belum ada kasbon batch', style: TextStyle(color: _bodyColor(context)))]))
                                         )
                                       else
                                         SliverPadding(
-                                          padding: EdgeInsets.only(left: isNarrow ? 16 : 24, right: isNarrow ? 16 : 24, bottom: isNarrow ? 16 : 24),
+                                          padding: EdgeInsets.only(left: isNarrow ? 16 : 24, right: isNarrow ? 16 : 24, bottom: _selectionMode ? 100 : (isNarrow ? 16 : 24)),
                                           sliver: SliverList(
                                             delegate: SliverChildBuilderDelegate(
                                               (context, i) {
-                                                final item = items[i];
-                                                if (item == '__header_single__') return _groupHeader(Icons.receipt_long_rounded, 'Kasbon Mandiri (${singles.length})');
-                                                if (item == '__header_batch__') return _groupHeader(Icons.folder_rounded, 'Kasbon Batch (${batches.length})');
-                                                final a = item as Map<String, dynamic>;
+                                                final a = items[i] as Map<String, dynamic>;
                                                 return RepaintBoundary(
                                                   child: AdvanceCard(
                                                     key: ValueKey('advance_${a['id']}'),
@@ -361,7 +434,36 @@ class AdvancesScreenState extends State<AdvancesScreen> {
                     ],
                   ),
                   if (_showScrollToTop && !_selectionMode)
-                    Positioned(right: 16, bottom: 16, child: FloatingActionButton.small(onPressed: scrollToTop, backgroundColor: _cardColor(context).withValues(alpha: 0.9), child: const Icon(Icons.keyboard_arrow_up_rounded, color: AppTheme.primary))),
+                    Positioned(
+                      right: 16,
+                      bottom: 16,
+                      child: FloatingActionButton.small(
+                        heroTag: 'advance_scroll_to_top',
+                        onPressed: scrollToTop,
+                        backgroundColor:
+                            _cardColor(context).withValues(alpha: 0.9),
+                        child: const Icon(Icons.keyboard_arrow_up_rounded,
+                            color: AppTheme.primary),
+                      ),
+                    ),
+                  if (_selectionMode && _selectedAdvanceIds.isNotEmpty)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: Center(
+                        child: FloatingActionButton.extended(
+                          heroTag: 'advance_bulk_delete',
+                          onPressed: _bulkDeleteAdvances,
+                          backgroundColor: AppTheme.danger,
+                          icon: const Icon(Icons.delete_sweep_rounded, color: Colors.white),
+                          label: Text(
+                            'Hapus (${_selectedAdvanceIds.length})',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -390,8 +492,114 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     }
   }
 
-  Widget _groupHeader(IconData icon, String label) {
-    return Padding(padding: const EdgeInsets.only(bottom: 12, top: 8), child: Row(children: [Icon(icon, size: 18, color: AppTheme.primary), const SizedBox(width: 8), Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: _titleColor(context)))]));
+  Widget _buildTypeToggle(bool useCompact) {
+    final prov = context.read<AdvanceProvider>();
+    final singlesCount =
+        prov.advances.where((a) => (a['advance_type'] ?? 'single') == 'single').length;
+    final batchesCount =
+        prov.advances.where((a) => (a['advance_type'] ?? 'single') == 'batch').length;
+
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: _cardColor(context).withValues(alpha: 0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: context.isDark ? AppTheme.divider : AppTheme.lightDivider,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildToggleButton(
+              label: 'Kasbon Mandiri',
+              count: singlesCount,
+              value: 'single',
+              useCompact: useCompact,
+            ),
+            const SizedBox(width: 4),
+            _buildToggleButton(
+              label: 'Kasbon Batch',
+              count: batchesCount,
+              value: 'batch',
+              useCompact: useCompact,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToggleButton({
+    required String label,
+    required int count,
+    required String value,
+    required bool useCompact,
+  }) {
+    final isActive = _selectedType == value;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => setState(() => _selectedType = value),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: useCompact
+                ? const EdgeInsets.symmetric(horizontal: 10, vertical: 6)
+                : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: isActive ? AppTheme.primary : Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppTheme.primary.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      )
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: useCompact ? 11 : 13,
+                    fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
+                    color: isActive
+                        ? Colors.white
+                        : (context.isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : (context.isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.05)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    count.toString(),
+                    style: TextStyle(
+                      fontSize: useCompact ? 10 : 12,
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? Colors.white : AppTheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildScrollableAdvanceHeader(BuildContext context, AuthProvider auth, AdvanceProvider prov, bool isNarrow, bool isVeryNarrow, bool canShowExport, EdgeInsets pagePadding, bool useCompact) {
@@ -405,14 +613,33 @@ class AdvancesScreenState extends State<AdvancesScreen> {
               Text(auth.isManager ? 'Semua Kasbon' : 'Kasbon Saya', style: TextStyle(fontSize: useCompact ? 18 : (isNarrow ? 20 : 24), fontWeight: FontWeight.bold, color: _titleColor(context))),
               Text('${prov.advances.length} total', style: TextStyle(color: _bodyColor(context), fontSize: useCompact ? 10 : 13)),
             ])),
-            ElevatedButton.icon(
-              onPressed: _selectionMode ? null : () => _showCreateDialog(context),
-              icon: Icon(Icons.add, size: useCompact ? 16 : 20),
-              label: Text(isNarrow ? 'Buat' : 'Buat Kasbon', style: TextStyle(fontSize: useCompact ? 12 : 14)),
-              style: ElevatedButton.styleFrom(
-                padding: useCompact ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : null,
-                minimumSize: useCompact ? const Size(0, 36) : null,
-              ),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectionMode = !_selectionMode;
+                      if (!_selectionMode) _selectedAdvanceIds.clear();
+                    });
+                  },
+                  icon: Icon(
+                    _selectionMode ? Icons.close_rounded : Icons.delete_outline_rounded,
+                    color: _selectionMode ? AppTheme.danger : AppTheme.danger,
+                    size: useCompact ? 22 : 26,
+                  ),
+                  tooltip: _selectionMode ? 'Batal' : 'Pilih Banyak',
+                ),
+                const SizedBox(width: 4),
+                ElevatedButton.icon(
+                  onPressed: _selectionMode ? null : () => _showCreateDialog(context),
+                  icon: Icon(Icons.add, size: useCompact ? 16 : 20),
+                  label: Text(isNarrow ? 'Buat' : 'Buat Kasbon', style: TextStyle(fontSize: useCompact ? 12 : 14)),
+                  style: ElevatedButton.styleFrom(
+                    padding: useCompact ? const EdgeInsets.symmetric(horizontal: 10, vertical: 8) : null,
+                    minimumSize: useCompact ? const Size(0, 36) : null,
+                  ),
+                ),
+              ],
             ),
           ]),
           SizedBox(height: useCompact ? 10 : 16),
@@ -475,6 +702,8 @@ class AdvancesScreenState extends State<AdvancesScreen> {
               IconButton(onPressed: _exportPdf, icon: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.danger)),
             ],
           ])),
+          const SizedBox(height: 12),
+          _buildTypeToggle(useCompact),
         ],
       ),
     );

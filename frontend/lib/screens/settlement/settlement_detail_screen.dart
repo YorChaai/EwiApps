@@ -32,6 +32,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
   final ScrollController _expenseTableVerticalCtrl = ScrollController();
   final ScrollController _expenseTableHorizontalCtrl = ScrollController();
   final ScrollController _mainScrollController = ScrollController();
+  final ScrollController _subCategoryScrollController = ScrollController();
   final Set<int> _selectedExpenses = {}; // tracking multi-delete
   bool _isSaving = false; // Lock mechanism untuk prevent double-tap save
 
@@ -139,6 +140,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     _expenseTableVerticalCtrl.dispose();
     _expenseTableHorizontalCtrl.dispose();
     _mainScrollController.dispose();
+    _subCategoryScrollController.dispose();
     super.dispose();
   }
 
@@ -876,12 +878,18 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       controller: _expenseTableVerticalCtrl,
                       thumbVisibility: true,
                       trackVisibility: true,
+                      interactive: true,
+                      thickness: 8,
+                      radius: const Radius.circular(4),
                       child: SingleChildScrollView(
                         controller: _expenseTableVerticalCtrl,
                         child: Scrollbar(
                           controller: _expenseTableHorizontalCtrl,
                           thumbVisibility: true,
                           trackVisibility: true,
+                          interactive: true,
+                          thickness: 8,
+                          radius: const Radius.circular(4),
                           notificationPredicate: (notification) =>
                               notification.metrics.axis == Axis.horizontal,
                           child: SingleChildScrollView(
@@ -1052,70 +1060,68 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                         Builder(builder: (context) {
                                           final status = (exp['status'] as String).toLowerCase();
                                           final notes = exp['notes'];
+                                          final statusUpper = status.toUpperCase();
+                                          Color statusColor = _statusColor(status);
 
-                                            // Jika status rejected/pending dan ada checklist di notes
-                                            if ((status == 'rejected' || status == 'pending') && notes != null) {
-                                              try {
-                                                List<dynamic> checklist = [];
-                                                final parsedNotes = notes is String && notes.startsWith('[')
-                                                    ? jsonDecode(notes)
-                                                    : notes;
+                                          // Jika status rejected/pending dan ada checklist di notes
+                                          if ((status == 'rejected' || status == 'pending') && notes != null) {
+                                            try {
+                                              List<dynamic> checklist = [];
+                                              final parsedNotes = notes is String && notes.startsWith('[')
+                                                  ? jsonDecode(notes)
+                                                  : notes;
 
-                                                if (parsedNotes is List) {
-                                                  checklist = List<dynamic>.from(parsedNotes);
-                                                }
+                                              if (parsedNotes is List) {
+                                                checklist = List<dynamic>.from(parsedNotes);
+                                              }
 
-                                                if (checklist.isEmpty) throw ArgumentError('no checklist');
+                                              if (checklist.isNotEmpty) {
                                                 final total = checklist.length;
                                                 final checked = checklist.where((it) => it['checked'] == true).length;
 
-                                                final isRejected = status == 'rejected';
-
-                                                return Row(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                      decoration: BoxDecoration(
-                                                        color: (isRejected ? AppTheme.danger : AppTheme.warning).withValues(alpha: 0.15),
-                                                        borderRadius: BorderRadius.circular(6),
-                                                      ),
-                                                      child: Text(isRejected ? 'REJECTED' : 'PENDING',
-                                                          style: TextStyle(
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.w700,
-                                                            color: isRejected ? AppTheme.danger : AppTheme.warning
-                                                          )),
+                                                Widget badge = Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor.withValues(alpha: 0.15),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(
+                                                      color: statusColor.withValues(alpha: 0.3),
                                                     ),
-                                                    const SizedBox(width: 4),
-                                                    InkWell(
-                                                      onTap: () => _showChecklistDialog(expId, checklist, (s['status'] ?? '').toString()),
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                        decoration: BoxDecoration(
-                                                          color: AppTheme.primary.withValues(alpha: 0.1),
-                                                          border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
-                                                          borderRadius: BorderRadius.circular(4),
-                                                        ),
-                                                        child: Text(
-                                                          'Comment $checked/$total',
-                                                          style: const TextStyle(fontSize: 10, color: AppTheme.primary, fontWeight: FontWeight.bold),
-                                                        ),
-                                                      ),
+                                                  ),
+                                                  child: Text(
+                                                    '$statusUpper (Comment $checked/$total)',
+                                                    style: TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: statusColor,
                                                     ),
-                                                  ],
+                                                  ),
                                                 );
-                                              } catch (e) {
-                                                // Fallback
-                                              }
-                                            }
 
-                                          return Text(
-                                            (exp['status'] as String).toUpperCase(),
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
-                                              color: _statusColor(exp['status']),
+                                                return InkWell(
+                                                  onTap: () => _showChecklistDialog(expId, checklist, (s['status'] ?? '').toString()),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  child: badge,
+                                                );
+                                              }
+                                            } catch (e) {
+                                              // Fallback
+                                            }
+                                          }
+
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: statusColor.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              statusUpper,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                                color: statusColor,
+                                              ),
                                             ),
                                           );
                                         }),
@@ -1274,10 +1280,15 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           ),
           content: SizedBox(
             width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+            child: Scrollbar(
+              thumbVisibility: true,
+              interactive: true,
+              thickness: 8,
+              radius: const Radius.circular(4),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                   const SizedBox(height: 10), // Memberi ruang agar label tidak menempel ke judul
                   // dropdown kategori utama
                   DropdownButtonFormField<int>(
@@ -1336,9 +1347,16 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppTheme.divider),
                         ),
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: children.map((c) {
+                        child: Scrollbar(
+                          controller: _subCategoryScrollController,
+                          thumbVisibility: true,
+                          interactive: true,
+                          thickness: 8,
+                          radius: const Radius.circular(4),
+                          child: SingleChildScrollView(
+                            controller: _subCategoryScrollController,
+                            child: Column(
+                              children: children.map((c) {
                               final subId = c['id'] as int;
                               final isPending = c['status'] == 'pending';
                               final isSelected = selectedSubCategoryIds.contains(subId);
@@ -1372,7 +1390,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                             }).toList(),
                           ),
                         ),
-                      )
+                      ),
+                        )
                     else
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1614,6 +1633,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 ],
               ),
             ),
+          ),
           ),
           actions: [
             TextButton(
@@ -3179,8 +3199,13 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               width: 400,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: SingleChildScrollView(
-                  child: SelectionArea(
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  interactive: true,
+                  thickness: 8,
+                  radius: const Radius.circular(4),
+                  child: SingleChildScrollView(
+                    child: SelectionArea(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -3190,13 +3215,50 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         }),
                         if (canAddComment)
                           _buildAddCommentButton(localChecklist, setModalState),
+                        if (!canEdit &&
+                            (normalizedStatus == 'submitted' ||
+                                normalizedStatus == 'revision_submitted'))
+                          Container(
+                            margin: const EdgeInsets.only(top: 16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.warning.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppTheme.warning.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: AppTheme.warning,
+                                ),
+                                const SizedBox(width: 8),
+                                const Expanded(
+                                  child: Text(
+                                    'Settlement disubmit, Move to Draft untuk edit',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.warning,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
               ),
             ),
-            actions: [
+          ),
+          actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text('Tutup', style: TextStyle(color: AppTheme.textSecondary)),

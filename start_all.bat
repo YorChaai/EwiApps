@@ -49,8 +49,9 @@ if !errorlevel!==1 (
     echo [INFO] Starting Frontend for Windows...
     start "Frontend Flutter" cmd /k "cd /d "%~dp0\frontend" && flutter run -d windows"
 ) else (
-    echo [INFO] Starting Frontend for Android...
-    start "Frontend Flutter" cmd /k "cd /d "%~dp0\frontend" && flutter run -d android"
+    echo [INFO] Starting Frontend for Mobile...
+    REM Menggunakan ID spesifik atau membiarkan flutter mendeteksi perangkat mobile yang aktif
+    start "Frontend Flutter" cmd /k "cd /d "%~dp0\frontend" && flutter run"
 )
 goto end
 

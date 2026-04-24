@@ -1,6 +1,8 @@
 import os
 import shutil
 import sqlite3
+import subprocess
+from urllib.parse import urlparse
 from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required
@@ -140,17 +142,40 @@ def export_database():
         # Buat folder jika belum ada
         os.makedirs(target_dir, exist_ok=True)
 
-        # Lokasi database asli (di folder backend)
-        source_db = os.path.join(BASE_DIR, 'database.db')
-        if not os.path.exists(source_db):
-            return jsonify({'error': 'File database tidak ditemukan'}), 404
+        # Cek tipe database dari config
+        db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
 
-        # Nama file dengan timestamp
-        target_filename = f"database_{timestamp}.db"
-        target_path = os.path.join(target_dir, target_filename)
+        if db_uri.startswith('postgresql'):
+            # EKSPOR POSTGRESQL (Menggunakan pg_dump)
+            target_filename = f"database_backup_{timestamp}.sql"
+            target_path = os.path.join(target_dir, target_filename)
 
-        # Proses Copy
-        shutil.copy2(source_db, target_path)
+            url = urlparse(db_uri)
+            env = os.environ.copy()
+            env["PGPASSWORD"] = url.password
+
+            command = [
+                'pg_dump',
+                '-h', url.hostname,
+                '-p', str(url.port or 5432),
+                '-U', url.username,
+                '-F', 'p', # Plain SQL format
+                '-f', target_path,
+                url.path[1:] # Nama database
+            ]
+
+            process = subprocess.run(command, env=env, capture_output=True, text=True)
+            if process.returncode != 0:
+                return jsonify({'error': f'Gagal pg_dump: {process.stderr}'}), 500
+        else:
+            # EKSPOR SQLITE (Lama)
+            source_db = os.path.join(BASE_DIR, 'database.db')
+            if not os.path.exists(source_db):
+                return jsonify({'error': 'File database SQLite tidak ditemukan'}), 404
+
+            target_filename = f"database_{timestamp}.db"
+            target_path = os.path.join(target_dir, target_filename)
+            shutil.copy2(source_db, target_path)
 
         return jsonify({
             'message': 'Database berhasil dieksport.',
@@ -175,42 +200,48 @@ def import_database_preview():
     from config import BASE_DIR
     base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
 
-    # Simpan sementara di folder data
-    temp_path = os.path.join(base_data_dir, 'temp_import.db')
+    # Cek tipe database
+    db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+    is_postgres = db_uri.startswith('postgresql')
+
+    # Simpan sementara
+    ext = '.sql' if is_postgres else '.db'
+    temp_path = os.path.join(base_data_dir, f'temp_import{ext}')
     file.save(temp_path)
 
     try:
-        # Cek apakah ini file SQLite valid
-        conn = sqlite3.connect(temp_path)
-        cursor = conn.cursor()
-
-        # Ambil daftar tabel
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [t[0] for t in cursor.fetchall() if t[0] not in ('sqlite_sequence',)]
-
-        summary = []
-        for table in tables:
-            try:
-                cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                count = cursor.fetchone()[0]
-                summary.append({
-                    'table': table,
-                    'rows': count
-                })
-            except:
-                continue
-
-        conn.close()
-
-        return jsonify({
-            'message': 'Preview database berhasil dimuat.',
-            'summary': summary,
-            'filename': file.filename
-        })
+        if is_postgres:
+            # PREVIEW POSTGRESQL (Sederhana: Cek ukuran file)
+            file_size = os.path.getsize(temp_path) / 1024 # KB
+            return jsonify({
+                'message': 'File cadangan PostgreSQL terdeteksi.',
+                'summary': [{'table': 'Database SQL Dump', 'rows': f'{file_size:.1f} KB'}],
+                'filename': file.filename,
+                'is_postgres': True
+            })
+        else:
+            # PREVIEW SQLITE (Lama)
+            conn = sqlite3.connect(temp_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [t[0] for t in cursor.fetchall() if t[0] not in ('sqlite_sequence',)]
+            summary = []
+            for table in tables:
+                try:
+                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                    count = cursor.fetchone()[0]
+                    summary.append({'table': table, 'rows': count})
+                except: continue
+            conn.close()
+            return jsonify({
+                'message': 'Preview database SQLite berhasil dimuat.',
+                'summary': summary,
+                'filename': file.filename,
+                'is_postgres': False
+            })
     except Exception as e:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-        return jsonify({'error': f'File tidak valid atau bukan database SQLite: {str(e)}'}), 400
+        if os.path.exists(temp_path): os.remove(temp_path)
+        return jsonify({'error': f'File tidak valid: {str(e)}'}), 400
 
 
 @settings_bp.route('/db/import-confirm', methods=['POST'])
@@ -219,29 +250,44 @@ def import_database_confirm():
     try:
         from config import BASE_DIR
         base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
-        temp_path = os.path.join(base_data_dir, 'temp_import.db')
+        db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        is_postgres = db_uri.startswith('postgresql')
+
+        ext = '.sql' if is_postgres else '.db'
+        temp_path = os.path.join(base_data_dir, f'temp_import{ext}')
 
         if not os.path.exists(temp_path):
-            return jsonify({'error': 'File import tidak ditemukan. Silakan unggah ulang.'}), 404
+            return jsonify({'error': 'File import tidak ditemukan. Silakan upload ulang.'}), 404
 
-        target_db = os.path.join(BASE_DIR, 'database.db')
+        if is_postgres:
+            # RESTORE POSTGRESQL (Menggunakan psql)
+            url = urlparse(db_uri)
+            env = os.environ.copy()
+            env["PGPASSWORD"] = url.password
 
-        # 1. Putus semua koneksi aktif ke database
-        db.session.remove()
-        db.engine.dispose()
+            # Perintah untuk membersihkan database dan restore
+            # Kita gunakan psql -f (file)
+            command = [
+                'psql',
+                '-h', url.hostname,
+                '-p', str(url.port or 5432),
+                '-U', url.username,
+                '-d', url.path[1:],
+                '-f', temp_path
+            ]
 
-        # 2. Backup database lama sebagai pencegahan (extra safety)
-        if os.path.exists(target_db):
-            backup_path = target_db + '.bak'
-            shutil.copy2(target_db, backup_path)
+            # Catatan: Ini akan menimpa data yang ada jika file .sql berisi perintah DROP/CREATE
+            process = subprocess.run(command, env=env, capture_output=True, text=True)
+            if process.returncode != 0:
+                return jsonify({'error': f'Gagal restore PostgreSQL: {process.stderr}'}), 500
+        else:
+            # RESTORE SQLITE (Lama)
+            target_db = os.path.join(BASE_DIR, 'database.db')
+            shutil.copy2(temp_path, target_db)
 
-        # 3. Ganti database utama dengan file temp
-        # Gunakan copy + remove agar lebih aman antar drive jika perlu
-        shutil.copy2(temp_path, target_db)
-        os.remove(temp_path)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
-        return jsonify({
-            'message': 'Database berhasil dipulihkan (Restore). Sistem sekarang menggunakan data baru.'
-        })
+        return jsonify({'message': 'Database berhasil dipulihkan (Import Selesai).'})
     except Exception as e:
-        return jsonify({'error': f'Gagal mengganti database: {str(e)}'}), 500
+        return jsonify({'error': f'Gagal import database: {str(e)}'}), 500

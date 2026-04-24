@@ -16,6 +16,17 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
   List<Map<String, dynamic>> _categories = [];
   bool _isLoading = true;
   bool _isSaving = false;
+  final ScrollController _scrollController = ScrollController();
+  final ScrollController _langsungController = ScrollController();
+  final ScrollController _adminController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _langsungController.dispose();
+    _adminController.dispose();
+    super.dispose();
+  }
 
   bool _isDark(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
@@ -46,7 +57,9 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
       final res = await _api.getCategories();
       final cats = List<Map<String, dynamic>>.from(res['categories'] ?? []);
 
-      cats.sort((a, b) => (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0));
+      cats.sort(
+        (a, b) => (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0),
+      );
 
       setState(() {
         _categories = cats;
@@ -69,7 +82,8 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
         payload.add({
           'id': _categories[i]['id'],
           'sort_order': i + 1,
-          'main_group': _categories[i]['main_group'] ?? 'BIAYA ADMINISTRASI DAN UMUM',
+          'main_group':
+              _categories[i]['main_group'] ?? 'BIAYA ADMINISTRASI DAN UMUM',
         });
       }
 
@@ -85,7 +99,10 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
   void _showSnackBar(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: isError ? AppTheme.danger : AppTheme.success),
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? AppTheme.danger : AppTheme.success,
+      ),
     );
   }
 
@@ -109,12 +126,17 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.success,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
               ),
             ),
           ),
-          IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
         ],
       ),
       body: _isLoading
@@ -132,12 +154,19 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
                           children: [
                             Text(
                               'Urutan Kolom Sheet 1',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _titleColor(context)),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: _titleColor(context),
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Geser item untuk mengatur urutan kolom di Excel Tahunan.',
-                              style: TextStyle(fontSize: 13, color: _bodyText(context)),
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _bodyText(context),
+                              ),
                             ),
                           ],
                         ),
@@ -149,9 +178,16 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
                         label: const Text('Atur Grup & Urutan'),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.accent,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          backgroundColor: AppTheme.accent.withValues(alpha: 0.1),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          backgroundColor: AppTheme.accent.withValues(
+                            alpha: 0.1,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
                       ),
                     ],
@@ -160,22 +196,38 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
 
                 // Single Reorderable List
                 Expanded(
-                  child: ReorderableListView.builder(
-                    buildDefaultDragHandles: false, // Matikan handle bawaan agar tidak double
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-
-                    itemCount: _categories.length,
-                    onReorder: (oldIdx, newIdx) {
-                      if (newIdx > oldIdx) newIdx--;
-                      setState(() {
-                        final item = _categories.removeAt(oldIdx);
-                        _categories.insert(newIdx, item);
-                      });
-                    },
-                    itemBuilder: (context, index) {
-                      final cat = _categories[index];
-                      return _buildSimpleCategoryCard(cat, index, index + 1, key: ValueKey('row_${cat['id']}'));
-                    },
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    thumbVisibility: true,
+                    interactive: true,
+                    thickness: 8,
+                    radius: const Radius.circular(4),
+                    child: ReorderableListView.builder(
+                      scrollController: _scrollController,
+                      buildDefaultDragHandles:
+                          false, // Matikan handle bawaan agar tidak double
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      itemCount: _categories.length,
+                      onReorder: (oldIdx, newIdx) {
+                        if (newIdx > oldIdx) newIdx--;
+                        setState(() {
+                          final item = _categories.removeAt(oldIdx);
+                          _categories.insert(newIdx, item);
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        return _buildSimpleCategoryCard(
+                          cat,
+                          index,
+                          index + 1,
+                          key: ValueKey('row_${cat['id']}'),
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -183,7 +235,12 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
     );
   }
 
-  Widget _buildSimpleCategoryCard(Map<String, dynamic> cat, int index, int displayIndex, {required Key key}) {
+  Widget _buildSimpleCategoryCard(
+    Map<String, dynamic> cat,
+    int index,
+    int displayIndex, {
+    required Key key,
+  }) {
     final childrenCount = (cat['children'] as List?)?.length ?? 0;
     final isLangsung = cat['main_group'] == 'BEBAN LANGSUNG';
 
@@ -207,7 +264,11 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
           child: Center(
             child: Text(
               displayIndex.toString().padLeft(2, '0'),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
             ),
           ),
         ),
@@ -218,26 +279,42 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
           children: [
             Text(
               cat['name'] ?? '',
-              style: TextStyle(color: _primaryText(context), fontWeight: FontWeight.bold, fontSize: 14),
+              style: TextStyle(
+                color: _primaryText(context),
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
             // Tag kecil untuk grup
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: (isLangsung ? AppTheme.accent : Colors.grey).withValues(alpha: 0.1),
+                color: (isLangsung ? AppTheme.accent : Colors.grey).withValues(
+                  alpha: 0.1,
+                ),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: isLangsung ? AppTheme.accent : Colors.grey, width: 0.5),
+                border: Border.all(
+                  color: isLangsung ? AppTheme.accent : Colors.grey,
+                  width: 0.5,
+                ),
               ),
               child: Text(
                 isLangsung ? 'Beban Langsung' : 'Administrasi',
-                style: TextStyle(fontSize: 9, color: isLangsung ? AppTheme.accent : Colors.grey),
+                style: TextStyle(
+                  fontSize: 9,
+                  color: isLangsung ? AppTheme.accent : Colors.grey,
+                ),
               ),
             ),
           ],
         ),
         subtitle: Text(
           '$childrenCount sub-kategori',
-          style: TextStyle(color: _bodyText(context), fontSize: 11, fontStyle: FontStyle.italic),
+          style: TextStyle(
+            color: _bodyText(context),
+            fontSize: 11,
+            fontStyle: FontStyle.italic,
+          ),
         ),
         trailing: ReorderableDragStartListener(
           index: index,
@@ -258,14 +335,20 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
     // Clone data untuk dialog
-    List<Map<String, dynamic>> tempCats = List<Map<String, dynamic>>.from(_categories.map((c) => {...c}));
+    List<Map<String, dynamic>> tempCats = List<Map<String, dynamic>>.from(
+      _categories.map((c) => {...c}),
+    );
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          final langsung = tempCats.where((c) => c['main_group'] == 'BEBAN LANGSUNG').toList();
-          final admin = tempCats.where((c) => c['main_group'] != 'BEBAN LANGSUNG').toList();
+          final langsung = tempCats
+              .where((c) => c['main_group'] == 'BEBAN LANGSUNG')
+              .toList();
+          final admin = tempCats
+              .where((c) => c['main_group'] != 'BEBAN LANGSUNG')
+              .toList();
 
           return AlertDialog(
             backgroundColor: _cardColor(context),
@@ -274,70 +357,94 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
               width: screenWidth * 0.95,
               height: isMobile ? 600 : 500,
               child: isMobile
-                ? Column(
-                    children: [
-                      Expanded(
-                        child: _buildKanbanColumn(
-                          'BEBAN LANGSUNG',
-                          langsung,
-                          AppTheme.accent,
-                          (cat) => setDialogState(() => cat['main_group'] = 'BIAYA ADMINISTRASI DAN UMUM'),
-                          (oldIdx, newIdx) => setDialogState(() {
-                            if (newIdx > oldIdx) newIdx--;
-                            langsung.insert(newIdx, langsung.removeAt(oldIdx));
-                            _syncTempCatsOrder(tempCats, langsung, admin);
-                          }),
+                  ? Column(
+                      children: [
+                        Expanded(
+                          child: _buildKanbanColumn(
+                            'BEBAN LANGSUNG',
+                            langsung,
+                            AppTheme.accent,
+                            _langsungController,
+                            (cat) => setDialogState(
+                              () => cat['main_group'] =
+                                  'BIAYA ADMINISTRASI DAN UMUM',
+                            ),
+                            (oldIdx, newIdx) => setDialogState(() {
+                              if (newIdx > oldIdx) newIdx--;
+                              langsung.insert(
+                                newIdx,
+                                langsung.removeAt(oldIdx),
+                              );
+                              _syncTempCatsOrder(tempCats, langsung, admin);
+                            }),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: _buildKanbanColumn(
-                          'ADMINISTRASI',
-                          admin,
-                          AppTheme.primary,
-                          (cat) => setDialogState(() => cat['main_group'] = 'BEBAN LANGSUNG'),
-                          (oldIdx, newIdx) => setDialogState(() {
-                            if (newIdx > oldIdx) newIdx--;
-                            admin.insert(newIdx, admin.removeAt(oldIdx));
-                            _syncTempCatsOrder(tempCats, langsung, admin);
-                          }),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: _buildKanbanColumn(
+                            'ADMINISTRASI',
+                            admin,
+                            AppTheme.primary,
+                            _adminController,
+                            (cat) => setDialogState(
+                              () => cat['main_group'] = 'BEBAN LANGSUNG',
+                            ),
+                            (oldIdx, newIdx) => setDialogState(() {
+                              if (newIdx > oldIdx) newIdx--;
+                              admin.insert(newIdx, admin.removeAt(oldIdx));
+                              _syncTempCatsOrder(tempCats, langsung, admin);
+                            }),
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    children: [
-                      Expanded(
-                        child: _buildKanbanColumn(
-                          'BEBAN LANGSUNG',
-                          langsung,
-                          AppTheme.accent,
-                          (cat) => setDialogState(() => cat['main_group'] = 'BIAYA ADMINISTRASI DAN UMUM'),
-                          (oldIdx, newIdx) => setDialogState(() {
-                            if (newIdx > oldIdx) newIdx--;
-                            langsung.insert(newIdx, langsung.removeAt(oldIdx));
-                            _syncTempCatsOrder(tempCats, langsung, admin);
-                          }),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: _buildKanbanColumn(
+                            'BEBAN LANGSUNG',
+                            langsung,
+                            AppTheme.accent,
+                            _langsungController,
+                            (cat) => setDialogState(
+                              () => cat['main_group'] =
+                                  'BIAYA ADMINISTRASI DAN UMUM',
+                            ),
+                            (oldIdx, newIdx) => setDialogState(() {
+                              if (newIdx > oldIdx) newIdx--;
+                              langsung.insert(
+                                newIdx,
+                                langsung.removeAt(oldIdx),
+                              );
+                              _syncTempCatsOrder(tempCats, langsung, admin);
+                            }),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildKanbanColumn(
-                          'ADMINISTRASI DAN UMUM',
-                          admin,
-                          AppTheme.primary,
-                          (cat) => setDialogState(() => cat['main_group'] = 'BEBAN LANGSUNG'),
-                          (oldIdx, newIdx) => setDialogState(() {
-                            if (newIdx > oldIdx) newIdx--;
-                            admin.insert(newIdx, admin.removeAt(oldIdx));
-                            _syncTempCatsOrder(tempCats, langsung, admin);
-                          }),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildKanbanColumn(
+                            'ADMINISTRASI DAN UMUM',
+                            admin,
+                            AppTheme.primary,
+                            _adminController,
+                            (cat) => setDialogState(
+                              () => cat['main_group'] = 'BEBAN LANGSUNG',
+                            ),
+                            (oldIdx, newIdx) => setDialogState(() {
+                              if (newIdx > oldIdx) newIdx--;
+                              admin.insert(newIdx, admin.removeAt(oldIdx));
+                              _syncTempCatsOrder(tempCats, langsung, admin);
+                            }),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-            ),            actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+                      ],
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Batal'),
+              ),
               ElevatedButton(
                 onPressed: () {
                   setState(() {
@@ -356,7 +463,11 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
   }
 
   // Helper untuk sinkronisasi urutan list temporary
-  void _syncTempCatsOrder(List<Map<String, dynamic>> source, List<Map<String, dynamic>> langsung, List<Map<String, dynamic>> admin) {
+  void _syncTempCatsOrder(
+    List<Map<String, dynamic>> source,
+    List<Map<String, dynamic>> langsung,
+    List<Map<String, dynamic>> admin,
+  ) {
     source.clear();
     source.addAll(langsung);
     source.addAll(admin);
@@ -369,6 +480,7 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
     String title,
     List<Map<String, dynamic>> items,
     Color color,
+    ScrollController controller,
     Function(Map<String, dynamic>) onMove,
     Function(int, int) onReorder,
   ) {
@@ -377,57 +489,95 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: Row(
             children: [
-              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
               const Spacer(),
-              Text('${items.length}', style: TextStyle(color: color, fontSize: 12)),
+              Text(
+                '${items.length}',
+                style: TextStyle(color: color, fontSize: 12),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: ReorderableListView.builder(
-            onReorder: onReorder,
-            buildDefaultDragHandles: false,
-            itemCount: items.length,
-            itemBuilder: (ctx, idx) {
-              final cat = items[idx];
-              return Card(
-                key: ValueKey('kanban_${cat['id']}'),
-                color: _surfaceColor(context),
-                margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: _dividerColor(context).withValues(alpha: 0.5),
+          child: Scrollbar(
+            controller: controller,
+            thumbVisibility: true,
+            interactive: true,
+            thickness: 6,
+            radius: const Radius.circular(4),
+            child: ReorderableListView.builder(
+              scrollController: controller,
+              onReorder: onReorder,
+              buildDefaultDragHandles: false,
+              padding: const EdgeInsets.only(right: 8),
+              itemCount: items.length,
+              itemBuilder: (ctx, idx) {
+                final cat = items[idx];
+                return Card(
+                  key: ValueKey('kanban_${cat['id']}'),
+                  color: _surfaceColor(context),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: _dividerColor(context).withValues(alpha: 0.5),
+                    ),
                   ),
-                ),
-                child: ListTile(
-                  dense: true,
-                  contentPadding: const EdgeInsets.only(left: 12, right: 4),
-                  title: Text(cat['name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                        onPressed: () => onMove(cat),
-                        tooltip: 'Pindah grup',
+                  child: ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                    title: Text(
+                      cat['name'],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
-                      ReorderableDragStartListener(
-                        index: idx,
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                          child: Icon(Icons.drag_handle_rounded, color: Colors.grey, size: 20),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 16,
+                          ),
+                          onPressed: () => onMove(cat),
+                          tooltip: 'Pindah grup',
                         ),
-                      ),
-                    ],
+                        ReorderableDragStartListener(
+                          index: idx,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            child: Icon(
+                              Icons.drag_handle_rounded,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ],

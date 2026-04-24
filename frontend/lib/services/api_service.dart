@@ -205,6 +205,13 @@ class ApiService {
     return _handleResponse(res);
   }
 
+  Future<Map<String, dynamic>> getUserDetail(int userId) async {
+    final res = await _retryRequest(
+      () => http.get(Uri.parse('$baseUrl/auth/users/$userId'), headers: _headers),
+    );
+    return _handleResponse(res);
+  }
+
   Future<Map<String, dynamic>> createUser({
     required String username,
     required String password,

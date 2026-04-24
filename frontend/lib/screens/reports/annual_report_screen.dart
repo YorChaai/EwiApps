@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
@@ -24,6 +26,16 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   Map<String, dynamic>? _reportData;
   List<Map<String, dynamic>> _categories = [];
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _expenseTableHorizontalController = ScrollController();
+  final ScrollController _expenseTableVerticalController = ScrollController();
+  final ScrollController _table1Controller = ScrollController();
+  final ScrollController _table2Controller = ScrollController();
+  final ScrollController _table3Controller = ScrollController();
+  final ScrollController _table5Controller = ScrollController();
+  final ScrollController _table1VController = ScrollController();
+  final ScrollController _table2VController = ScrollController();
+  final ScrollController _table3VController = ScrollController();
+  final ScrollController _table5VController = ScrollController();
   final _currencyFormat = NumberFormat('#,##0', 'id_ID');
 
   // Cache untuk optimasi performa
@@ -56,6 +68,16 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _expenseTableHorizontalController.dispose();
+    _expenseTableVerticalController.dispose();
+    _table1Controller.dispose();
+    _table2Controller.dispose();
+    _table3Controller.dispose();
+    _table5Controller.dispose();
+    _table1VController.dispose();
+    _table2VController.dispose();
+    _table3VController.dispose();
+    _table5VController.dispose();
     super.dispose();
   }
 
@@ -86,6 +108,22 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   }
 
   Future<void> _fetchReport() async {
+    final controllers = <ScrollController>[
+      _scrollController,
+      _expenseTableHorizontalController,
+      _expenseTableVerticalController,
+      _table1Controller,
+      _table2Controller,
+      _table3Controller,
+      _table5Controller,
+      _table1VController,
+      _table2VController,
+      _table3VController,
+      _table5VController,
+    ];
+    for (final c in controllers) {
+      if (c.hasClients) c.jumpTo(0);
+    }
     setState(() {
       _isLoading = true;
       _cachedGroupedExpenses = null;
@@ -99,7 +137,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
           _reportData = data;
           _lastProcessedReportYear = _selectedYear;
           // Pre-calculate grouping immediately after data arrives
-          final rawExpenses = _asListMap(data['expenses']);
+          final rawExpenses = _asListMap(data['operation_cost']?['data']);
           if (rawExpenses.isNotEmpty) {
             _cachedGroupedExpenses = _groupAnnualExpenses(rawExpenses);
           }
@@ -362,13 +400,78 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     return backendSub;
   }
 
+  List<double> _getColumnWidths(String title, int colCount, bool useCompact) {
+    if (title.contains('Tabel 4')) {
+      return [
+        100,
+        50,
+        400,
+        100,
+        160,
+        80,
+        80,
+        ...List<double>.filled(math.max(colCount - 7, 0), 200),
+      ];
+    }
+    if (title.contains('Tabel 1')) {
+      return [
+        100,
+        50,
+        280,
+        140,
+        70,
+        70,
+        120,
+        150,
+        100,
+        140,
+        110,
+        110,
+        100,
+        180,
+      ];
+    }
+    if (title.contains('Tabel 2')) {
+      return [
+        100,
+        50,
+        250,
+        130,
+        70,
+        70,
+        130,
+        110,
+        130,
+        110,
+        130,
+        110,
+        130,
+        110,
+      ];
+    }
+    if (title.contains('Tabel 3')) {
+      return [110, 50, 180, 150, 150, 150];
+    }
+    if (title.contains('Tabel 5')) {
+      return [250, 200];
+    }
+    return List<double>.filled(colCount, 150);
+  }
+
   Widget _buildTableCard({
     required String title,
     required List<String> headers,
     required List<List<String>> rows,
+    required ScrollController controller,
+    required ScrollController verticalController,
     Set<int> boldRows = const {},
     bool useCompact = false,
   }) {
+    const double leftScrollbarSpace = 14;
+    final colWidths = _getColumnWidths(title, headers.length, useCompact);
+    final totalWidth = colWidths.fold<double>(0, (a, b) => a + b);
+    final rowHeight = title.contains('Tabel 4') ? 60.0 : 52.0;
+
     return Card(
       color: _cardColor(context),
       margin: const EdgeInsets.only(bottom: 12),
@@ -377,7 +480,10 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         side: BorderSide(color: _dividerColor(context)),
       ),
       child: Padding(
-        padding: EdgeInsets.all(useCompact ? 10 : 16),
+        padding: EdgeInsets.symmetric(
+          horizontal: useCompact ? 6 : 10,
+          vertical: useCompact ? 8 : 12,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -389,61 +495,173 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                 fontSize: useCompact ? 14 : 15,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             Container(
-              clipBehavior: Clip
-                  .antiAlias, // Mencegah warna header menabrak border di pojok
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 border: Border.all(color: _dividerColor(context)),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  headingRowColor: WidgetStateProperty.all(
-                    _surfaceColor(context),
-                  ),
-                  headingRowHeight: useCompact ? 40 : 56,
-                  dataRowMinHeight: useCompact ? 32 : 48,
-                  columnSpacing: useCompact ? 12 : 24,
-                  horizontalMargin: useCompact ? 8 : 16,
-                  columns: headers
-                      .map(
-                        (h) => DataColumn(
-                          label: Text(
-                            h,
-                            style: TextStyle(
-                              color: _titleColor(context),
-                              fontWeight: FontWeight.bold,
-                              fontSize: useCompact ? 12 : 14,
+              child: Scrollbar(
+                controller: verticalController,
+                thumbVisibility: true,
+                interactive: true,
+                thickness: 6,
+                scrollbarOrientation: ScrollbarOrientation.left,
+                notificationPredicate: (notification) =>
+                    notification.metrics.axis == Axis.vertical,
+                radius: const Radius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.only(left: leftScrollbarSpace),
+                  child: Scrollbar(
+                    controller: controller,
+                    thumbVisibility: true,
+                    interactive: true,
+                    thickness: 6,
+                    notificationPredicate: (notification) =>
+                        notification.metrics.axis == Axis.horizontal,
+                    radius: const Radius.circular(4),
+                    child: SingleChildScrollView(
+                      controller: controller,
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: SizedBox(
+                        width: totalWidth + leftScrollbarSpace,
+                        child: Column(
+                          children: [
+                            // Header Row
+                            Container(
+                              color: _surfaceColor(context),
+                              height: 48,
+                              child: Row(
+                                children: headers.asMap().entries.map((e) {
+                                  return _buildExpenseTableCell(
+                                    value: e.value,
+                                    width: colWidths[e.key],
+                                    useCompact: useCompact,
+                                    isBold: true,
+                                    textAlign: e.key == 1
+                                        ? TextAlign.center
+                                        : (_isNumericLikeCell(e.value, e.key)
+                                              ? TextAlign.right
+                                              : TextAlign.left),
+                                    fontSize: 13,
+                                  );
+                                }).toList(),
+                              ),
                             ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  rows: rows.asMap().entries.map((entry) {
-                    final isBold = boldRows.contains(entry.key);
-                    return DataRow(
-                      cells: entry.value
-                          .map(
-                            (cell) => DataCell(
-                              Text(
-                                cell,
-                                style: TextStyle(
-                                  fontSize: useCompact ? 11 : 13,
-                                  fontWeight: isBold
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isBold
-                                      ? _titleColor(context)
-                                      : _primaryText(context),
+                            // Lazy Body (Dynamic Height)
+                            SizedBox(
+                              height: math
+                                  .min(
+                                    rows.length * rowHeight,
+                                    useCompact ? 650.0 : 800.0,
+                                  )
+                                  .toDouble()
+                                  .clamp(rowHeight, 800.0),
+                              child: RepaintBoundary(
+                                child: NotificationListener<ScrollNotification>(
+                                  onNotification: (notification) {
+                                    if (notification.metrics.axis ==
+                                        Axis.vertical) {
+                                      if (notification
+                                              is ScrollUpdateNotification &&
+                                          notification.scrollDelta != null) {
+                                        final delta = notification.scrollDelta!;
+                                        final metrics = notification.metrics;
+                                        if ((delta > 0 &&
+                                                metrics.pixels >=
+                                                    metrics.maxScrollExtent) ||
+                                            (delta < 0 &&
+                                                metrics.pixels <= 0)) {
+                                          _scrollController.position.jumpTo(
+                                            (_scrollController.offset + delta)
+                                                .clamp(
+                                                  0,
+                                                  _scrollController
+                                                      .position
+                                                      .maxScrollExtent,
+                                                ),
+                                          );
+                                        }
+                                      } else if (notification
+                                          is OverscrollNotification) {
+                                        _scrollController.position.jumpTo(
+                                          (_scrollController.offset +
+                                                  notification.overscroll)
+                                              .clamp(
+                                                0,
+                                                _scrollController
+                                                    .position
+                                                    .maxScrollExtent,
+                                              ),
+                                        );
+                                      }
+                                    }
+                                    return false;
+                                  },
+                                  child: ListView.builder(
+                                    controller: verticalController,
+                                    itemCount: rows.length,
+                                    itemExtent: rowHeight,
+                                    cacheExtent: 1000,
+                                    padding: const EdgeInsets.only(left: 2),
+                                    physics: const ClampingScrollPhysics(),
+                                    itemBuilder: (context, rowIndex) {
+                                      final row = rows[rowIndex];
+                                      final isBold = boldRows.contains(rowIndex);
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: isBold
+                                              ? _surfaceColor(context)
+                                              : (rowIndex.isEven
+                                                    ? (_isDark(context)
+                                                          ? const Color(
+                                                              0xFF1E293B,
+                                                            )
+                                                          : const Color(
+                                                              0xFFF1F5F9,
+                                                            ))
+                                                    : (_isDark(context)
+                                                          ? const Color(
+                                                              0xFF0F172A,
+                                                            )
+                                                          : Colors.white)),
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: _dividerColor(context),
+                                            ),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: row.asMap().entries.map((e) {
+                                            return _buildExpenseTableCell(
+                                              value: e.value,
+                                              width: colWidths[e.key],
+                                              useCompact: useCompact,
+                                              isBold: isBold,
+                                              textAlign: e.key == 1
+                                                  ? TextAlign.center
+                                                  : (_isNumericLikeCell(
+                                                          headers[e.key],
+                                                          e.key,
+                                                        )
+                                                        ? TextAlign.right
+                                                        : TextAlign.left),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ),
-                          )
-                          .toList(),
-                    );
-                  }).toList(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -452,6 +670,58 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       ),
     );
   }
+
+  bool _isNumericLikeCell(String header, int index) {
+    final text = header.toLowerCase().trim();
+    if (index == 1) return true;
+    return text == 'amount' ||
+        text == 'amt' ||
+        text == 'rate' ||
+        text == 'value' ||
+        text == 'val' ||
+        text == 'ppn' ||
+        text.startsWith('pph') ||
+        text.startsWith('dpp') ||
+        text == 'fee' ||
+        text == 'nilai' ||
+        text == 'total';
+  }
+
+  Widget _buildExpenseTableCell({
+    required String value,
+    required double width,
+    required bool useCompact,
+    required bool isBold,
+    required TextAlign textAlign,
+    int maxLines = 1,
+    double? fontSize,
+  }) {
+    return Container(
+      width: width,
+      padding: EdgeInsets.symmetric(
+        horizontal: useCompact ? 8 : 10,
+        vertical: useCompact ? 8 : 10,
+      ),
+      alignment: switch (textAlign) {
+        TextAlign.right => Alignment.centerRight,
+        TextAlign.center => Alignment.center,
+        _ => Alignment.centerLeft,
+      },
+      child: Text(
+        value,
+        textAlign: textAlign,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize ?? 13,
+          fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          color: isBold ? _titleColor(context) : _primaryText(context),
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildCacheInfo(bool useCompact) {
     final source = (_reportData?['cache_source'] ?? '').toString();
@@ -599,7 +869,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
 
     // ✅ Optimasi: Gunakan cache jika tersedia dan tahun laporan tidak berubah
     final List<List<Map<String, dynamic>>> expenseGroups;
-    if (_cachedGroupedExpenses != null && _lastProcessedReportYear == _selectedYear) {
+    if (_cachedGroupedExpenses != null &&
+        _lastProcessedReportYear == _selectedYear) {
       expenseGroups = _cachedGroupedExpenses!;
     } else {
       expenseGroups = _groupAnnualExpenses(expenseData);
@@ -714,14 +985,13 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         ..sort(
           (a, b) =>
               _subcategorySortBucket(a).compareTo(_subcategorySortBucket(b)) !=
-                      0
-                  ? _subcategorySortBucket(a)
-                      .compareTo(_subcategorySortBucket(b))
-                  : a.toLowerCase().compareTo(b.toLowerCase()),
+                  0
+              ? _subcategorySortBucket(a).compareTo(_subcategorySortBucket(b))
+              : a.toLowerCase().compareTo(b.toLowerCase()),
         );
 
       for (final sub in sortedBatchSubs) {
-          expenseBoldRows.add(expenseRows.length);
+        expenseBoldRows.add(expenseRows.length);
         expenseRows.add([
           '',
           '',
@@ -790,13 +1060,15 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             'Inv No',
             'Client',
             'Rec Date',
-            'Amt',
+            'Amount',
             'PPN',
             'PPH23',
             'Fee',
             'Rem',
           ],
           rows: revenueRows,
+          controller: _table1Controller,
+          verticalController: _table1VController,
           useCompact: useCompact,
         ),
         _buildTableCard(
@@ -818,6 +1090,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             'PPH26',
           ],
           rows: taxRows,
+          controller: _table2Controller,
+          verticalController: _table2VController,
           useCompact: useCompact,
         ),
         _buildTableCard(
@@ -831,6 +1105,8 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             'Per Person',
           ],
           rows: dividendRows,
+          controller: _table3Controller,
+          verticalController: _table3VController,
           useCompact: useCompact,
         ),
         _buildTableCard(
@@ -840,19 +1116,23 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             '#',
             'Activity',
             'Src',
-            'Amt',
+            'Amount',
             'Cur',
             'Rate',
             ...catHeaders,
           ],
           rows: expenseRows,
           boldRows: expenseBoldRows,
+          controller: _expenseTableHorizontalController,
+          verticalController: _expenseTableVerticalController,
           useCompact: useCompact,
         ),
         _buildTableCard(
           title: 'Tabel 5: NERACA',
           headers: const ['Parameter', 'Nilai'],
           rows: neracaRows,
+          controller: _table5Controller,
+          verticalController: _table5VController,
           useCompact: useCompact,
         ),
       ],
@@ -863,6 +1143,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final useCompact = screenWidth < 550;
+    final showMainScrollbar = screenWidth > (useCompact ? 550 : 800);
 
     return Scaffold(
       backgroundColor: _surfaceColor(context),
@@ -938,9 +1219,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             )
           : Scrollbar(
               controller: _scrollController,
-              thumbVisibility: true,
-              trackVisibility: true,
-              thickness: 8,
+              thumbVisibility: showMainScrollbar,
+              trackVisibility: showMainScrollbar,
+              thickness: 6,
               interactive: true,
               radius: const Radius.circular(4),
               child: SingleChildScrollView(
@@ -1021,25 +1302,28 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: _bodyColor(context),
-                  fontSize: useCompact ? 10 : 12,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: _bodyColor(context),
+                    fontSize: useCompact ? 10 : 12,
+                  ),
                 ),
-              ),
-              Text(
-                _fmtMoney(amount),
-                style: TextStyle(
-                  color: color,
-                  fontSize: useCompact ? 15 : 18,
-                  fontWeight: FontWeight.bold,
+                Text(
+                  _fmtMoney(amount),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: useCompact ? 15 : 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Icon(
             Icons.trending_up_rounded,

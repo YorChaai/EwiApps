@@ -2,7 +2,7 @@
 
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, Any, List, Dict, Tuple
 from copy import copy
 from flask import current_app
@@ -21,6 +21,12 @@ DEFAULT_END_COL = 17
 def _default_report_year() -> int:
     """Get default report year from config or current year."""
     return int(current_app.config.get('REPORT_DEFAULT_YEAR', datetime.now().year))
+
+
+def _year_date_bounds(year: int) -> Tuple[date, date]:
+    """Return inclusive start date and exclusive next-year start date."""
+    start = date(int(year), 1, 1)
+    return start, date(start.year + 1, 1, 1)
 
 
 def _safe_set_cell(ws, row: int, col: int, value: Optional[Any]) -> None:

@@ -227,13 +227,9 @@ def create_advance():
     if not title:
         return jsonify({'error': 'Title wajib diisi'}), 400
 
-    # Set created_at to match report_year if provided
+    # Gunakan waktu asli sekarang untuk created_at
+    # report_year tetap menyimpan tahun target laporan (misal: 2027)
     created_at = datetime.now(timezone.utc)
-    if report_year:
-        try:
-            created_at = created_at.replace(year=report_year)
-        except ValueError:
-            created_at = created_at.replace(year=report_year, day=28)
 
     advance = Advance(
         title=title,

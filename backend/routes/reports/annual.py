@@ -35,6 +35,7 @@ from .helpers import (
     _to_float, _as_iso_date, _idr_from_currency, _shorten, _map_expense_column,
     _is_batch_settlement, _clean_settlement_title, _group_annual_expenses,
     _format_date_dd_mmm_yy, _set_formula_with_format, _set_date_with_format,
+    _year_date_bounds,
 )
 
 # Setup logging
@@ -305,6 +306,7 @@ def _annual_cache_paths(year):
     return {
         'json': os.path.join(cache_dir, f'annual_{year}.json'),
         'pdf': os.path.join(cache_dir, f'annual_{year}.pdf'),
+        'excel': os.path.join(cache_dir, f'annual_{year}.xlsx'),
     }
 
 
@@ -341,6 +343,7 @@ def _tagged_ids_for_year(table_name, report_year):
         ).fetchall()
         return [int(r[0]) for r in rows]
     except Exception:
+        db.session.rollback()
         return []
 
 
@@ -349,6 +352,7 @@ def _has_any_report_tags():
         row = db.session.execute(sql_text("SELECT 1 FROM report_entry_tags LIMIT 1")).first()
         return row is not None
     except Exception:
+        db.session.rollback()
         return False
 
 
@@ -380,6 +384,7 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
     from models import Dividend, DividendSetting, Revenue, Tax
 
     logger.debug(f'Building payload for year={year}')
+    year_start, next_year_start = _year_date_bounds(year)
 
     has_report_tags = _has_any_report_tags()
     tagged_revenue_ids = _tagged_ids_for_year('revenues', year)
@@ -394,25 +399,32 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
 
     if has_report_tags:
         if tagged_revenue_ids:
-            revenues_raw = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
+            revenues_raw = Revenue.query.filter(
+                Revenue.id.in_(tagged_revenue_ids),
+                Revenue.invoice_date >= year_start,
+                Revenue.invoice_date < next_year_start,
+            ).all()
             # ✅ Filter tagged revenue by year too - handle None invoice_date
-            revenues_raw = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
             logger.debug(f'Filtered {len(revenues_raw)} tagged revenues for year {year}')
             # ✅ Urutkan berdasarkan tipe (langsung vs lain-lain) dan receive_date
             revenues = sorted(revenues_raw, key=revenue_sort_key)
         else:
             revenues = []
     elif tagged_revenue_ids:
-        revenues_raw = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
+        revenues = Revenue.query.filter(
+            Revenue.id.in_(tagged_revenue_ids),
+            Revenue.invoice_date >= year_start,
+            Revenue.invoice_date < next_year_start,
+        ).all()
         # ✅ Filter tagged revenue by year too - handle None invoice_date
-        revenues = [r for r in revenues_raw if (r.invoice_date and r.invoice_date.year == year)]
-        logger.debug(f'Filtered {len(revenues)} tagged revenues from {len(revenues_raw)} for year {year}')
+        logger.debug(f'Filtered {len(revenues)} tagged revenues for year {year}')
         # ✅ Urutkan berdasarkan tipe dan receive_date
         revenues.sort(key=revenue_sort_key)
     else:
         # ✅ FIX: Use Database filter instead of pulling all rows into memory
         revenues = Revenue.query.filter(
-            db.extract('year', Revenue.invoice_date) == year
+            Revenue.invoice_date >= year_start,
+            Revenue.invoice_date < next_year_start,
         ).all()
         revenues.sort(key=revenue_sort_key)
 
@@ -422,22 +434,29 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
 
     if has_report_tags:
         if tagged_tax_ids:
-            taxes = Tax.query.filter(Tax.id.in_(tagged_tax_ids)).all()
+            taxes = Tax.query.filter(
+                Tax.id.in_(tagged_tax_ids),
+                Tax.date >= year_start,
+                Tax.date < next_year_start,
+            ).all()
             # ✅ Filter tagged tax by year too
-            taxes = [t for t in taxes if (t.date and t.date.year == year)]
             tax_order = {tid: idx for idx, tid in enumerate(tagged_tax_ids)}
             taxes.sort(key=lambda t: tax_order.get(t.id, 10**9))
         else:
             taxes = []
     elif tagged_tax_ids:
-        taxes = Tax.query.filter(Tax.id.in_(tagged_tax_ids)).all()
+        taxes = Tax.query.filter(
+            Tax.id.in_(tagged_tax_ids),
+            Tax.date >= year_start,
+            Tax.date < next_year_start,
+        ).all()
         # ✅ Filter tagged tax by year too
-        taxes = [t for t in taxes if (t.date and t.date.year == year)]
         taxes.sort(key=lambda t: t.date)
     else:
         # ✅ FIX: Use Database filter instead of pulling all rows into memory
         taxes = Tax.query.filter(
-            db.extract('year', Tax.date) == year
+            Tax.date >= year_start,
+            Tax.date < next_year_start,
         ).order_by(Tax.date.asc(), Tax.id.asc()).all()
         logger.debug(f'Filtered {len(taxes)} taxes for year {year}')
 
@@ -448,12 +467,14 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
     # ✅ ADDED joinedload to avoid N+1 queries during to_dict() loop
     expenses_query = Expense.query.options(
         joinedload(Expense.category),
-        joinedload(Expense.subcategories)
+        joinedload(Expense.subcategories),
+        joinedload(Expense.settlement)
     ).join(
         Settlement, Expense.settlement_id == Settlement.id
     ).filter(
         Settlement.status.in_(('approved', 'completed')),
-        db.extract('year', Expense.date) == year,
+        Expense.date >= year_start,
+        Expense.date < next_year_start,
     )
     expenses = expenses_query.order_by(Expense.date.asc()).all()
 
@@ -462,7 +483,8 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         logger.debug(f'Expense date range: {expenses[0].date} to {expenses[-1].date}')
 
     dividends = Dividend.query.filter(
-        db.extract('year', Dividend.date) == year,
+        Dividend.date >= year_start,
+        Dividend.date < next_year_start,
     ).order_by(Dividend.date.asc(), Dividend.id.asc()).all()
     dividend_setting = DividendSetting.query.filter_by(year=year).first()
 
@@ -2032,7 +2054,10 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         # input dan formula neraca
         ws_lr['J10'] = opening_cash_balance
+        # ✅ FIX: Ensure J11 doesn't point to itself (even if laba_bersih_row is 11)
+        # Usually laba_bersih_row is > 20, but we'll use a safer reference if needed.
         ws_lr['J11'] = f"=E{laba_bersih_row}-'Business Summary'!E13"
+        ws_lr['J11'].number_format = '#,##0'
         ws_lr['J12'] = accounts_receivable
         ws_lr['J13'] = prepaid_tax_pph23
         ws_lr['J14'] = prepaid_expenses
@@ -2292,7 +2317,6 @@ def get_annual_report():
     payload = _build_annual_payload_from_db(year)
     payload['cache_source'] = 'refresh'
     saved_payload = _save_annual_payload_cache(year, payload)
-    _save_annual_pdf_cache(year, _build_annual_pdf_bytes(saved_payload))
     return jsonify(saved_payload), 200
 
 
@@ -2328,9 +2352,31 @@ def get_annual_report_excel():
 
     logger.info(f'Starting Excel export for year={year}')
 
+    # ✅ STEP 1: Check cache first
+    cache_paths = _annual_cache_paths(year)
+    excel_cache_path = cache_paths['excel']
+    json_cache_path = cache_paths['json']
+    force_refresh = request.args.get('refresh', '0') == '1'
+
+    # Auto-refresh if JSON cache is newer than Excel cache
+    if os.path.exists(excel_cache_path) and os.path.exists(json_cache_path):
+        if os.path.getmtime(json_cache_path) > os.path.getmtime(excel_cache_path):
+            logger.info(f'JSON cache is newer than Excel cache for year {year}, forcing refresh')
+            force_refresh = True
+
+    if not force_refresh and os.path.exists(excel_cache_path):
+        logger.info(f'Serving Excel from cache for year {year}')
+        return send_file(
+            excel_cache_path,
+            as_attachment=True,
+            download_name=f"Laporan_Tahunan_{year}.xlsx",
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
     try:
         # Load data
-        payload = _save_annual_payload_cache(year, _build_annual_payload_from_db(year))
+        payload = _build_annual_payload_from_db(year)
+        _save_annual_payload_cache(year, payload)
         revenues = payload.get('revenue', {}).get('data', [])
         taxes = payload.get('tax', {}).get('data', [])
         expenses = payload.get('operation_cost', {}).get('data', [])
@@ -2350,6 +2396,7 @@ def get_annual_report_excel():
                    ORDER BY imported_at DESC, id DESC LIMIT 1"""),
                 {'year': int(year)}).scalar()
         except Exception:
+            db.session.rollback()
             logger.debug('No imported source name found')
 
         template_dir = os.path.abspath(os.path.join(current_app.root_path, '..', 'excel'))

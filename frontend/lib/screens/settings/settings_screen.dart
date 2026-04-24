@@ -424,23 +424,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Stack(
             children: [
-              CircleAvatar(
-                radius: 48,
-                backgroundColor: AppTheme.primary,
-                backgroundImage: auth.profileImageUrl != null
-                    ? NetworkImage(auth.profileImageUrl!)
-                    : null,
-                child: auth.profileImageUrl == null
-                    ? Text(
-                        (auth.fullName.isNotEmpty ? auth.fullName[0] : 'U')
-                            .toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      )
-                    : null,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).brightness == Brightness.light
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 48,
+                  backgroundColor: AppTheme.primary,
+                  backgroundImage: auth.profileImageUrl != null
+                      ? NetworkImage(auth.profileImageUrl!)
+                      : null,
+                  child: auth.profileImageUrl == null
+                      ? Text(
+                          (auth.fullName.isNotEmpty ? auth.fullName[0] : 'U')
+                              .toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        )
+                      : null,
+                ),
               ),
               Positioned(
                 right: 0,

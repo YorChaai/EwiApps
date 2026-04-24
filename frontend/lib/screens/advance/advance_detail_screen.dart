@@ -34,6 +34,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
   final _itemTableHorizontalCtrl = ScrollController();
   final _itemTableVerticalCtrl = ScrollController();
   final _mainScrollController = ScrollController();
+  final _checklistScrollController = ScrollController();
   final Set<int> _selectedItemIds = {}; // for bulk delete (staf)
   final Set<int> _checkedItemIds = {}; // Checklist manager (approval)
   bool _isManager = false;
@@ -88,6 +89,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     _itemTableHorizontalCtrl.dispose();
     _itemTableVerticalCtrl.dispose();
     _mainScrollController.dispose();
+    _checklistScrollController.dispose();
     super.dispose();
   }
 
@@ -380,10 +382,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           bottom: BorderSide(color: AppTheme.divider.withValues(alpha: 0.6)),
         ),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
+      child: Scrollbar(
+        thumbVisibility: true,
+        interactive: true,
+        thickness: 8,
+        radius: const Radius.circular(4),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
             if (_selectedItemIds.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -403,9 +410,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               ),
             ),
           ],
-        ),      ),
-    );
-  }
+        ),
+      ),
+    ),
+  );
+}
 
   Future<void> _startRevision() async {
     final prov = context.read<AdvanceProvider>();
@@ -793,10 +802,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ),
             content: SizedBox(
               width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
+              child: Scrollbar(
+                thumbVisibility: true,
+                interactive: true,
+                thickness: 8,
+                radius: const Radius.circular(4),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                     const SizedBox(height: 10), // Ruang ekstra agar label terbaca
                     // dropdown kategori utama
                     DropdownButtonFormField<int>(
@@ -1110,6 +1124,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   ],
                 ),
               ),
+            ),
             ),
             actions: [
               if (isEditing)
@@ -1665,8 +1680,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     ? Scrollbar(
                         controller: _mainScrollController,
                         thumbVisibility: true,
-                        thickness: 8,
                         interactive: true,
+                        thickness: 8,
                         radius: const Radius.circular(4),
                         child: SingleChildScrollView(
                           controller: _mainScrollController,
@@ -1697,8 +1712,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     : Scrollbar(
                         controller: _mainScrollController,
                         thumbVisibility: true,
-                        thickness: 8,
                         interactive: true,
+                        thickness: 8,
                         radius: const Radius.circular(4),
                         child: SingleChildScrollView(
                           controller: _mainScrollController,
@@ -1946,12 +1961,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           controller: _itemTableVerticalCtrl,
           thumbVisibility: true,
           trackVisibility: true,
+          interactive: true,
+          thickness: 8,
+          radius: const Radius.circular(4),
           child: SingleChildScrollView(
             controller: _itemTableVerticalCtrl,
             child: Scrollbar(
               controller: _itemTableHorizontalCtrl,
               thumbVisibility: true,
               trackVisibility: true,
+              interactive: true,
+              thickness: 8,
+              radius: const Radius.circular(4),
               notificationPredicate: (notification) =>
                   notification.metrics.axis == Axis.horizontal,
               child: SingleChildScrollView(
@@ -2132,90 +2153,59 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 statusColor = AppTheme.danger;
                               }
 
-                              return Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      itemStatus,
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        color: statusColor,
-                                      ),
-                                    ),
-                                  ),
-                                  if ((itemStatus == 'REJECTED' ||
-                                          itemStatus == 'PENDING') &&
-                                      item['notes'] != null &&
-                                      (item['notes'] as String).isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 6),
-                                      child: Builder(
-                                        builder: (context) {
-                                          try {
-                                            final List<dynamic> checklist =
-                                                _parseChecklist(item['notes']);
-                                            if (checklist.isEmpty) {
-                                              return const SizedBox.shrink();
-                                            }
+                              final hasNotes = (itemStatus == 'REJECTED' ||
+                                      itemStatus == 'PENDING') &&
+                                  item['notes'] != null &&
+                                  (item['notes'] as String).isNotEmpty;
 
-                                            final total = checklist.length;
-                                            final checked = checklist
-                                                .where(
-                                                  (it) => it['checked'] == true,
-                                                )
-                                                .length;
-                                            return InkWell(
-                                              onTap: () => _showChecklistDialog(
-                                                itemId,
-                                                checklist,
-                                                (adv['status'] ?? '')
-                                                    .toString(),
-                                              ),
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppTheme.primary
-                                                      .withValues(alpha: 0.1),
-                                                  border: Border.all(
-                                                    color: AppTheme.primary
-                                                        .withValues(alpha: 0.3),
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  'Comment $checked/$total',
-                                                  style: const TextStyle(
-                                                    fontSize: 9,
-                                                    color: AppTheme.primary,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            return const SizedBox.shrink();
-                                          }
-                                        },
-                                      ),
-                                    ),
-                                ],
+                              List<dynamic> checklist = [];
+                              if (hasNotes) {
+                                try {
+                                  checklist = _parseChecklist(item['notes']);
+                                } catch (_) {}
+                              }
+
+                              final bool hasComments = checklist.isNotEmpty;
+
+                              Widget badge = Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: hasComments
+                                      ? Border.all(
+                                          color: statusColor.withValues(alpha: 0.3),
+                                        )
+                                      : null,
+                                ),
+                                child: Text(
+                                  hasComments
+                                      ? '$itemStatus (Comment ${checklist.where((it) => it['checked'] == true).length}/${checklist.length})'
+                                      : itemStatus,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: statusColor,
+                                  ),
+                                ),
                               );
+
+                              if (hasComments) {
+                                return InkWell(
+                                  onTap: () => _showChecklistDialog(
+                                    itemId,
+                                    checklist,
+                                    (adv['status'] ?? '').toString(),
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: badge,
+                                );
+                              }
+
+                              return badge;
                             },
                           ),
                         ),
@@ -2846,11 +2836,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               width: 400,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: SingleChildScrollView(
-                  child: SelectionArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                child: Scrollbar(
+                  controller: _checklistScrollController,
+                  thumbVisibility: true,
+                  interactive: true,
+                  thickness: 8,
+                  radius: const Radius.circular(4),
+                  child: SingleChildScrollView(
+                    controller: _checklistScrollController,
+                    child: SelectionArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                         ...localChecklist.asMap().entries.map((entry) {
                           final item = entry.value;
                           return _buildChecklistTile(
@@ -2861,11 +2858,47 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         }),
                         if (canAddComment)
                           _buildAddCommentButton(localChecklist, setModalState),
+                        if (!canEdit && isSubmitted)
+                          Container(
+                            margin: const EdgeInsets.only(top: 16),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppTheme.warning.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppTheme.warning.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline,
+                                  size: 16,
+                                  color: AppTheme.warning,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Kasbon disubmit, Move to Draft untuk edit',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color:
+                                          AppTheme.warning.withValues(alpha: 0.9),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
               ),
+            ),
             ),
             actions: [
               TextButton(

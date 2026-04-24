@@ -39,6 +39,16 @@ class AdvanceProvider extends ChangeNotifier {
     if (reportYear != null) _reportYear = reportYear;
     final yearToUse = _reportYear == 0 ? null : _reportYear;
 
+    // ✅ Centralized Sanitization
+    final cleanSearch = search
+        ?.replaceAll('<', '')
+        .replaceAll('>', '')
+        .replaceAll('"', '')
+        .replaceAll("'", '')
+        .replaceAll('&', '')
+        .replaceAll(';', '')
+        .trim();
+
     _loading = true;
     _error = null;
     notifyListeners();
@@ -50,7 +60,7 @@ class AdvanceProvider extends ChangeNotifier {
         endDate: endDate,
         reportYear: yearToUse,
         type: type,
-        search: search,
+        search: cleanSearch,
       );
       _advances = List<Map<String, dynamic>>.from(res['advances']);
     } catch (e) {
@@ -59,6 +69,10 @@ class AdvanceProvider extends ChangeNotifier {
 
     _loading = false;
     notifyListeners();
+  }
+
+  void clearFilters() {
+    loadAdvances();
   }
 
   Future<void> syncReportYear() async {

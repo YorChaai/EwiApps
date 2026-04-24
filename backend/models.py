@@ -23,7 +23,11 @@ class User(db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(150), unique=True, nullable=True)  # Gmail for Login/OTP
     password_hash = db.Column(db.String(256), nullable=False)
+    google_id = db.Column(db.String(200), nullable=True, unique=True)  # For Google Sign-In
+    reset_token = db.Column(db.String(100), nullable=True)  # For Forgot Password OTP
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)
     full_name = db.Column(db.String(150), nullable=False)
     phone_number = db.Column(db.String(20), nullable=True, default='-')
     workplace = db.Column(db.String(100), nullable=True, default='-')
@@ -41,16 +45,54 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    @property
+    def last_login_formatted(self):
+        if self.last_login is None:
+            return "-"
+
+        last = self.last_login
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        diff = now - last
+        total_seconds = int(diff.total_seconds())
+
+        if total_seconds < 86400:
+            if total_seconds < 60:
+                return "Baru saja"
+            elif total_seconds < 3600:
+                return f"{total_seconds // 60} menit yang lalu"
+            else:
+                return f"{total_seconds // 3600} jam yang lalu"
+
+        months = {1:'Jan', 2:'Feb', 3:'Mar', 4:'Apr', 5:'Mei', 6:'Jun', 7:'Jul', 8:'Agt', 9:'Sep', 10:'Okt', 11:'Nov', 12:'Des'}
+        return f"{last.day} {months[last.month]}, {last.strftime('%H:%M')}"
+
+    @property
+    def is_online(self):
+        if self.last_login is None:
+            return False
+        last = self.last_login
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        diff = datetime.now(timezone.utc) - last
+        return diff.total_seconds() < 120
+
     def to_dict(self):
         return {
             'id': self.id,
             'username': self.username,
+            'email': self.email,
+            'google_id': self.google_id,
             'full_name': self.full_name,
             'phone_number': self.phone_number or '-',
             'workplace': self.workplace or '-',
             'role': self.role,
             'profile_image': self.profile_image,
             'last_login': self.last_login.isoformat() if self.last_login else None,
+            'last_login_formatted': self.last_login_formatted,
+            'is_online': self.is_online,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -394,7 +436,7 @@ class Expense(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False, index=True)
     description = db.Column(db.String(300), nullable=False)  # Format: [Kategori] Vendor - Barang - Keperluan
     amount = db.Column(db.Float, nullable=False)
-    date = db.Column(db.Date, nullable=False)
+    date = db.Column(db.Date, nullable=False, index=True)
     source = db.Column(db.String(50), nullable=True)  # bca, bri, cash, dll
     advance_item_id = db.Column(db.Integer, db.ForeignKey('advance_items.id'), nullable=True)
     revision_no = db.Column(db.Integer, default=0)
@@ -467,7 +509,7 @@ class Expense(db.Model):
 class Revenue(db.Model):
     __tablename__ = 'revenues'
     id = db.Column(db.Integer, primary_key=True)
-    invoice_date = db.Column(db.Date, nullable=False)
+    invoice_date = db.Column(db.Date, nullable=False, index=True)
     description = db.Column(db.String(300), nullable=False)
     invoice_value = db.Column(db.Float, nullable=False)
     currency = db.Column(db.String(10), default='IDR')
@@ -536,7 +578,7 @@ class Revenue(db.Model):
 class Tax(db.Model):
     __tablename__ = 'taxes'
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False)
+    date = db.Column(db.Date, nullable=False, index=True)
     description = db.Column(db.String(300), nullable=False)
     transaction_value = db.Column(db.Float, nullable=False)
     currency = db.Column(db.String(10), default='IDR')
@@ -605,7 +647,7 @@ class ManualCombineGroup(db.Model):
 class Dividend(db.Model):
     __tablename__ = 'dividends'
     id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.Date, nullable=False)
+    date = db.Column(db.Date, nullable=False, index=True)
     name = db.Column(db.String(150), nullable=False)
     amount = db.Column(db.Float, nullable=False, default=0.0)
     recipient_count = db.Column(db.Integer, nullable=False, default=1)
