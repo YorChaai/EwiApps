@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
   String? _token;
   Map<String, dynamic>? _user;
   bool _loading = false;
@@ -91,6 +95,100 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', _token!);
 
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> loginWithGoogle() async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // 1. Sign in with Google
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        _loading = false;
+        notifyListeners();
+        return null; // User cancelled
+      }
+
+      // 2. Get ID Token
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Gagal mendapatkan ID Token dari Google');
+      }
+
+      // 3. Send token to backend
+      final res = await _api.googleLogin(idToken);
+
+      if (res['new_user'] == true) {
+        _loading = false;
+        notifyListeners();
+        return res; // Registration info for new user
+      }
+
+      // 4. Handle successful login
+      _token = res['token'];
+      _user = res['user'];
+      _api.setToken(_token);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', _token!);
+
+      _loading = false;
+      notifyListeners();
+      return {'success': true};
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<bool> forgotPassword(String email) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _api.forgotPassword(email);
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _api.resetPassword(
+        email: email,
+        otp: otp,
+        newPassword: newPassword,
+      );
       _loading = false;
       notifyListeners();
       return true;

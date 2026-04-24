@@ -206,15 +206,12 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               child: Align(
                 alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: cardMaxWidth,
-                      minWidth: safeWidth > 8 && safeWidth < 340
-                          ? safeWidth - 8
-                          : 0,
-                    ),
-                    child: Container(
-                    padding: cardPadding,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: cardMaxWidth,
+                    minWidth: safeWidth > 8 && safeWidth < 340 ? safeWidth - 8 : 0,
+                  ),
+                  child: Container(
                     decoration: BoxDecoration(
                       color: _cardColor(context),
                       borderRadius: BorderRadius.circular(isCompact ? 20 : 24),
@@ -228,38 +225,108 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       ],
                     ),
-                    child: isPhoneLandscape
-                        ? _LandscapeLoginContent(
-                            usernameController: _usernameController,
-                            passwordController: _passwordController,
-                            obscure: _obscure,
-                            loading: auth.loading,
-                            onToggleObscure: () =>
-                                setState(() => _obscure = !_obscure),
-                            onLogin: _login,
-                            onRegister: () => _navigateToRegister(context),
-                            serverUrl: _currentServerUrl,
-                            onConfigureServer: _showServerUrlDialog,
-                          )
-                        : _PortraitLoginContent(
-                            usernameController: _usernameController,
-                            passwordController: _passwordController,
-                            obscure: _obscure,
-                            loading: auth.loading,
-                            compact: isCompact,
-                            onToggleObscure: () =>
-                                setState(() => _obscure = !_obscure),
-                            onLogin: _login,
-                            onRegister: () => _navigateToRegister(context),
-                            serverUrl: _currentServerUrl,
-                            onConfigureServer: _showServerUrlDialog,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: cardPadding,
+                          child: isPhoneLandscape
+                              ? _LandscapeLoginContent(
+                                  usernameController: _usernameController,
+                                  passwordController: _passwordController,
+                                  obscure: _obscure,
+                                  loading: auth.loading,
+                                  onToggleObscure: () => setState(() => _obscure = !_obscure),
+                                  onLogin: _login,
+                                  onRegister: () => _navigateToRegister(context),
+                                  serverUrl: _currentServerUrl,
+                                  onConfigureServer: _showServerUrlDialog,
+                                )
+                              : _PortraitLoginContent(
+                                  usernameController: _usernameController,
+                                  passwordController: _passwordController,
+                                  obscure: _obscure,
+                                  loading: auth.loading,
+                                  compact: isCompact,
+                                  onToggleObscure: () => setState(() => _obscure = !_obscure),
+                                  onLogin: _login,
+                                  onRegister: () => _navigateToRegister(context),
+                                  serverUrl: _currentServerUrl,
+                                  onConfigureServer: _showServerUrlDialog,
+                                ),
+                        ),
+                        Divider(height: 1, color: _dividerColor(context)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  SizedBox(
+                                    width: (cardMaxWidth > 0 ? cardMaxWidth : 400) / 2.8,
+                                    child: _GmailLoginButton(
+                                      onPressed: () async {
+                                        final scaffoldMessenger = ScaffoldMessenger.of(context);
+                                        final auth = context.read<AuthProvider>();
+                                        final result = await auth.loginWithGoogle();
+
+                                        if (result != null && result['new_user'] == true) {
+                                          scaffoldMessenger.showSnackBar(
+                                            const SnackBar(content: Text('Email belum terdaftar. Fitur registrasi Gmail sedang disiapkan.')),
+                                          );
+                                        } else if (result == null && auth.error != null) {
+                                          scaffoldMessenger.showSnackBar(
+                                            SnackBar(content: Text(auth.error!), backgroundColor: AppTheme.danger),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const _LoginHintCard(),
+                            ],
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LoginHintCard extends StatelessWidget {
+  const _LoginHintCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.surface : AppTheme.lightSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isDark ? Colors.transparent : AppTheme.lightDivider),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 14, color: AppTheme.accent.withValues(alpha: 0.7)),
+          const SizedBox(width: 8),
+          const Text(
+            'EWIAPPS',
+            style: TextStyle(fontSize: 10, color: AppTheme.textSecondary, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }
@@ -379,15 +446,6 @@ class _PortraitLoginContent extends StatelessWidget {
         ),
         SizedBox(height: spacingMedium),
         _RegisterLink(onTap: onRegister),
-        SizedBox(height: spacingLarge),
-        _GmailLoginButton(
-          onPressed: () {
-            // TODO: Implement Google Sign In
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Fitur Login Gmail sedang disiapkan')),
-            );
-          },
-        ),
       ],
     );
   }
@@ -506,8 +564,6 @@ class _LandscapeLoginContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _RegisterLink(onTap: onRegister, compact: true),
-                const SizedBox(height: 14),
-                _GmailLoginButton(onPressed: () {}),
               ],
             ),
           ),

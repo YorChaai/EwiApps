@@ -37,6 +37,10 @@ def create_app():
 
     JWTManager(app)
 
+    # init mail
+    from routes.auth import init_mail
+    init_mail(app)
+
     # buat folder jika belum ada
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     os.makedirs(app.config['EXPORT_FOLDER'], exist_ok=True)

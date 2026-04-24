@@ -160,6 +160,47 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> googleLogin(String idToken) async {
+    final res = await _retryRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/auth/google-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'id_token': idToken}),
+      ),
+    );
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final res = await _retryRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      ),
+    );
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+  }) async {
+    final res = await _retryRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'otp': otp,
+          'new_password': newPassword,
+        }),
+      ),
+    );
+    return _handleResponse(res);
+  }
+
   Future<Map<String, dynamic>> register(
     String username,
     String password,

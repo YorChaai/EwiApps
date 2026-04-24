@@ -1,19 +1,142 @@
 import os
 import uuid
+import random
+import string
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_mail import Mail, Message
 from models import db, User
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from routes.notifications import notify_managers, create_notification
+from google.oauth2 import id_token
+from google.auth.transport import requests
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
+mail = Mail()
 
+def init_mail(app):
+    mail.init_app(app)
+
+def generate_otp(length=6):
+    return ''.join(random.choices(string.digits, k=length))
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    data = request.get_json()
+    email = data.get('email', '').strip()
+
+    if not email:
+        return jsonify({'error': 'Email wajib diisi'}), 400
+
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        # Untuk keamanan, jangan beri tahu jika email tidak ada
+        return jsonify({'message': 'Jika email terdaftar, kode OTP akan dikirim.'}), 200
+
+    otp = generate_otp()
+    user.reset_token = otp
+    user.reset_token_expiry = datetime.now(timezone.utc) + timedelta(minutes=10)
+    db.session.commit()
+
+    try:
+        msg = Message(
+            'Kode Reset Password ExspanApp',
+            recipients=[email]
+        )
+        msg.body = f"Halo {user.full_name},\n\nKode OTP Anda untuk reset password adalah: {otp}\n\nKode ini akan kadaluarsa dalam 10 menit. Jika Anda tidak merasa meminta reset password, abaikan email ini."
+        mail.send(msg)
+        return jsonify({'message': 'Kode OTP telah dikirim ke email Anda.'}), 200
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return jsonify({'error': 'Gagal mengirim email OTP. Silakan coba lagi nanti.'}), 500
+
+@auth_bp.route('/reset-password', methods=['POST'])
+def reset_password():
+    data = request.get_json()
+    email = data.get('email', '').strip()
+    otp = data.get('otp', '').strip()
+    new_password = data.get('new_password', '')
+
+    if not email or not otp or not new_password:
+        return jsonify({'error': 'Semua field wajib diisi'}), 400
+
+    user = User.query.filter_by(email=email, reset_token=otp).first()
+
+    if not user or not user.reset_token_expiry:
+        return jsonify({'error': 'Kode OTP salah atau tidak valid'}), 400
+
+    # Check expiry
+    expiry = user.reset_token_expiry
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+
+    if datetime.now(timezone.utc) > expiry:
+        return jsonify({'error': 'Kode OTP telah kadaluarsa'}), 400
+
+    if len(new_password) < 6:
+        return jsonify({'error': 'Password minimal 6 karakter'}), 400
+
+    user.set_password(new_password)
+    user.reset_token = None
+    user.reset_token_expiry = None
+    db.session.commit()
+
+    return jsonify({'message': 'Password berhasil diganti. Silakan login kembali.'}), 200
+
+@auth_bp.route('/google-login', methods=['POST'])
+def google_login():
+    data = request.get_json()
+    id_token_str = data.get('id_token')
+
+    if not id_token_str:
+        return jsonify({'error': 'ID Token Google tidak ditemukan'}), 400
+
+    try:
+        # Verify the ID token
+        client_id = current_app.config.get('GOOGLE_CLIENT_ID')
+        id_info = id_token.verify_oauth2_token(id_token_str, requests.Request(), client_id)
+
+        email = id_info.get('email')
+        google_id = id_info.get('sub')
+        full_name = id_info.get('name')
+
+        # Check if user exists by google_id or email
+        user = User.query.filter((User.google_id == google_id) | (User.email == email)).first()
+
+        if not user:
+            # User not found, return info to Flutter to complete registration
+            return jsonify({
+                'new_user': True,
+                'email': email,
+                'google_id': google_id,
+                'full_name': full_name,
+                'message': 'Email belum terdaftar. Silakan lengkapi profil.'
+            }), 200
+
+        # User found, update info if needed
+        if not user.google_id:
+            user.google_id = google_id
+        if not user.email:
+            user.email = email
+
+        user.last_login = datetime.now(timezone.utc)
+        db.session.commit()
+
+        token = create_access_token(identity=str(user.id))
+        return jsonify({
+            'token': token,
+            'user': user.to_dict()
+        }), 200
+
+    except ValueError:
+        return jsonify({'error': 'Verifikasi token Google gagal'}), 401
+    except Exception as e:
+        print(f"Google login error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 def allowed_file(filename):
     allowed = current_app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'pdf'})
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed
-
-
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
