@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../services/api_service.dart';
@@ -44,6 +46,13 @@ class AuthProvider extends ChangeNotifier {
 
   bool get loading => _loading;
   String? get error => _error;
+  bool get isGoogleSignInSupported {
+    if (kIsWeb) return true;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android || TargetPlatform.iOS || TargetPlatform.macOS => true,
+      _ => false,
+    };
+  }
 
   AuthProvider() {
     _loadToken();
@@ -112,6 +121,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      if (!isGoogleSignInSupported) {
+        throw Exception(
+          'Login Gmail belum didukung di perangkat ini. Gunakan login username/password.',
+        );
+      }
+
       // 1. Sign in with Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
@@ -148,6 +163,12 @@ class AuthProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
       return {'success': true};
+    } on MissingPluginException {
+      _error =
+          'Login Gmail belum tersedia di platform ini. Gunakan login username/password.';
+      _loading = false;
+      notifyListeners();
+      return null;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
       _loading = false;
@@ -200,13 +221,31 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> register(String username, String password, String fullName, String role, {String? phoneNumber, String? workplace}) async {
+  Future<bool> register(
+    String username,
+    String password,
+    String fullName,
+    String role, {
+    String? email,
+    String? googleId,
+    String? phoneNumber,
+    String? workplace,
+  }) async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      await _api.register(username, password, fullName, role, phoneNumber: phoneNumber, workplace: workplace);
+      await _api.register(
+        username,
+        password,
+        fullName,
+        role,
+        email: email,
+        googleId: googleId,
+        phoneNumber: phoneNumber,
+        workplace: workplace,
+      );
       _loading = false;
       notifyListeners();
       return true;
@@ -315,6 +354,63 @@ class AuthProvider extends ChangeNotifier {
   void updateUserData(Map<String, dynamic> userData) {
     _user = userData;
     notifyListeners();
+  }
+
+  Future<bool> linkGoogleAccount() async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      if (!isGoogleSignInSupported) {
+        throw Exception('Fitur ini belum didukung di perangkat ini.');
+      }
+
+      final googleSignIn = GoogleSignIn();
+      final account = await googleSignIn.signIn();
+      if (account == null) {
+        _loading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final auth = await account.authentication;
+      if (auth.idToken == null) {
+        throw Exception('Gagal mendapatkan ID Token dari Google');
+      }
+
+      final res = await _api.linkGoogleAccount(auth.idToken!);
+      _user = res['user'];
+
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> unlinkGoogleAccount() async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await _api.unlinkGoogleAccount();
+      _user = res['user'];
+
+      _loading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = e.toString().replaceAll('Exception: ', '');
+      _loading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<void> logout() async {

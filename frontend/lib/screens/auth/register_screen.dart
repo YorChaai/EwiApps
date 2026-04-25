@@ -6,7 +6,18 @@ import '../../theme/app_theme.dart';
 import '../../utils/responsive_layout.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final String? initialEmail;
+  final String? initialFullName;
+  final String? initialGoogleId;
+  final bool lockEmail;
+
+  const RegisterScreen({
+    super.key,
+    this.initialEmail,
+    this.initialFullName,
+    this.initialGoogleId,
+    this.lockEmail = false,
+  });
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -15,6 +26,7 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _fullNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _workplaceController = TextEditingController();
@@ -36,6 +48,8 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void initState() {
     super.initState();
+    _emailController.text = widget.initialEmail ?? '';
+    _fullNameController.text = widget.initialFullName ?? '';
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -50,6 +64,7 @@ class _RegisterScreenState extends State<RegisterScreen>
   @override
   void dispose() {
     _usernameController.dispose();
+    _emailController.dispose();
     _fullNameController.dispose();
     _phoneController.dispose();
     _workplaceController.dispose();
@@ -63,6 +78,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     FocusScope.of(context).unfocus();
 
     final username = _usernameController.text.trim();
+    final email = _emailController.text.trim();
     final fullName = _fullNameController.text.trim();
     final phone = _phoneController.text.trim();
     final workplace = _workplaceController.text.trim();
@@ -84,6 +100,26 @@ class _RegisterScreenState extends State<RegisterScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Nama lengkap tidak boleh kosong'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
+    if (email.isNotEmpty && !email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Format email tidak valid'),
+          backgroundColor: AppTheme.danger,
+        ),
+      );
+      return;
+    }
+
+    if (widget.lockEmail && email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email Google wajib tersedia untuk registrasi ini'),
           backgroundColor: AppTheme.danger,
         ),
       );
@@ -126,6 +162,8 @@ class _RegisterScreenState extends State<RegisterScreen>
       password,
       fullName,
       _selectedRole,
+      email: email.isEmpty ? null : email,
+      googleId: widget.initialGoogleId,
       phoneNumber: phone.isEmpty ? '-' : phone,
       workplace: workplace.isEmpty ? '-' : workplace,
     );
@@ -153,7 +191,9 @@ class _RegisterScreenState extends State<RegisterScreen>
               ),
               const SizedBox(height: 12),
               Text(
-                'Silakan login dengan akun yang baru dibuat.',
+                widget.initialGoogleId != null
+                    ? 'Akun berhasil dibuat. Sekarang kamu bisa login dengan Gmail atau username dan password.'
+                    : 'Silakan login dengan akun yang baru dibuat.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 14,
@@ -210,7 +250,6 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     final horizontalPadding = ResponsiveLayout.horizontalPadding(context);
     final verticalPadding = ResponsiveLayout.verticalPadding(context);
-    final safeWidth = ResponsiveLayout.safeWidth(context);
 
     final cardMaxWidth = isPhoneLandscape
         ? 780.0
@@ -225,27 +264,20 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     return Scaffold(
       body: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnim,
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: Center(
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                verticalPadding,
-                horizontalPadding,
-                verticalPadding +
-                    MediaQuery.of(context).viewInsets.bottom +
-                    8,
-              ),
-              child: Align(
-                alignment: Alignment.topCenter,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
+                ).add(EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom)),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxWidth: cardMaxWidth,
-                    minWidth: safeWidth > 8 && safeWidth < 340
-                        ? safeWidth - 8
-                        : 0,
+                    minWidth: 280, // Minimum width like a phone
                   ),
                   child: Container(
                     padding: cardPadding,
@@ -265,6 +297,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                     child: isPhoneLandscape
                         ? _LandscapeRegisterContent(
                             usernameController: _usernameController,
+                            emailController: _emailController,
                             fullNameController: _fullNameController,
                             phoneController: _phoneController,
                             workplaceController: _workplaceController,
@@ -282,8 +315,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 setState(() => _selectedRole = value),
                             onRegister: _register,
                             onBack: () => Navigator.pop(context),
+                            lockEmail: widget.lockEmail,
                           )
                         : _PortraitRegisterContent(                            usernameController: _usernameController,
+                            emailController: _emailController,
                             fullNameController: _fullNameController,
                             phoneController: _phoneController,
                             workplaceController: _workplaceController,
@@ -302,6 +337,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 setState(() => _selectedRole = value),
                             onRegister: _register,
                             onBack: () => Navigator.pop(context),
+                            lockEmail: widget.lockEmail,
                           ),
                         ),
                         ),
@@ -316,6 +352,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                         class _PortraitRegisterContent extends StatelessWidget {
                         final TextEditingController usernameController;
+                        final TextEditingController emailController;
                         final TextEditingController fullNameController;
                         final TextEditingController phoneController;
                         final TextEditingController workplaceController;
@@ -331,9 +368,11 @@ class _RegisterScreenState extends State<RegisterScreen>
                         final ValueChanged<String> onRoleChanged;
                         final VoidCallback onRegister;
                         final VoidCallback onBack;
+                        final bool lockEmail;
 
                         const _PortraitRegisterContent({
                         required this.usernameController,
+                        required this.emailController,
                         required this.fullNameController,
                         required this.phoneController,
                         required this.workplaceController,
@@ -349,6 +388,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                         required this.onRoleChanged,
                         required this.onRegister,
                         required this.onBack,
+                        required this.lockEmail,
                         });
   @override
   Widget build(BuildContext context) {
@@ -388,6 +428,8 @@ class _RegisterScreenState extends State<RegisterScreen>
         SizedBox(height: spacingXL),
         _UsernameField(controller: usernameController),
         SizedBox(height: spacingMedium),
+        _EmailField(controller: emailController, readOnly: lockEmail),
+        SizedBox(height: spacingMedium),
         _FullNameField(controller: fullNameController),
         SizedBox(height: spacingMedium),
         _PhoneField(controller: phoneController),
@@ -424,6 +466,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
 class _LandscapeRegisterContent extends StatelessWidget {
   final TextEditingController usernameController;
+  final TextEditingController emailController;
   final TextEditingController fullNameController;
   final TextEditingController phoneController;
   final TextEditingController workplaceController;
@@ -438,9 +481,11 @@ class _LandscapeRegisterContent extends StatelessWidget {
   final ValueChanged<String> onRoleChanged;
   final VoidCallback onRegister;
   final VoidCallback onBack;
+  final bool lockEmail;
 
   const _LandscapeRegisterContent({
     required this.usernameController,
+    required this.emailController,
     required this.fullNameController,
     required this.phoneController,
     required this.workplaceController,
@@ -455,6 +500,7 @@ class _LandscapeRegisterContent extends StatelessWidget {
     required this.onRoleChanged,
     required this.onRegister,
     required this.onBack,
+    required this.lockEmail,
   });
 
   @override
@@ -483,6 +529,8 @@ class _LandscapeRegisterContent extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _UsernameField(controller: usernameController),
+                  const SizedBox(height: 12),
+                  _EmailField(controller: emailController, readOnly: lockEmail),
                   const SizedBox(height: 12),
                   _FullNameField(controller: fullNameController),
                   const SizedBox(height: 12),
@@ -668,6 +716,41 @@ class _FullNameField extends StatelessWidget {
       style: TextStyle(color: textColor),
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.name],
+    );
+  }
+}
+
+class _EmailField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool readOnly;
+
+  const _EmailField({
+    required this.controller,
+    this.readOnly = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final labelColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+    final iconColor = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final hintColor = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final textColor = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+
+    return TextField(
+      controller: controller,
+      readOnly: readOnly,
+      keyboardType: TextInputType.emailAddress,
+      decoration: InputDecoration(
+        labelText: 'Email',
+        labelStyle: TextStyle(color: labelColor),
+        prefixIcon: Icon(Icons.email_outlined, color: iconColor),
+        hintText: 'nama@email.com',
+        hintStyle: TextStyle(color: hintColor),
+      ),
+      style: TextStyle(color: textColor),
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.email],
     );
   }
 }

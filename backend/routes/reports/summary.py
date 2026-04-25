@@ -2,18 +2,21 @@
 
 import re
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from io import BytesIO
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union
 from flask import jsonify, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill
+from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
+from openpyxl.drawing.image import Image as OpenpyxlImage
+import os
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -42,13 +45,23 @@ COMMON_SUBCATEGORY_ORDER = [
 ]
 
 
-def _validate_date(date_str: str) -> Optional[datetime]:
-    """Validate date string format (YYYY-MM-DD)."""
-    if not date_str:
+def _validate_date(date_input: Any) -> Optional[datetime]:
+    """Validate date format and return datetime object. Handles strings and date/datetime objects."""
+    if not date_input:
         return None
+
+    # If it's already a datetime object
+    if isinstance(date_input, datetime):
+        return date_input
+
+    # If it's a date object (but not datetime)
+    if isinstance(date_input, date):
+        return datetime.combine(date_input, datetime.min.time())
+
     try:
-        return datetime.strptime(date_str, '%Y-%m-%d')
-    except ValueError:
+        # If it's a string
+        return datetime.strptime(str(date_input), '%Y-%m-%d')
+    except (ValueError, TypeError):
         return None
 
 
@@ -59,8 +72,8 @@ def _display_settlement_status(status: str) -> str:
 
 def _get_summary_approved_expenses(
     year: int,
-    start_date: Optional[str],
-    end_date: Optional[str]
+    start_date: Optional[Union[str, date, datetime]],
+    end_date: Optional[Union[str, date, datetime]]
 ) -> List[Expense]:
     """Get approved expenses with optional date range filter."""
     query = Expense.query.filter(Expense.status == 'approved')
@@ -92,8 +105,18 @@ def _expense_amount_for_summary(expense: Expense) -> float:
 
 
 def _get_display_subcategory(expense: Expense) -> str:
-    """Get the consolidated subcategory label from the Expense model."""
-    return (expense.combined_subcategory_label or '').strip()
+    """Get the consolidated subcategory label from the Expense model or description."""
+    label = (expense.combined_subcategory_label or '').strip()
+    if label:
+        return label
+
+    # Jika label kosong, coba ekstrak dari deskripsi format [Subkategori]
+    if expense.description:
+        match = re.match(r'^\[(.*?)\]', expense.description.strip())
+        if match:
+            return match.group(1).strip()
+
+    return ''
 
 
 def _summary_display_category(expense, category_by_id, children_by_parent_name):
@@ -101,22 +124,50 @@ def _summary_display_category(expense, category_by_id, children_by_parent_name):
     if not category:
         return None, None
 
+    # Cari root (kategori paling atas)
     root = category
+    path = [category]
     while root.parent_id and category_by_id.get(root.parent_id):
         root = category_by_id[root.parent_id]
+        path.append(root)
 
     root_name = root.name or '-'
-    raw_subcategory_name = category.name or '-'
-    inferred_subcategory = _get_display_subcategory(expense)
 
-    children_map = children_by_parent_name.get(root_name, {})
-    if inferred_subcategory and inferred_subcategory in children_map:
-        child = children_map[inferred_subcategory]
-        return root, child
-
+    # 1. PRIORITAS: Jika expense.category_id itu sendiri adalah subkategori (punya parent)
+    # dan parent-nya adalah root, maka itu adalah anak langsung.
     if category.parent_id == root.id:
         return root, category
 
+    # 2. Jika category_id adalah level yang lebih dalam (cucu), cari anak langsung dari root.
+    if len(path) > 2: # [category, child, root] -> length 3
+        direct_child = path[-2]
+        if direct_child.parent_id == root.id:
+            return root, direct_child
+
+    # 3. FALLBACK: Coba cocokkan berdasarkan label teks (inferred_subcategory)
+    inferred_subcategory_name = _get_display_subcategory(expense)
+    if inferred_subcategory_name:
+        children_map = children_by_parent_name.get(root_name, {})
+        key_search = inferred_subcategory_name.lower().strip()
+
+        # Hilangkan prefix kode jika ada di key_search (misal 'A11-Sales' -> 'sales')
+        if '-' in key_search:
+            key_search = key_search.split('-', 1)[1].strip()
+
+        for child_name, child_obj in children_map.items():
+            c_name_low = child_name.lower().strip()
+            # Hilangkan prefix kode di nama kategori database juga untuk perbandingan
+            pure_child_name = c_name_low
+            if '-' in pure_child_name:
+                pure_child_name = pure_child_name.split('-', 1)[1].strip()
+
+            # Cocokkan jika nama murni sama, atau salah satu mengandung yang lain
+            if (key_search == pure_child_name or
+                key_search == c_name_low or
+                key_search in pure_child_name or
+                pure_child_name in key_search):
+                return root, child_obj
+    # Jika expense dicatat langsung di kategori Induk (category_id == root_id)
     return root, None
 
 
@@ -176,6 +227,8 @@ def _build_summary_payload(expenses):
 
         children = list(children_by_parent_name.get(root.name, {}).values())
         children_list = []
+
+        # 1. Proses Subkategori Resmi
         for child in children:
             child_expenses = child_expense_map.get(child.id, [])
             monthly = {str(i): 0 for i in range(1, 13)}
@@ -195,26 +248,41 @@ def _build_summary_payload(expenses):
                 'level': 1
             })
 
-        # Hitung total bulanan & tahunan kategori induk dari seluruh anak + root direct expenses
+        # 2. Proses Baris Sisa (Yang masuk langsung ke Root)
+        if root_expenses:
+            combine_monthly = {str(i): 0 for i in range(1, 13)}
+            combine_yearly_total = 0
+            labels = set()
+            for e in root_expenses:
+                month_str = str(e.date.month)
+                amount = _expense_amount_for_summary(e)
+                combine_monthly[month_str] += amount
+                combine_yearly_total += amount
+                grand_total += amount
+
+                lbl = _get_display_subcategory(e)
+                if lbl: labels.add(lbl)
+
+            label_str = " - ".join(sorted(list(labels))) if labels else "Uncategorized"
+            # Jangan gunakan kode dummy '0', gunakan kode Root saja agar tidak membingungkan
+            children_list.insert(0, {
+                'category': f"{root.code} (Other) - {label_str}",
+                'monthly': combine_monthly,
+                'yearly_total': combine_yearly_total,
+                'is_parent': False,
+                'level': 1
+            })
+        # 3. Hitung Total Kategori Induk (dari semua baris di children_list)
         parent_monthly = {str(i): 0 for i in range(1, 13)}
         parent_yearly_total = 0.0
 
-        # Kontribusi dari anak-anak (sudah terakumulasi di children_list)
         for child_row in children_list:
             for i in range(1, 13):
                 month_key = str(i)
                 parent_monthly[month_key] += child_row['monthly'].get(month_key, 0) or 0
             parent_yearly_total += child_row.get('yearly_total', 0) or 0
 
-        # Kontribusi dari expense langsung ke kategori induk
-        for e in root_expenses:
-            amount = _expense_amount_for_summary(e)
-            month_key = str(e.date.month)
-            parent_monthly[month_key] += amount
-            parent_yearly_total += amount
-            grand_total += amount
-
-        # Masukkan baris INDUK dengan total riil (bukan nol)
+        # Masukkan baris INDUK
         summary_data.append({
             'category': f"{root.code} - {root.name}",
             'monthly': parent_monthly,
@@ -223,7 +291,7 @@ def _build_summary_payload(expenses):
             'level': 0
         })
 
-        # Masukkan baris ANAK-ANAK
+        # Masukkan semua anak (termasuk baris combine tadi)
         summary_data.extend(children_list)
 
     return summary_data, grand_total
@@ -265,20 +333,43 @@ def export_summary_pdf():
     end_date = _parse_iso_date(request.args.get('end_date'))
     expenses = _get_summary_approved_expenses(year, start_date, end_date)
     summary_data, grand_total = _build_summary_payload(expenses)
+
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
+    # Perkecil margin agar tabel punya ruang lebih luas (792 total lebar landscape)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter),
+                            leftMargin=20, rightMargin=20, topMargin=30, bottom=30)
     styles = getSampleStyleSheet()
     elements = []
+
     title = "Laporan Summary Pengeluaran"
     if start_date or end_date:
         period_text = f"Periode: {(start_date.isoformat() if start_date else '-')} s/d {(end_date.isoformat() if end_date else '-')}"
     else:
         period_text = f"Tahun: {year}"
+
     elements.append(Paragraph(title, styles['Heading1']))
     elements.append(Paragraph(period_text, styles['Normal']))
     elements.append(Spacer(1, 10))
+
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
     table_data = [["Kategori"] + months + ["Total"]]
+
+    # --- HITUNG LEBAR DINAMIS ---
+    # Gunakan font sedikit lebih kecil agar angka besar (milyaran) tidak bertabrakan
+    fontSize = 6.5
+    max_cat_name_width = 110 # Minimum awal
+    for row in summary_data:
+        cat_name = str(row.get('category', '-'))
+        level = row.get('level', 0)
+        indent = level * 10
+        w = stringWidth(cat_name, 'Helvetica-Bold' if row.get('is_parent') else 'Helvetica', fontSize) + indent + 12
+        if w > max_cat_name_width:
+            max_cat_name_width = w
+
+    # Cap category width agar kolom angka tetap proporsional
+    if max_cat_name_width > 180:
+        max_cat_name_width = 180
+
     month_totals = [0] * 12
     for row in summary_data:
         monthly = row.get('monthly', {})
@@ -292,26 +383,32 @@ def export_summary_pdf():
             values.append(f"{val:,.0f}" if val > 0 else "-")
 
         cat_name = row.get('category', '-')
-        # Gunakan Paragraph untuk mendukung bold dan indentasi di PDF table
-        p_style = ParagraphStyle('TableText', parent=styles['Normal'], fontSize=7)
+        p_style = ParagraphStyle('TableText', parent=styles['Normal'], fontSize=fontSize, leading=8)
         if is_parent:
             display_name = Paragraph(f"<b>{cat_name}</b>", p_style)
         else:
-            p_style.leftIndent = level * 12
+            p_style.leftIndent = level * 10
             display_name = Paragraph(cat_name, p_style)
 
         table_data.append([display_name] + values + [f"{float(row.get('yearly_total', 0) or 0):,.0f}"])
 
-    table_data.append([Paragraph("<b>GRAND TOTAL</b>", ParagraphStyle('Total', parent=styles['Normal'], fontSize=7))] +
+    table_data.append([Paragraph("<b>GRAND TOTAL</b>", ParagraphStyle('Total', parent=styles['Normal'], fontSize=fontSize))] +
                       [f"{v:,.0f}" if v > 0 else "-" for v in month_totals] + [f"{float(grand_total):,.0f}"])
 
-    table = Table(table_data, colWidths=[155] + [42] * 12 + [70], repeatRows=1)
+    # Atur lebar kolom: month_width ditingkatkan ke 45, total_width ke 75
+    month_col_width = 45
+    last_col_width = 75
+    col_widths = [max_cat_name_width] + [month_col_width] * 12 + [last_col_width]
+
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3B82F6')), ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), 7),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), ('FONTSIZE', (0, 0), (-1, -1), fontSize),
         ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E6F0FF')),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'), ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),]))
+
     elements.append(table)
     doc.build(elements)
     buffer.seek(0)
@@ -326,7 +423,6 @@ def generate_excel_report():
     if user.role != 'manager':
         return jsonify({'error': 'Akses ditolak'}), 403
 
-    # Gunakan build_summary_payload agar konsisten dengan hirarki & sorting
     year = request.args.get('year', _default_report_year(), type=int)
     start_date = _parse_iso_date(request.args.get('start_date'))
     end_date = _parse_iso_date(request.args.get('end_date'))
@@ -337,44 +433,102 @@ def generate_excel_report():
     ws = wb.active
     ws.title = "Laporan Summary Bulanan"
 
+    # --- HEADER SECTION ---
+    # Row 1: Title
+    ws['A1'] = "Daily Report - Balance Calculation Operation Cost"
+    ws['A1'].font = Font(bold=True, size=14)
+
+    # Row 2: Project
+    ws['A2'] = "Project"
+    ws['B2'] = ":"
+    ws['C2'] = f"REVENUE vs OPERATION COST Tahun {year}"
+    ws['A2'].font = Font(bold=True)
+    ws['C2'].font = Font(bold=True)
+
+    # Row 3: Date
+    ws['A3'] = "Date"
+    ws['B3'] = ":"
+    if start_date and end_date:
+        ws['C3'] = f"{start_date.strftime('%d %B')} - {end_date.strftime('%d %B %Y')}"
+    else:
+        ws['C3'] = f"Januari - Desember {year}"
+    ws['A3'].font = Font(bold=True)
+    ws['C3'].font = Font(bold=True)
+
+    # --- LOGO SECTION ---
+    logo_path = r"D:\2. Organize\1. Projects\MiniProjectKPI_EWI\frontend\assets\images\sheet1.png"
+    if os.path.exists(logo_path):
+        img = OpenpyxlImage(logo_path)
+        # Sesuai analisis screenshot: Width 6.69cm (~253px), Height 2.22cm (~84px)
+        img.width = 253
+        img.height = 84
+        ws.add_image(img, 'N1') # Anchor di N1 agar sejajar ke arah kolom O
+
+    # --- TABLE SECTION ---
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des']
     headers = ["Kategori"] + months + ["Total"]
-    ws.append(headers)
-    for cell in ws[1]: cell.font = Font(bold=True)
 
+    start_row = 6
+    for i, header in enumerate(headers, 1):
+        cell = ws.cell(row=start_row, column=i)
+        cell.value = header
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color='3B82F6', end_color='3B82F6', fill_type='solid') # Blue header
+        cell.alignment = Alignment(horizontal='center')
+
+    current_row = start_row + 1
     for row in summary_data:
         is_parent = row.get('is_parent', False)
         level = row.get('level', 0)
         cat_name = row.get('category', '-')
 
-        # Tambahkan spasi untuk indentasi di Excel
         display_name = ("  " * level) + cat_name
+        ws.cell(row=current_row, column=1).value = display_name
+
+        if is_parent:
+            ws.cell(row=current_row, column=1).font = Font(bold=True)
 
         monthly = row.get('monthly', {})
-        row_values = [display_name]
         for i in range(1, 13):
-            row_values.append(monthly.get(str(i), 0))
-        row_values.append(row.get('yearly_total', 0))
-
-        ws.append(row_values)
-        if is_parent:
-            for cell in ws[ws.max_row]:
+            val = monthly.get(str(i), 0)
+            cell = ws.cell(row=current_row, column=i+1)
+            cell.value = val
+            cell.number_format = '#,##0'
+            if is_parent:
                 cell.font = Font(bold=True)
 
+        total_val = row.get('yearly_total', 0)
+        total_cell = ws.cell(row=current_row, column=14)
+        total_cell.value = total_val
+        total_cell.number_format = '#,##0'
+        if is_parent:
+            total_cell.font = Font(bold=True)
+
+        current_row += 1
+
     # Grand Total row
-    gt_row = ["GRAND TOTAL"]
+    ws.cell(row=current_row, column=1).value = "GRAND TOTAL"
+    ws.cell(row=current_row, column=1).font = Font(bold=True)
+
     for i in range(1, 13):
-        total_m = sum(r['monthly'].get(str(i), 0) for r in summary_data)
-        gt_row.append(total_m)
-    gt_row.append(grand_total_val)
-    ws.append(gt_row)
-    for cell in ws[ws.max_row]:
+        total_m = sum(r['monthly'].get(str(i), 0) for r in summary_data if r.get('level') == 0) # Only sum top level to avoid double count
+        cell = ws.cell(row=current_row, column=i+1)
+        cell.value = total_m
+        cell.number_format = '#,##0'
         cell.font = Font(bold=True)
         cell.fill = PatternFill(start_color='E6F0FF', end_color='E6F0FF', fill_type='solid')
 
-    for i, col_name in enumerate(headers, 1):
+    gt_cell = ws.cell(row=current_row, column=14)
+    gt_cell.value = grand_total_val
+    gt_cell.number_format = '#,##0'
+    gt_cell.font = Font(bold=True)
+    gt_cell.fill = PatternFill(start_color='E6F0FF', end_color='E6F0FF', fill_type='solid')
+
+    # Column widths
+    ws.column_dimensions['A'].width = 40
+    for i in range(2, 14):
         ws.column_dimensions[get_column_letter(i)].width = 15
-    ws.column_dimensions['A'].width = 35
+    ws.column_dimensions['N'].width = 18
 
     buffer = BytesIO(); wb.save(buffer); buffer.seek(0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')

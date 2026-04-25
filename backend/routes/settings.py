@@ -130,59 +130,79 @@ def manage_report_year():
 def export_database():
     try:
         from config import BASE_DIR
-        # Ambil folder penyimpanan dinamis dari config
+        # Folder utama: data/exportdb
         base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
         export_base_dir = os.path.join(base_data_dir, 'exportdb')
 
-        # Buat timestamp untuk folder dan nama file
-        now = datetime.now()
-        timestamp = now.strftime("%Y-%m-%d_%H-%M-%S")
+        # Buat timestamp folder (Contoh: 2026-04-24_14-30-00)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         target_dir = os.path.join(export_base_dir, timestamp)
-
-        # Buat folder jika belum ada
         os.makedirs(target_dir, exist_ok=True)
 
-        # Cek tipe database dari config
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
+        exported_files = []
 
+        # 1. EKSPOR POSTGRESQL (Jika aktif)
         if db_uri.startswith('postgresql'):
-            # EKSPOR POSTGRESQL (Menggunakan pg_dump)
-            target_filename = f"database_backup_{timestamp}.sql"
-            target_path = os.path.join(target_dir, target_filename)
+            try:
+                url = urlparse(db_uri)
+                env = os.environ.copy()
+                env["PGPASSWORD"] = url.password
 
-            url = urlparse(db_uri)
-            env = os.environ.copy()
-            env["PGPASSWORD"] = url.password
+                target_sql = os.path.join(target_dir, f"backup_postgres_{timestamp}.sql")
 
-            command = [
-                'pg_dump',
-                '-h', url.hostname,
-                '-p', str(url.port or 5432),
-                '-U', url.username,
-                '-F', 'p', # Plain SQL format
-                '-f', target_path,
-                url.path[1:] # Nama database
-            ]
+                # Cari pg_dump: Coba di PATH dulu, kalau gagal coba jalur spesifik user
+                pg_dump_path = 'pg_dump'
+                potential_paths = [
+                    'pg_dump',
+                    r"D:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
+                    r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
+                ]
 
-            process = subprocess.run(command, env=env, capture_output=True, text=True)
-            if process.returncode != 0:
-                return jsonify({'error': f'Gagal pg_dump: {process.stderr}'}), 500
-        else:
-            # EKSPOR SQLITE (Lama)
-            source_db = os.path.join(BASE_DIR, 'database.db')
-            if not os.path.exists(source_db):
-                return jsonify({'error': 'File database SQLite tidak ditemukan'}), 404
+                success = False
+                last_error = ""
 
-            target_filename = f"database_{timestamp}.db"
-            target_path = os.path.join(target_dir, target_filename)
-            shutil.copy2(source_db, target_path)
+                for path in potential_paths:
+                    try:
+                        command = [
+                            path,
+                            '-h', url.hostname,
+                            '-p', str(url.port or 5432),
+                            '-U', url.username,
+                            '-F', 'p',
+                            '-f', target_sql,
+                            url.path[1:]
+                        ]
+                        process = subprocess.run(command, env=env, capture_output=True, text=True)
+                        if process.returncode == 0:
+                            exported_files.append(f"PostgreSQL (.sql)")
+                            success = True
+                            break
+                        else:
+                            last_error = process.stderr
+                    except FileNotFoundError:
+                        continue
+
+                if not success and last_error:
+                    print(f"[!] pg_dump error: {last_error}")
+                elif not success:
+                    print("[!] Error: 'pg_dump' utility not found in PATH or common locations.")
+
+            except Exception as pe:
+                print(f"[!] Unexpected PostgreSQL export error: {str(pe)}")
+
+        if not exported_files:
+            return jsonify({'error': 'Tidak ada database PostgreSQL yang bisa diekspor. Pastikan tools pg_dump terinstall.'}), 404
 
         return jsonify({
-            'message': 'Database berhasil dieksport.',
-            'path': os.path.abspath(target_path),
+            'message': f'Export Berhasil: {", ".join(exported_files)}',
+            'path': os.path.abspath(target_dir),
             'folder': timestamp
         })
     except Exception as e:
+        print(f"[!] Global Export Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Gagal eksport database: {str(e)}'}), 500
 
 
@@ -200,13 +220,20 @@ def import_database_preview():
     from config import BASE_DIR
     base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
 
+    # Gunakan subfolder tmp agar folder data tetap bersih
+    tmp_dir = os.path.join(base_data_dir, 'tmp')
+    os.makedirs(tmp_dir, exist_ok=True)
+
     # Cek tipe database
     db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
     is_postgres = db_uri.startswith('postgresql')
 
     # Simpan sementara
     ext = '.sql' if is_postgres else '.db'
-    temp_path = os.path.join(base_data_dir, f'temp_import{ext}')
+    temp_path = os.path.join(tmp_dir, f'temp_import{ext}')
+
+    # Hapus file lama jika ada
+    if os.path.exists(temp_path): os.remove(temp_path)
     file.save(temp_path)
 
     try:
@@ -247,47 +274,132 @@ def import_database_preview():
 @settings_bp.route('/db/import-confirm', methods=['POST'])
 @jwt_required()
 def import_database_confirm():
+    temp_path = None
     try:
         from config import BASE_DIR
         base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
+        export_base_dir = os.path.join(base_data_dir, 'exportdb')
+
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
         is_postgres = db_uri.startswith('postgresql')
 
         ext = '.sql' if is_postgres else '.db'
-        temp_path = os.path.join(base_data_dir, f'temp_import{ext}')
+        temp_path = os.path.join(base_data_dir, 'tmp', f'temp_import{ext}')
 
         if not os.path.exists(temp_path):
             return jsonify({'error': 'File import tidak ditemukan. Silakan upload ulang.'}), 404
 
+        # --- FOLDER RIWAYAT IMPOR (Sesuai Permintaan User) ---
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        history_dir = os.path.join(export_base_dir, f"{timestamp}(import)")
+        os.makedirs(history_dir, exist_ok=True)
+
+        # Simpan salinan file yang diimpor sebagai arsip
+        archived_import_file = os.path.join(history_dir, f"file_yang_diimpor_{timestamp}{ext}")
+        shutil.copy2(temp_path, archived_import_file)
+
         if is_postgres:
-            # RESTORE POSTGRESQL (Menggunakan psql)
+            # RESTORE POSTGRESQL
             url = urlparse(db_uri)
             env = os.environ.copy()
             env["PGPASSWORD"] = url.password
 
-            # Perintah untuk membersihkan database dan restore
-            # Kita gunakan psql -f (file)
-            command = [
-                'psql',
-                '-h', url.hostname,
-                '-p', str(url.port or 5432),
-                '-U', url.username,
-                '-d', url.path[1:],
+            # --- BACKUP DATA LAMA KE FOLDER RIWAYAT ---
+            try:
+                backup_path = os.path.join(history_dir, f"backup_data_lama_sebelum_import_{timestamp}.sql")
+
+                pg_dump_path = 'pg_dump'
+                for p in ['pg_dump', r"D:\Program Files\PostgreSQL\16\bin\pg_dump.exe", r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe"]:
+                    if os.path.exists(p) or p == 'pg_dump':
+                        pg_dump_path = p
+                        break
+
+                subprocess.run([
+                    pg_dump_path, '-h', url.hostname, '-p', str(url.port or 5432),
+                    '-U', url.username, '-F', 'p', '-f', backup_path, url.path[1:]
+                ], env=env, capture_output=True)
+                print(f"[*] Pre-import backup saved to: {backup_path}")
+            except Exception as e:
+                print(f"[!] Pre-import backup warning: {e}")
+
+            # --- PROSES RESTORE ---
+            print(f"[*] Memulai Restore PostgreSQL dari file: {temp_path}")
+
+            # --- PENTING: TUTUP SEMUA KONEKSI FLASK AGAR TIDAK DEADLOCK ---
+            from models import db
+            db.session.remove()
+            db.engine.dispose()
+            print("[*] Koneksi internal dilepaskan untuk menghindari deadlock.")
+
+            psql_path = 'psql'
+            for p in ['psql', r"D:\Program Files\PostgreSQL\16\bin\psql.exe", r"C:\Program Files\PostgreSQL\16\bin\psql.exe"]:
+                if os.path.exists(p) or p == 'psql':
+                    psql_path = p
+                    break
+
+            # 1. BERSIHKAN DATABASE TERLEBIH DAHULU (Wipe Schema)
+            print("[*] Membersihkan schema public lama...")
+            # Tambahkan perintah untuk memutus koneksi lain yang mungkin nyangkut
+            kill_conns = f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{url.path[1:]}' AND pid <> pg_backend_pid();"
+            subprocess.run([
+                psql_path, '-h', url.hostname, '-p', str(url.port or 5432),
+                '-U', url.username, '-d', 'postgres', # Connect ke db 'postgres' untuk drop db target
+                '-c', kill_conns
+            ], env=env, capture_output=True)
+
+            wipe_cmd = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+            subprocess.run([
+                psql_path, '-h', url.hostname, '-p', str(url.port or 5432),
+                '-U', url.username, '-d', url.path[1:],
+                '-c', wipe_cmd
+            ], env=env, capture_output=True)
+
+            # 2. JALANKAN RESTORE
+            print("[*] Menjalankan perintah psql restore...")
+            process = subprocess.run([
+                psql_path, '-h', url.hostname, '-p', str(url.port or 5432),
+                '-U', url.username, '-d', url.path[1:],
+                '-v', 'ON_ERROR_STOP=1',
                 '-f', temp_path
-            ]
-
-            # Catatan: Ini akan menimpa data yang ada jika file .sql berisi perintah DROP/CREATE
-            process = subprocess.run(command, env=env, capture_output=True, text=True)
+            ], env=env, capture_output=True, text=True)
             if process.returncode != 0:
+                print(f"[!] PSQL RESTORE ERROR:\n{process.stderr}")
                 return jsonify({'error': f'Gagal restore PostgreSQL: {process.stderr}'}), 500
-        else:
-            # RESTORE SQLITE (Lama)
-            target_db = os.path.join(BASE_DIR, 'database.db')
-            shutil.copy2(temp_path, target_db)
+            print("[*] Restore Selesai. Melakukan verifikasi data...")
 
-        if os.path.exists(temp_path):
+            # --- VERIFIKASI DATA (Cek apakah tabel ada isinya) ---
+            from models import db, Expense, User
+            try:
+                # Kita perlu me-refresh sesi database karena koneksi psql tadi di luar SQLAlchemy
+                db.session.remove()
+                user_count = db.session.query(db.func.count(User.id)).scalar()
+                exp_count = db.session.query(db.func.count(Expense.id)).scalar()
+                print(f"[+] Verifikasi Berhasil: Ditemukan {user_count} User dan {exp_count} Pengeluaran di database baru.")
+                debug_info = f"Import OK. Users: {user_count}, Expenses: {exp_count}"
+            except Exception as ve:
+                print(f"[!] Verifikasi Gagal: {ve}")
+                debug_info = f"Import selesai tapi verifikasi gagal: {str(ve)}"
+
+        else:
+            # RESTORE SQLITE (LAMA)
+            target_db = os.path.join(BASE_DIR, 'database.db')
+            if os.path.exists(target_db):
+                backup_path = os.path.join(history_dir, f"backup_data_lama_sebelum_import_{timestamp}.db")
+                shutil.copy2(target_db, backup_path)
+            shutil.copy2(temp_path, target_db)
+            debug_info = "SQLite Import OK"
+
+        # Hapus file sampah
+        if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
 
-        return jsonify({'message': 'Database berhasil dipulihkan (Import Selesai).'})
+        return jsonify({
+            'message': 'Database berhasil dipulihkan.',
+            'debug': debug_info,
+            'history_folder': f"{timestamp}(import)"
+        })
+
     except Exception as e:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
         return jsonify({'error': f'Gagal import database: {str(e)}'}), 500

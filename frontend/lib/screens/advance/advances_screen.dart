@@ -159,9 +159,10 @@ class AdvancesScreenState extends State<AdvancesScreen> {
       final prov = context.read<AdvanceProvider>();
       final year = prov.reportYear == 0 ? DateTime.now().year : prov.reportYear;
       final res = await context.read<AuthProvider>().api.getAdvances(reportYear: year);
+      if (!mounted) return;
       final advances = List<Map<String, dynamic>>.from(res['advances'] ?? []);
       final total = advances.fold<double>(0, (sum, a) => sum + (double.tryParse(a['total_amount']?.toString() ?? '0') ?? 0));
-      if (mounted) setState(() => _annualAdvanceTotal = total);
+      setState(() => _annualAdvanceTotal = total);
     } catch (_) {}
   }
 
@@ -335,6 +336,7 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     _listScrollController.addListener(_handleListScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<AdvanceProvider>().syncReportYear();
+      if (!mounted) return;
       _reloadAdvances();
     });
   }

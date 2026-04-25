@@ -24,26 +24,21 @@ def migrate_data():
 
     print(f"🚀 Memulai migrasi ke: {target_uri}")
 
-    # 3. Cari database SQLite lama (Cari di tempat biasa atau di folder backup)
-    sqlite_path = os.path.join(os.path.dirname(__file__), "database.db")
-    backup_path = os.path.join(os.path.dirname(__file__), "backup_sqlite", "database_lama_sqlite_sebelum_postgres.db")
+    # 3. Cari database SQLite lama
+    sqlite_path = r"D:\2. Organize\1. Projects\MiniProjectKPI_EWI\backend\backup_sqlite\database_lama_sqlite_sebelum_postgres.db"
 
     if not os.path.exists(sqlite_path):
-        if os.path.exists(backup_path):
-            sqlite_path = backup_path
-            print("📂 Menggunakan database sumber dari folder backup.")
-        else:
-            print(f"❌ ERROR: File SQLite tidak ditemukan.")
-            return
+        print(f"❌ ERROR: File SQLite tidak ditemukan di {sqlite_path}")
+        return
+
+    print(f"📂 Menggunakan database sumber: {sqlite_path}")
 
     # 4. Buat tabel di PostgreSQL (jika belum ada)
     with app.app_context():
         db.create_all()
         print("✅ Tabel di PostgreSQL berhasil disiapkan.")
 
-    # 5. Proses Pemindahan Data (menggunakan jembatan SQLAlchemy)
-    # Urutan tabel sangat penting karena adanya relasi (Foreign Key)
-    # Kita hapus dulu data yang mungkin ada di PG agar tidak duplikat
+    # 5. Proses Pemindahan Data
     tables = [
         'expenses', 'settlements', 'advance_items', 'advances',
         'notifications', 'dividend_settings', 'dividends', 'taxes',
@@ -51,42 +46,50 @@ def migrate_data():
     ]
 
     try:
-        # Koneksi ke SQLite
         sqlite_conn = sqlite3.connect(sqlite_path)
-
-        # Koneksi ke PostgreSQL
         pg_engine = create_engine(target_uri)
 
-        # Hapus data lama di PG (jika ada) dalam urutan terbalik
-        print("🧹 Membersihkan data contoh di PostgreSQL...")
+        print("🧹 Membersihkan data di PostgreSQL...")
         with pg_engine.begin() as conn:
             for table in tables:
                 conn.execute(db.text(f'TRUNCATE TABLE "{table}" CASCADE'))
 
-        # Pindahkan data (urutan dari bawah ke atas agar relasi terjaga)
         tables.reverse()
 
         for table in tables:
             print(f"⏳ Memindahkan tabel: {table}...")
-            # Baca dari SQLite
             df = pd.read_sql_query(f"SELECT * FROM {table}", sqlite_conn)
 
-            # Perbaikan Boolean: PostgreSQL butuh True/False, bukan 1/0
-            if table == 'notifications' and 'read_status' in df.columns:
-                df['read_status'] = df['read_status'].astype(bool)
+            # --- HANDLING KHUSUS TABEL EXPENSES ---
+            if table == 'expenses':
+                # idr_amount adalah hybrid_property, bukan kolom fisik di DB
+                if 'idr_amount' in df.columns:
+                    df = df.drop(columns=['idr_amount'])
 
-            if table == 'expenses' and 'is_verified' in df.columns:
-                df['is_verified'] = df['is_verified'].astype(bool)
+                # Pastikan kolom status tidak null
+                if 'status' in df.columns:
+                    df['status'] = df['status'].fillna('approved')
 
-            # Tambahkan konvensional boolean lain jika ada (misal di advance_items atau advances)
-            # Kita buat loop otomatis untuk kolom yang mengandung 'is_' atau 'status' yang mungkin boolean
+            # --- HANDLING KHUSUS TABEL ADVANCE_ITEMS ---
+            if table == 'advance_items':
+                # idr_amount juga hybrid_property di sini
+                if 'idr_amount' in df.columns:
+                    df = df.drop(columns=['idr_amount'])
+            # --- HANDLING KHUSUS TABEL CATEGORIES ---
+            if table == 'categories':
+                 if 'status' in df.columns:
+                    df['status'] = df['status'].fillna('approved')
+
+            # Perbaikan Boolean
             for col in df.columns:
-                if col.startswith('is_') or col.endswith('_status') or col == 'active':
+                if col in ['read_status', 'is_verified']:
+                     df[col] = df[col].astype(bool)
+                elif col.startswith('is_'):
                     try:
-                        # Hanya jika kolom tersebut memang didefinisikan sebagai Boolean di Model
                         df[col] = df[col].map({1: True, 0: False, None: None})
                     except:
                         pass
+
             # Tulis ke PostgreSQL
             df.to_sql(table, pg_engine, if_exists='append', index=False)
             print(f"✅ Tabel {table} selesai dipindah.")

@@ -202,19 +202,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (result == null || result.files.single.path == null) return;
       final filePath = result.files.single.path!;
+      final fileName = result.files.single.name.toLowerCase();
 
-      if (!filePath.endsWith('.db')) {
+      if (!fileName.endsWith('.sql')) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Hanya file .db (SQLite) yang diperbolehkan.'),
+              content: Text('Hanya file .sql (Postgres) yang diperbolehkan.'),
               backgroundColor: AppTheme.danger,
             ),
           );
         }
         return;
       }
-
       setState(() => _loading = true);
       final preview = await _api.importDatabasePreview(filePath);
 
@@ -411,6 +411,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildProfileCard() {
     final auth = context.watch<AuthProvider>();
     final user = auth.user ?? {};
+    final isGoogleLinked = user['google_id'] != null;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(32),
@@ -489,6 +491,109 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             '@${user['username'] ?? '-'}',
             style: TextStyle(fontSize: 14, color: _bodyColor(context)),
+          ),
+          const SizedBox(height: 12),
+          // Google Link Status Button
+          SizedBox(
+            height: 36,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: isGoogleLinked ? AppTheme.success : AppTheme.danger,
+                ),
+                foregroundColor:
+                    isGoogleLinked ? AppTheme.success : AppTheme.danger,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              onPressed: () async {
+                if (isGoogleLinked) {
+                  // Tampilkan dialog konfirmasi Unlink
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: _cardColor(context),
+                      title: const Text('Putuskan Google'),
+                      content: const Text(
+                        'Apakah Anda yakin ingin memutuskan hubungan akun Google dari aplikasi ini?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Batal'),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.danger,
+                            foregroundColor: Colors.white,
+                          ),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Ya, Putuskan'),
+                        ),
+                      ],
+                    ),
+                  );
+
+                  if (confirm == true && mounted) {
+                    final ok = await auth.unlinkGoogleAccount();
+                    if (mounted) {
+                      if (ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Koneksi Google telah dihapus'),
+                            backgroundColor: AppTheme.success,
+                          ),
+                        );
+                      }
+                    }
+                  }
+                } else {
+                  // Cek dukungan platform saat diklik
+                  if (!auth.isGoogleSignInSupported) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Fitur Google Sign-In belum tersedia di Windows. Silakan coba di HP Android.',
+                        ),
+                        backgroundColor: AppTheme.danger,
+                      ),
+                    );
+                    return;
+                  }
+
+                  final ok = await auth.linkGoogleAccount();
+                  if (mounted) {
+                    if (ok) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Berhasil menghubungkan Google'),
+                          backgroundColor: AppTheme.success,
+                        ),
+                      );
+                    } else if (auth.error != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(auth.error!),
+                          backgroundColor: AppTheme.danger,
+                        ),
+                      );
+                    }
+                  }
+                }
+              },
+              icon: Icon(
+                isGoogleLinked ? Icons.check_circle : Icons.link_rounded,
+                size: 18,
+              ),
+              label: Text(
+                isGoogleLinked ? 'Google Terhubung' : 'Hubungkan Google',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           const Divider(),

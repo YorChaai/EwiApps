@@ -22,6 +22,8 @@ class AnnualReportScreen extends StatefulWidget {
 
 class _AnnualReportScreenState extends State<AnnualReportScreen> {
   int _selectedYear = 2024;
+  DateTime? _startDate;
+  DateTime? _endDate;
   bool _isLoading = false;
   Map<String, dynamic>? _reportData;
   List<Map<String, dynamic>> _categories = [];
@@ -153,28 +155,30 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    setState(() => _isLoading = true);
-    try {
-      final api = context.read<AuthProvider>().api;
-      final bytes = await api.getAnnualReportPdf(year: _selectedYear);
-      if (!mounted) return;
-      await FileHelper.saveAndOpenFile(
-        context: context,
-        bytes: bytes,
-        filename: 'Laporan_Tahunan_$_selectedYear.pdf',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal export PDF: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  Future<void> _pickDateRange() async {
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      initialDateRange: (_startDate != null && _endDate != null)
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+    );
+    if (range != null) {
+      setState(() {
+        _startDate = range.start;
+        _endDate = range.end;
+      });
+      _fetchReport();
     }
+  }
+
+  void _clearDateRange() {
+    setState(() {
+      _startDate = null;
+      _endDate = null;
+    });
+    _fetchReport();
   }
 
   Future<void> _exportExcel() async {
@@ -1163,7 +1167,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
               dropdownColor: _cardColor(context),
               style: TextStyle(
                 color: _titleColor(context),
-                fontSize: 13,
+                fontSize: useCompact ? 12 : 13,
                 fontWeight: FontWeight.bold,
               ),
               items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
@@ -1172,7 +1176,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                   .map(
                     (y) => DropdownMenuItem(
                       value: y,
-                      child: Text(useCompact ? '$y' : 'Laporan $y'),
+                      child: Text('Laporan $y'),
                     ),
                   )
                   .toList(),
@@ -1185,23 +1189,49 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             ),
           ),
           TextButton.icon(
+            onPressed: _pickDateRange,
+            icon: Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
+            label: Text(
+              'Range',
+              style: TextStyle(
+                color: AppTheme.primary,
+                fontSize: useCompact ? 12 : 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            style: TextButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: useCompact ? 2 : 6),
+            ),
+          ),
+          if (_startDate != null)
+            IconButton(
+              onPressed: _clearDateRange,
+              tooltip: 'Clear Range',
+              icon: Icon(Icons.close_rounded, color: Colors.red, size: 18),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          TextButton.icon(
             style: TextButton.styleFrom(
               foregroundColor: AppTheme.primary,
-              padding: EdgeInsets.symmetric(horizontal: useCompact ? 4 : 8),
+              padding: EdgeInsets.symmetric(horizontal: useCompact ? 2 : 6),
             ),
             onPressed: () => _navTo(const CategoryTabularScreen()),
-            icon: const Icon(Icons.sort, size: 20),
-            label: useCompact
-                ? const SizedBox.shrink()
-                : const Text(
-                    'Kategori Tabular',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
+            icon: const Icon(Icons.sort, size: 18),
+            label: Text(
+              'Kategori Tabular',
+              style: TextStyle(
+                fontSize: useCompact ? 12 : 13,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
+          /*
           IconButton(
             icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
             onPressed: _isLoading ? null : _exportPdf,
           ),
+          */
           IconButton(
             icon: const Icon(Icons.table_view, color: Colors.green),
             onPressed: _isLoading ? null : _exportExcel,

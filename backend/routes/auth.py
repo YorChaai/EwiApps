@@ -151,15 +151,17 @@ def login():
 
 def _internal_login():
     data = request.get_json()
-    username = data.get('username', '').strip()
+    identifier = data.get('username', '').strip() # Bisa username atau email
     password = data.get('password', '')
 
-    if not username or not password:
-        return jsonify({'error': 'Username dan password harus diisi'}), 400
+    if not identifier or not password:
+        return jsonify({'error': 'Username/Email dan password harus diisi'}), 400
 
-    user = User.query.filter_by(username=username).first()
+    # Cari berdasarkan username ATAU email
+    user = User.query.filter((User.username == identifier) | (User.email == identifier)).first()
+
     if not user or not user.check_password(password):
-        return jsonify({'error': 'Username atau password salah'}), 401
+        return jsonify({'error': 'Username/Email atau password salah'}), 401
 
     # Check if this is a return after long absence (>30 days)
     from routes.notifications import create_notification
@@ -204,8 +206,10 @@ def _internal_login():
 def register():
     data = request.get_json()
     username = data.get('username', '').strip()
+    email = data.get('email', '').strip().lower() or None
     password = data.get('password', '')
     full_name = data.get('full_name', '').strip()
+    google_id = data.get('google_id', '').strip() or None
     phone_number = data.get('phone_number', '').strip() or '-'
     workplace = data.get('workplace', '').strip() or '-'
     role = data.get('role', 'staff')
@@ -224,6 +228,12 @@ def register():
     if User.query.filter_by(username=username).first():
         return jsonify({'error': 'Username sudah dipakai, gunakan yang lain'}), 409
 
+    if email and User.query.filter_by(email=email).first():
+        return jsonify({'error': 'Email sudah dipakai, gunakan email lain'}), 409
+
+    if google_id and User.query.filter_by(google_id=google_id).first():
+        return jsonify({'error': 'Akun Google ini sudah terhubung ke user lain'}), 409
+
     # Validasi role (hanya staff atau mitra_eks untuk registrasi mandiri)
     if role not in ['staff', 'mitra_eks']:
         role = 'staff'
@@ -231,7 +241,9 @@ def register():
     # Buat user baru
     user = User(
         username=username,
+        email=email,
         full_name=full_name,
+        google_id=google_id,
         phone_number=phone_number,
         workplace=workplace,
         role=role
@@ -446,3 +458,83 @@ def update_user_by_manager(user_id):
 def get_user_detail(user_id):
     user = User.query.get_or_404(user_id)
     return jsonify({'user': user.to_dict()}), 200
+
+@auth_bp.route('/link-google', methods=['POST'])
+@jwt_required()
+def link_google():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User tidak ditemukan'}), 404
+
+    data = request.get_json()
+    id_token_str = data.get('id_token')
+
+    if not id_token_str:
+        return jsonify({'error': 'ID Token Google tidak ditemukan'}), 400
+
+    try:
+        client_id = current_app.config.get('GOOGLE_CLIENT_ID')
+        id_info = id_token.verify_oauth2_token(id_token_str, requests.Request(), client_id)
+
+        email = id_info.get('email')
+        google_id = id_info.get('sub')
+
+        # Cek apakah google_id atau email sudah dipakai user lain
+        existing_user = User.query.filter(
+            ((User.google_id == google_id) | (User.email == email)) & (User.id != user.id)
+        ).first()
+
+        if existing_user:
+            return jsonify({'error': 'Akun Google ini sudah terhubung ke user lain'}), 409
+
+        user.google_id = google_id
+        if not user.email: # Jika belum punya email, set dari google
+            user.email = email
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Berhasil menghubungkan akun Google: {email}',
+            'user': user.to_dict()
+        }), 200
+
+    except ValueError:
+        return jsonify({'error': 'Verifikasi token Google gagal'}), 401
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@auth_bp.route('/unlink-google', methods=['POST'])
+@jwt_required()
+def unlink_google():
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User tidak ditemukan'}), 404
+
+    # Hapus koneksi Google
+    user.google_id = None
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': 'Berhasil memutuskan hubungan akun Google',
+        'user': user.to_dict()
+    }), 200
+
+# Endpoint untuk membuka login Google di Browser (Windows)
+@auth_bp.route('/google-login-browser')
+def google_login_browser():
+    # Ini akan mengarahkan ke halaman login Google
+    # Untuk sementara kita buat halaman instruksi sederhana
+    # karena integrasi OAuth2 lengkap butuh Client Secret dan Redirect URI yang valid
+    return """
+    <html>
+        <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
+            <h2>Integrasi Google Browser</h2>
+            <p>Fitur login via browser sedang disiapkan.</p>
+            <p>Gunakan HP Android untuk menghubungkan akun Gmail untuk saat ini.</p>
+        </body>
+    </html>
+    """

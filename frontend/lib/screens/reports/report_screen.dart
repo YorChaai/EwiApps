@@ -93,13 +93,14 @@ class _ReportScreenState extends State<ReportScreen> {
       );
       setState(() => _summary = data);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
+      }
     }
     setState(() => _loading = false);
   }
@@ -136,15 +137,17 @@ class _ReportScreenState extends State<ReportScreen> {
     final useCompact = screenWidth < 550;
     final isNarrow = screenWidth < 800;
 
-    if (_loading)
+    if (_loading) {
       return Center(child: CircularProgressIndicator(color: AppTheme.primary));
-    if (_summary == null)
+    }
+    if (_summary == null) {
       return Center(
         child: Text(
           'Tidak ada data',
           style: TextStyle(color: _bodyColor(context)),
         ),
       );
+    }
 
     return Scrollbar(
       controller: _verticalController,
@@ -234,41 +237,44 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _buildActions(bool useCompact) {
     final buttons = [
-      Container(
-        height: useCompact ? 36 : 40,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: _cardColor(context),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _dividerColor(context)),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: _selectedYear,
-            dropdownColor: _cardColor(context),
-            style: TextStyle(
-              color: _primaryText(context),
-              fontSize: useCompact ? 12 : 14,
-            ),
-            items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
-                .where((y) => y != 0)
-                .map((y) => DropdownMenuItem(value: y, child: Text('$y')))
-                .toList(),
-            onChanged: (v) {
-              if (v != null) {
-                setState(() => _selectedYear = v);
-                _loadSummary();
-              }
-            },
+      DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _selectedYear,
+          dropdownColor: _cardColor(context),
+          style: TextStyle(
+            color: _primaryText(context),
+            fontSize: useCompact ? 12 : 13,
+            fontWeight: FontWeight.bold,
           ),
+          items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
+              .where((y) => y != 0)
+              .map((y) => DropdownMenuItem(
+                    value: y,
+                    child: Text('Laporan $y'),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) {
+              setState(() => _selectedYear = v);
+              _loadSummary();
+            }
+          },
         ),
       ),
-      _actionButton(
+      TextButton.icon(
         onPressed: _pickDateRange,
-        icon: Icons.date_range_rounded,
-        label: 'Range',
-        useCompact: useCompact,
-        isOutlined: true,
+        icon: Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
+        label: Text(
+          'Range',
+          style: TextStyle(
+            color: AppTheme.primary,
+            fontSize: useCompact ? 12 : 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.symmetric(horizontal: useCompact ? 4 : 8),
+        ),
       ),
       if (_startDate != null)
         IconButton(
@@ -277,79 +283,53 @@ class _ReportScreenState extends State<ReportScreen> {
           icon: Icon(
             Icons.close_rounded,
             color: AppTheme.danger,
-            size: useCompact ? 20 : 24,
+            size: 20,
           ),
         ),
-      _actionButton(
-        onPressed: _exportSummaryPdf,
-        icon: Icons.picture_as_pdf_rounded,
-        label: 'PDF',
-        useCompact: useCompact,
-      ),
-      _actionButton(
-        onPressed: _exportFullExcel,
-        icon: Icons.download_rounded,
-        label: 'Excel',
-        useCompact: useCompact,
-      ),
-      _actionButton(
+      TextButton.icon(
         onPressed: () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => AnnualReportScreen()),
         ),
-        icon: Icons.assessment_rounded,
-        label: 'Tahunan',
-        useCompact: useCompact,
+        icon: Icon(Icons.assessment_rounded, size: 18, color: AppTheme.primary),
+        label: Text(
+          'Laporan Tahunan',
+          style: TextStyle(
+            color: AppTheme.primary,
+            fontSize: useCompact ? 12 : 13,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: TextButton.styleFrom(
+          padding: EdgeInsets.symmetric(horizontal: useCompact ? 4 : 8),
+        ),
+      ),
+      IconButton(
+        onPressed: _exportSummaryPdf,
+        tooltip: 'Export PDF',
+        icon: Icon(
+          Icons.picture_as_pdf_rounded,
+          color: AppTheme.danger,
+          size: 22,
+        ),
+      ),
+      IconButton(
+        onPressed: _exportFullExcel,
+        tooltip: 'Export Excel',
+        icon: Icon(
+          Icons.table_view_rounded,
+          color: AppTheme.success,
+          size: 22,
+        ),
       ),
     ];
 
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 4,
+      runSpacing: 4,
       alignment: useCompact ? WrapAlignment.start : WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: buttons,
-    );
-  }
-
-  Widget _actionButton({
-    required VoidCallback onPressed,
-    required IconData icon,
-    required String label,
-    required bool useCompact,
-    bool isOutlined = false,
-  }) {
-    final style = ElevatedButton.styleFrom(
-      padding: EdgeInsets.symmetric(
-        horizontal: useCompact ? 10 : 16,
-        vertical: 0,
-      ),
-      minimumSize: Size(0, useCompact ? 36 : 42),
-      textStyle: TextStyle(
-        fontSize: useCompact ? 12 : 14,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-
-    if (isOutlined) {
-      return OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: useCompact ? 16 : 18),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(
-            horizontal: useCompact ? 10 : 16,
-            vertical: 0,
-          ),
-          minimumSize: Size(0, useCompact ? 36 : 42),
-        ),
-      );
-    }
-
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: useCompact ? 16 : 18),
-      label: Text(label),
-      style: style,
     );
   }
 
@@ -431,13 +411,15 @@ class _ReportScreenState extends State<ReportScreen> {
                 scrollDirection: Axis.horizontal,
                 physics: const ClampingScrollPhysics(),
                 child: SizedBox(
-                  width: totalWidth,
+                  width: totalWidth + 10, // Tambahkan buffer 10 pixel untuk mencegah rounding error
                   child: Column(
                     children: [
+                      // Header Table
                       Container(
                         color: _surfaceColor(context),
                         height: 48,
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             _buildSummaryCell(
                               value: 'Kategori',
@@ -464,6 +446,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           ],
                         ),
                       ),
+                      // Body Table
                       SizedBox(
                         height: bodyHeight + 4,
                         child: RepaintBoundary(
@@ -478,12 +461,15 @@ class _ReportScreenState extends State<ReportScreen> {
                             radius: const Radius.circular(4),
                             child: NotificationListener<ScrollNotification>(
                               onNotification: (notification) {
-                                if (notification.metrics.axis == Axis.vertical) {
+                                if (notification.metrics.axis ==
+                                    Axis.vertical) {
                                   final m = notification.metrics;
-                                  if (notification is ScrollUpdateNotification &&
+                                  if (notification
+                                          is ScrollUpdateNotification &&
                                       notification.scrollDelta != null) {
                                     final d = notification.scrollDelta!;
-                                    if ((d > 0 && m.pixels >= m.maxScrollExtent) ||
+                                    if ((d > 0 &&
+                                            m.pixels >= m.maxScrollExtent) ||
                                         (d < 0 && m.pixels <= 0)) {
                                       _verticalController.position.jumpTo(
                                         (_verticalController.offset + d).clamp(
@@ -541,6 +527,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                         ),
                                       ),
                                       child: Row(
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Container(
                                             width: colKategori,
@@ -597,6 +584,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                       ),
                                     ),
                                     child: Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         _buildSummaryCell(
                                           value: 'GRAND TOTAL',
@@ -609,13 +597,18 @@ class _ReportScreenState extends State<ReportScreen> {
                                           for (final cat in summaryList) {
                                             monthTotal +=
                                                 ((cat['monthly']
-                                                                as Map<String, dynamic>)['${mIdx + 1}'] ??
-                                                            0)
+                                                            as Map<
+                                                              String,
+                                                              dynamic
+                                                            >)['${mIdx + 1}'] ??
+                                                        0)
                                                     .toDouble();
                                           }
                                           return _buildSummaryCell(
                                             value: monthTotal > 0
-                                                ? _currencyFormat.format(monthTotal)
+                                                ? _currencyFormat.format(
+                                                    monthTotal,
+                                                  )
                                                 : '-',
                                             width: colMonth,
                                             isBold: true,
@@ -659,21 +652,23 @@ class _ReportScreenState extends State<ReportScreen> {
       );
       final filename =
           'summary_${DateFormat('yyyyMMdd').format(start)}_${DateFormat('yyyyMMdd').format(end)}.xlsx';
-      if (mounted)
+      if (mounted) {
         await FileHelper.saveAndOpenFolder(
           context: context,
           bytes: bytes,
           filename: filename,
           successMessage: 'Excel Summary berhasil disimpan.',
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal export: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
+      }
     }
   }
 
@@ -693,21 +688,23 @@ class _ReportScreenState extends State<ReportScreen> {
           ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}'
           : '$_selectedYear';
       final filename = 'summary_$suffix.pdf';
-      if (mounted)
+      if (mounted) {
         await FileHelper.saveAndOpenFile(
           context: context,
           bytes: bytes,
           filename: filename,
           successMessage: 'PDF Summary berhasil disimpan.',
         );
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Gagal export PDF: $e'),
             backgroundColor: AppTheme.danger,
           ),
         );
+      }
     }
   }
 }

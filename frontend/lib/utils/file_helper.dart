@@ -28,7 +28,15 @@ class FileHelper {
     }
 
     if (Platform.isAndroid) {
-  // simpan file ke storage aplikasi di android
+      // Coba simpan ke folder Downloads publik agar bisa dilihat File Manager & aplikasi lain
+      try {
+        final publicDownloadDir = Directory('/storage/emulated/0/Download');
+        if (await publicDownloadDir.exists()) {
+          return publicDownloadDir;
+        }
+      } catch (_) {}
+
+      // Fallback ke storage eksternal aplikasi jika folder publik tidak aksesibel
       final dir = await getExternalStorageDirectory();
       return dir ?? await getApplicationDocumentsDirectory();
     }
@@ -187,37 +195,27 @@ class FileHelper {
   }
 
   static Future<void> openFile(String path) async {
-    // Untuk Android, gunakan FileProvider dengan content:// URI
-    if (Platform.isAndroid) {
-      try {
-        // Untuk Android 14+, kita perlu menggunakan FileProvider
-        // Uri.parse dengan content:// scheme
-        // Format: content://{applicationId}.fileprovider/files/{relative_path}
-        final fileName = path.split('/').last;
-        final contentUri = 'content://com.expense.expense_app.fileprovider/files/$fileName';
-
-        final uri = Uri.parse(contentUri);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-          return;
-        }
-      } catch (e) {
-        debugPrint('Failed to open file with FileProvider: $e');
-      }
-      // Show user-friendly error for Android
-      debugPrint('File saved at: $path (manual navigation required)');
+    final file = File(path);
+    if (!await file.exists()) {
+      debugPrint('File tidak ditemukan di jalur: $path');
       return;
     }
 
-    // Untuk Windows atau fallback
     final uri = Uri.file(path);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Gagal membuka via url_launcher: $e');
     }
 
+    // Fallback khusus Windows
     if (Platform.isWindows) {
       await Process.run('cmd', ['/c', 'start', '', path]);
+    } else if (Platform.isAndroid) {
+      debugPrint('File tersimpan di: $path. Silakan buka melalui File Manager.');
     }
   }
 

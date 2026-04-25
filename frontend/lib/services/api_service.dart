@@ -171,6 +171,27 @@ class ApiService {
     return _handleResponse(res);
   }
 
+  Future<Map<String, dynamic>> linkGoogleAccount(String idToken) async {
+    final res = await _retryRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/auth/link-google'),
+        headers: _headers,
+        body: jsonEncode({'id_token': idToken}),
+      ),
+    );
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> unlinkGoogleAccount() async {
+    final res = await _retryRequest(
+      () => http.post(
+        Uri.parse('$baseUrl/auth/unlink-google'),
+        headers: _headers,
+      ),
+    );
+    return _handleResponse(res);
+  }
+
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     final res = await _retryRequest(
       () => http.post(
@@ -206,6 +227,8 @@ class ApiService {
     String password,
     String fullName,
     String role, {
+    String? email,
+    String? googleId,
     String? phoneNumber,
     String? workplace,
   }) async {
@@ -218,6 +241,8 @@ class ApiService {
             'username': username,
             'password': password,
             'full_name': fullName,
+            'email': email,
+            'google_id': googleId,
             'role': role,
             'phone_number': phoneNumber,
             'workplace': workplace,

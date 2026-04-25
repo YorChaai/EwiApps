@@ -175,6 +175,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _confirmLogout() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: AppTheme.danger),
+            SizedBox(width: 12),
+            Text('Konfirmasi Logout'),
+          ],
+        ),
+        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Batal',
+              style: TextStyle(
+                color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Keluar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      context.read<AuthProvider>().logout();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -229,7 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     }
                   });
                 },
-                onLogout: () => auth.logout(),
+                onLogout: _confirmLogout,
                 isMini: isTablet,
                 isExpanded: _sidebarExpanded,
                 onToggleExpand: isTablet
@@ -535,6 +577,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
   Future<void> _loadDefaultReportYearAndReload() async {
     final prov = context.read<SettlementProvider>();
     await prov.syncReportYear();
+    if (!mounted) return;
     _reloadSettlements();
     _loadDashboardSummary();
     _loadAnnualSettlementSummary();
@@ -543,6 +586,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
   Future<void> _loadDashboardSummary() async {
     try {
       await context.read<AuthProvider>().api.getDashboardSummary();
+      if (!mounted) return;
     } catch (e) {
       debugPrint('ERROR dashboard summary: $e');
     }

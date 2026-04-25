@@ -2018,12 +2018,12 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         sig_title_row = last_row + 1
 
         # ✅ ALIGNED BRANDING & MERGED SIGNATURES
-        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
         profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
         # Top Logos - Enlarged to ~6.5cm (approx 250 pixels)
+        ws_lr._images.clear()
         _add_image_to_sheet(ws_lr, logo_path, 'D1', width=250, height=75)
-        _add_image_to_sheet(ws_lr, logo_path, 'I1', width=250, height=75)
 
         # Left Side Signature (Merge B-E and Center)
         ws_lr.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
@@ -2228,10 +2228,11 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             ws_bs.row_dimensions[r].height = ROW_HEIGHT_DIVIDEND
 
         # ✅ ADD BRANDING TO BUSINESS SUMMARY
-        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+        logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
         profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
         # Top Logo - Balanced size (approx 5.89cm)
+        ws_bs._images.clear()
         _add_image_to_sheet(ws_bs, logo_path, 'D1', width=220, height=65)
 
         # Footer Profile - Restored "Gap Panjang" (4 rows below last_row to stay at the bottom)
@@ -2795,11 +2796,14 @@ def get_annual_report_excel():
     logger.debug(f'Table 3 rendered up to row {total_row}')
 
     # ✅ ALIGNED BRANDING & MERGED SIGNATURES
-    logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
+    logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
     profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
     # Top Logo - Enlarged to ~6.5cm (approx 250 pixels)
-    _add_image_to_sheet(ws, logo_path, 'K2', width=250, height=75)
+    ws._images.clear()  # Clear potential template logos
+    
+    
+    _add_image_to_sheet(ws, logo_path, 'B1', width=200, height=60)
 
     # Signature & Footer at the bottom of Table 3
     sig_name_row = total_row + 4
