@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "223768746501",
+    "project_id": "exspan-app",
+    "storage_bucket": "exspan-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:223768746501:android:46d8c09cdc30d3bca35a6c",
+        "android_client_info": {
+          "package_name": "com.expense.expense_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD01hTAtlmATzjLY-oRFBbaVCK7-6uYpNw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

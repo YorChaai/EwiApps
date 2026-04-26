@@ -204,27 +204,6 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
-    setState(() => _isLoading = true);
-    try {
-      final api = context.read<AuthProvider>().api;
-      final bytes = await api.getAnnualReportPdf(year: _selectedYear);
-      if (!mounted) return;
-      await FileHelper.saveAndOpenFile(
-        context: context,
-        bytes: bytes,
-        filename: 'Revenue-Cost_$_selectedYear.pdf',
-        subFolder: 'Reports/Annual/PDF',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error PDF: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
 
   List<Map<String, dynamic>> _asListMap(dynamic data) {
     if (data is! List) return [];

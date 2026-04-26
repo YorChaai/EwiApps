@@ -9,7 +9,8 @@ class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    // TODO: Ganti dengan Web Client ID dari Google Cloud Console agar backend bisa verifikasi token
+    // TODO: Ganti dengan Web Client ID dari Google Cloud Console (Project Firebase -> Project Settings -> Google Service -> Web Client ID)
+    // agar backend bisa verifikasi token
     // serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
   );
   String? _token;

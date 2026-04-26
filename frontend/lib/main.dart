@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/settlement_provider.dart';
@@ -49,7 +50,16 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
   }
 }
 
-void main() {
+void main() async {
+  // Ensure Flutter binding is initialized before calling SystemChrome
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Lock orientation to portrait mode
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   // Set error widget builder for better error handling
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return Directionality(
