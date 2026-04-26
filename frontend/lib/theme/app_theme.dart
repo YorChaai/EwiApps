@@ -209,16 +209,15 @@ class AppTheme {
       scrollbarTheme: ScrollbarThemeData(
         thumbVisibility: WidgetStateProperty.all(true),
         trackVisibility: WidgetStateProperty.all(true),
-        thickness: WidgetStateProperty.resolveWith((context) => 6),
-        radius: const Radius.circular(4),
+        thickness: WidgetStateProperty.resolveWith((context) => 8),
+        radius: const Radius.circular(8),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.dragged)) return accent;
-          return textSecondary.withValues(alpha: 0.9);
+          return textSecondary.withValues(alpha: 0.7);
         }),
-        trackColor: WidgetStateProperty.all(divider.withValues(alpha: 0.65)),
-        trackBorderColor: WidgetStateProperty.all(
-          Colors.transparent,
-        ),
+        trackColor: WidgetStateProperty.all(divider.withValues(alpha: 0.2)),
+        trackBorderColor: WidgetStateProperty.all(Colors.transparent),
+        interactive: true,
       ),
     );
   }
@@ -337,16 +336,15 @@ class AppTheme {
       scrollbarTheme: ScrollbarThemeData(
         thumbVisibility: WidgetStateProperty.all(true),
         trackVisibility: WidgetStateProperty.all(true),
-        thickness: WidgetStateProperty.resolveWith((context) => 6),
-        radius: const Radius.circular(4),
+        thickness: WidgetStateProperty.resolveWith((context) => 8),
+        radius: const Radius.circular(8),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.dragged)) return primary;
-          return lightTextSecondary.withValues(alpha: 0.8);
+          return lightTextSecondary.withValues(alpha: 0.6);
         }),
-        trackColor: WidgetStateProperty.all(lightDivider.withValues(alpha: 0.75)),
-        trackBorderColor: WidgetStateProperty.all(
-          Colors.transparent,
-        ),
+        trackColor: WidgetStateProperty.all(lightDivider.withValues(alpha: 0.15)),
+        trackBorderColor: WidgetStateProperty.all(Colors.transparent),
+        interactive: true,
       ),
     );
   }

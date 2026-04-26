@@ -14,6 +14,7 @@ import '../../widgets/category_preview_dialog.dart';
 import '../../utils/currency_formatter.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/app_snackbar.dart';
+import '../../widgets/app_scrollbar.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/settlement_detail_widgets.dart';
 import '../../utils/responsive_layout.dart';
@@ -588,12 +589,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           : s == null
           ? const Center(child: Text('Data tidak ditemukan'))
           : ResponsiveLayout.isMobile(context)
-          ? Scrollbar(
+          ? AppScrollbar(
               controller: _mainScrollController,
               thumbVisibility: true,
-              thickness: 8,
               interactive: true,
-              radius: const Radius.circular(4),
               child: SingleChildScrollView(
                 controller: _mainScrollController,
                 child: Column(
@@ -609,12 +608,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 ),
               ),
             )
-          : Scrollbar(
+          : AppScrollbar(
               controller: _mainScrollController,
               thumbVisibility: true,
-              thickness: 8,
               interactive: true,
-              radius: const Radius.circular(4),
               child: SingleChildScrollView(
                 controller: _mainScrollController,
                 child: _buildContent(context, s, auth, prov),
@@ -874,22 +871,19 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Scrollbar(
+                    child: AppScrollbar(
                       controller: _expenseTableVerticalCtrl,
                       thumbVisibility: true,
                       trackVisibility: true,
                       interactive: true,
-                      thickness: 8,
-                      radius: const Radius.circular(4),
                       child: SingleChildScrollView(
                         controller: _expenseTableVerticalCtrl,
-                        child: Scrollbar(
+                        child: AppScrollbar(
                           controller: _expenseTableHorizontalCtrl,
                           thumbVisibility: true,
                           trackVisibility: true,
                           interactive: true,
-                          thickness: 8,
-                          radius: const Radius.circular(4),
+                          scrollDirection: Axis.horizontal,
                           notificationPredicate: (notification) =>
                               notification.metrics.axis == Axis.horizontal,
                           child: SingleChildScrollView(
@@ -1280,11 +1274,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           ),
           content: SizedBox(
             width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-            child: Scrollbar(
+            child: AppScrollbar(
               thumbVisibility: true,
               interactive: true,
-              thickness: 8,
-              radius: const Radius.circular(4),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1347,12 +1339,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: AppTheme.divider),
                         ),
-                        child: Scrollbar(
+                        child: AppScrollbar(
                           controller: _subCategoryScrollController,
                           thumbVisibility: true,
                           interactive: true,
-                          thickness: 8,
-                          radius: const Radius.circular(4),
                           child: SingleChildScrollView(
                             controller: _subCategoryScrollController,
                             child: Column(
@@ -3199,11 +3189,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               width: 400,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: Scrollbar(
+                child: AppScrollbar(
                   thumbVisibility: true,
                   interactive: true,
-                  thickness: 8,
-                  radius: const Radius.circular(4),
                   child: SingleChildScrollView(
                     child: SelectionArea(
                     child: Column(

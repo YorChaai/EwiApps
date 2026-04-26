@@ -4,6 +4,7 @@ import '../providers/notification_provider.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'app_scrollbar.dart';
 
 class NotificationBellIcon extends StatefulWidget {
   final Function(String)? onNotificationTap;
@@ -216,13 +217,11 @@ class _NotificationBellIconState extends State<NotificationBellIcon> {
                         );
                       }
 
-                      return Scrollbar(
+                      return AppScrollbar(
                         controller: _scrollController,
                         thumbVisibility: true,
                         trackVisibility: true,
                         interactive: true,
-                        thickness: 6,
-                        radius: const Radius.circular(3),
                         child: ListView.builder(
                           controller: _scrollController,
                           padding: EdgeInsets.zero,

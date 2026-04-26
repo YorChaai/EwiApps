@@ -19,6 +19,7 @@ import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/settlement_detail_widgets.dart';
+import '../../widgets/app_scrollbar.dart';
 
 class AdvanceDetailScreen extends StatefulWidget {
   final int advanceId;
@@ -382,11 +383,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           bottom: BorderSide(color: AppTheme.divider.withValues(alpha: 0.6)),
         ),
       ),
-      child: Scrollbar(
+      child: AppScrollbar(
         thumbVisibility: true,
         interactive: true,
-        thickness: 8,
-        radius: const Radius.circular(4),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -802,11 +801,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ),
             content: SizedBox(
               width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-              child: Scrollbar(
+              child: AppScrollbar(
                 thumbVisibility: true,
                 interactive: true,
-                thickness: 8,
-                radius: const Radius.circular(4),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1677,12 +1674,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         ),
                       )
                     : ResponsiveLayout.isMobile(context)
-                    ? Scrollbar(
+                    ? AppScrollbar(
                         controller: _mainScrollController,
                         thumbVisibility: true,
                         interactive: true,
-                        thickness: 8,
-                        radius: const Radius.circular(4),
                         child: SingleChildScrollView(
                           controller: _mainScrollController,
                           child: Column(
@@ -1709,12 +1704,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           ),
                         ),
                       )
-                    : Scrollbar(
+                    : AppScrollbar(
                         controller: _mainScrollController,
                         thumbVisibility: true,
                         interactive: true,
-                        thickness: 8,
-                        radius: const Radius.circular(4),
                         child: SingleChildScrollView(
                           controller: _mainScrollController,
                           child: _buildContent(
@@ -1957,22 +1950,19 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Scrollbar(
+        child: AppScrollbar(
           controller: _itemTableVerticalCtrl,
           thumbVisibility: true,
           trackVisibility: true,
           interactive: true,
-          thickness: 8,
-          radius: const Radius.circular(4),
           child: SingleChildScrollView(
             controller: _itemTableVerticalCtrl,
-            child: Scrollbar(
+            child: AppScrollbar(
               controller: _itemTableHorizontalCtrl,
               thumbVisibility: true,
               trackVisibility: true,
               interactive: true,
-              thickness: 8,
-              radius: const Radius.circular(4),
+              scrollDirection: Axis.horizontal,
               notificationPredicate: (notification) =>
                   notification.metrics.axis == Axis.horizontal,
               child: SingleChildScrollView(
@@ -2836,12 +2826,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               width: 400,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: Scrollbar(
+                child: AppScrollbar(
                   controller: _checklistScrollController,
                   thumbVisibility: true,
                   interactive: true,
-                  thickness: 8,
-                  radius: const Radius.circular(4),
                   child: SingleChildScrollView(
                     controller: _checklistScrollController,
                     child: SelectionArea(

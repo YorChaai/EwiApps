@@ -19,6 +19,7 @@ import '../utils/responsive_layout.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/page_selector.dart';
 import 'widgets/common_widgets.dart';
+import '../widgets/app_scrollbar.dart';
 import '../utils/app_snackbar.dart';
 import '../providers/notification_provider.dart';
 import '../models/notification_model.dart';
@@ -871,12 +872,10 @@ class _SettlementListViewState extends State<_SettlementListView> {
                   Column(
                     children: [
                       Expanded(
-                        child: Scrollbar(
+                        child: AppScrollbar(
                           controller: _listScrollController,
                           thumbVisibility: true,
                           interactive: true,
-                          thickness: 8,
-                          radius: const Radius.circular(4),
                           child: RefreshIndicator(
                             onRefresh: () async => _reloadSettlements(),
                             child: Builder(

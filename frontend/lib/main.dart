@@ -14,6 +14,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/app_snackbar.dart';
+import 'widgets/app_scrollbar.dart';
 
 class MyCustomScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -36,7 +37,7 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
     // Scrollbar hanya untuk desktop/web
     if (kIsWeb) {
       // Keep scrollbar for web with proper controller
-      return Scrollbar(
+      return AppScrollbar(
         controller: details.controller,
         thumbVisibility: true,
         trackVisibility: true,

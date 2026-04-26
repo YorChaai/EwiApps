@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../utils/context_extensions.dart';
+import 'app_scrollbar.dart';
 
 class CategoryPreviewDialog extends StatefulWidget {
   final List<Map<String, dynamic>> categories;
@@ -70,7 +71,7 @@ class _CategoryPreviewDialogState extends State<CategoryPreviewDialog> {
                   style: TextStyle(color: textSecondary),
                 ),
               )
-            : Scrollbar(
+            : AppScrollbar(
                 controller: _scrollController,
                 thumbVisibility: true,
                 child: ListView.separated(

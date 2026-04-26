@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/settlement_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_scrollbar.dart';
 
 // kelola kategori
 class CategoryManagementView extends StatefulWidget {
@@ -51,12 +52,10 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
 
     return Container(
       color: _surfaceColor(context),
-      child: Scrollbar(
+      child: AppScrollbar(
         controller: _scrollController,
         thumbVisibility: true,
         interactive: true,
-        thickness: 8,
-        radius: const Radius.circular(4),
         child: SingleChildScrollView(
           controller: _scrollController,
           padding: EdgeInsets.all(useCompact ? 16 : 32),
@@ -547,41 +546,38 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: SizedBox(
-                  width: isNarrow ? 52 : 72,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        constraints: BoxConstraints.tightFor(
-                          width: isNarrow ? 24 : 32,
-                          height: isNarrow ? 24 : 32,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.edit_rounded,
-                          size: isNarrow ? 14 : 16,
-                          color: AppTheme.accent,
-                        ),
-                        onPressed: () =>
-                            _showEditCategoryDialog(context, child),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      constraints: BoxConstraints.tightFor(
+                        width: isNarrow ? 24 : 32,
+                        height: isNarrow ? 24 : 32,
                       ),
-                      if (!isNarrow) const SizedBox(width: 4),
-                      IconButton(
-                        constraints: BoxConstraints.tightFor(
-                          width: isNarrow ? 24 : 32,
-                          height: isNarrow ? 24 : 32,
-                        ),
-                        padding: EdgeInsets.zero,
-                        icon: Icon(
-                          Icons.delete_outline,
-                          size: isNarrow ? 14 : 16,
-                          color: AppTheme.danger,
-                        ),
-                        onPressed: () => _deleteCategory(child['id']),
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        Icons.edit_rounded,
+                        size: isNarrow ? 14 : 16,
+                        color: AppTheme.accent,
                       ),
-                    ],
-                  ),
+                      onPressed: () =>
+                          _showEditCategoryDialog(context, child),
+                    ),
+                    if (!isNarrow) const SizedBox(width: 4),
+                    IconButton(
+                      constraints: BoxConstraints.tightFor(
+                        width: isNarrow ? 24 : 32,
+                        height: isNarrow ? 24 : 32,
+                      ),
+                      padding: EdgeInsets.zero,
+                      icon: Icon(
+                        Icons.delete_outline,
+                        size: isNarrow ? 14 : 16,
+                        color: AppTheme.danger,
+                      ),
+                      onPressed: () => _deleteCategory(child['id']),
+                    ),
+                  ],
                 ),
               ),
             )

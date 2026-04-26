@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_scrollbar.dart';
 
 class CategoryTabularScreen extends StatefulWidget {
   const CategoryTabularScreen({super.key});
@@ -196,12 +197,10 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
 
                 // Single Reorderable List
                 Expanded(
-                  child: Scrollbar(
+                  child: AppScrollbar(
                     controller: _scrollController,
                     thumbVisibility: true,
                     interactive: true,
-                    thickness: 8,
-                    radius: const Radius.circular(4),
                     child: ReorderableListView.builder(
                       scrollController: _scrollController,
                       buildDefaultDragHandles:
@@ -513,12 +512,10 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: Scrollbar(
+          child: AppScrollbar(
             controller: controller,
             thumbVisibility: true,
             interactive: true,
-            thickness: 6,
-            radius: const Radius.circular(4),
             child: ReorderableListView.builder(
               scrollController: controller,
               onReorder: onReorder,

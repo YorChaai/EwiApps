@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/settlement_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/file_helper.dart';
+import '../../widgets/app_scrollbar.dart';
 import 'annual_report_screen.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -149,12 +150,10 @@ class _ReportScreenState extends State<ReportScreen> {
       );
     }
 
-    return Scrollbar(
+    return AppScrollbar(
       controller: _verticalController,
       thumbVisibility: true,
       interactive: true,
-      thickness: 8,
-      radius: const Radius.circular(4),
       child: SingleChildScrollView(
         controller: _verticalController,
         child: Column(
@@ -368,7 +367,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
     final grandTotal = (_summary!['grand_total'] ?? 0).toDouble();
 
-    const double leftScrollbarSpace = 4;
+    const double leftScrollbarSpace = 14;
     final double colKategori = 180;
     final double colMonth = 110;
     final double colTotal = 140;
@@ -396,69 +395,66 @@ class _ReportScreenState extends State<ReportScreen> {
             border: Border.all(color: _dividerColor(context)),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Padding(
-            padding: const EdgeInsets.only(left: leftScrollbarSpace),
-            child: Scrollbar(
-              controller: _horizontalController,
-              thumbVisibility: true,
-              interactive: true,
-              thickness: 6,
-              radius: const Radius.circular(4),
-              notificationPredicate: (notification) =>
-                  notification.metrics.axis == Axis.horizontal,
-              child: SingleChildScrollView(
+          child: AppScrollbar(
+            controller: _tableVerticalController,
+            thumbVisibility: true,
+            interactive: true,
+            scrollbarOrientation: ScrollbarOrientation.left,
+            notificationPredicate: (notification) =>
+                notification.metrics.axis == Axis.vertical,
+            child: Padding(
+              padding: const EdgeInsets.only(left: leftScrollbarSpace),
+              child: AppScrollbar(
                 controller: _horizontalController,
+                thumbVisibility: true,
+                interactive: true,
                 scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: totalWidth + 10, // Tambahkan buffer 10 pixel untuk mencegah rounding error
-                  child: Column(
-                    children: [
-                      // Header Table
-                      Container(
-                        color: _surfaceColor(context),
-                        height: 48,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildSummaryCell(
-                              value: 'Kategori',
-                              width: colKategori,
-                              isBold: true,
-                              align: TextAlign.left,
-                              fontSize: 13,
-                            ),
-                            ..._months.map(
-                              (m) => _buildSummaryCell(
-                                value: m,
-                                width: colMonth,
+                notificationPredicate: (notification) =>
+                    notification.metrics.axis == Axis.horizontal,
+                child: SingleChildScrollView(
+                  controller: _horizontalController,
+                  scrollDirection: Axis.horizontal,
+                  physics: const ClampingScrollPhysics(),
+                  child: SizedBox(
+                    width: totalWidth + 10,
+                    child: Column(
+                      children: [
+                        // Header Table
+                        Container(
+                          color: _surfaceColor(context),
+                          height: 48,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildSummaryCell(
+                                value: 'Kategori',
+                                width: colKategori,
                                 isBold: true,
+                                align: TextAlign.left,
                                 fontSize: 13,
                               ),
-                            ),
-                            _buildSummaryCell(
-                              value: 'TOTAL',
-                              width: colTotal,
-                              isBold: true,
-                              color: AppTheme.accent,
-                              fontSize: 13,
-                            ),
-                          ],
+                              ..._months.map(
+                                (m) => _buildSummaryCell(
+                                  value: m,
+                                  width: colMonth,
+                                  isBold: true,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              _buildSummaryCell(
+                                value: 'TOTAL',
+                                width: colTotal,
+                                isBold: true,
+                                color: AppTheme.accent,
+                                fontSize: 13,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      // Body Table
-                      SizedBox(
-                        height: bodyHeight + 4,
-                        child: RepaintBoundary(
-                          child: Scrollbar(
-                            controller: _tableVerticalController,
-                            thumbVisibility: true,
-                            interactive: true,
-                            thickness: 6,
-                            scrollbarOrientation: ScrollbarOrientation.left,
-                            notificationPredicate: (notification) =>
-                                notification.metrics.axis == Axis.vertical,
-                            radius: const Radius.circular(4),
+                        // Body Table
+                        SizedBox(
+                          height: bodyHeight + 4,
+                          child: RepaintBoundary(
                             child: NotificationListener<ScrollNotification>(
                               onNotification: (notification) {
                                 if (notification.metrics.axis ==
@@ -629,8 +625,8 @@ class _ReportScreenState extends State<ReportScreen> {
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

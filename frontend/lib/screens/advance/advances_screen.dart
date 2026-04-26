@@ -11,6 +11,7 @@ import '../../utils/context_extensions.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/app_snackbar.dart';
 import 'advance_detail_screen.dart';
+import '../../widgets/app_scrollbar.dart';
 
 class AdvancesScreen extends StatefulWidget {
   const AdvancesScreen({super.key});
@@ -368,12 +369,10 @@ class AdvancesScreenState extends State<AdvancesScreen> {
                   Column(
                     children: [
                       Expanded(
-                        child: Scrollbar(
+                        child: AppScrollbar(
                             controller: _listScrollController,
                             thumbVisibility: true,
                             interactive: true,
-                            thickness: 8,
-                            radius: const Radius.circular(4),
                             child: RefreshIndicator(
                               onRefresh: () async => _reloadAdvances(),
                               child: Builder(

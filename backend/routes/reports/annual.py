@@ -4,7 +4,7 @@ import os
 import re
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from io import BytesIO
 from copy import copy
 from collections import OrderedDict
@@ -47,6 +47,14 @@ COLUMN_WIDTH_EXCHANGE = 10
 COLUMN_WIDTH_CATEGORY = 18
 ROW_HEIGHT_HEADER_VERTICAL = 60
 ROW_HEIGHT_DIVIDEND = 20
+
+# Definisi Lebar Kolom Minimum (MIN_WIDTHS)
+MIN_WIDTHS = {
+    'A': 0.6328125, 'B': 11.81640625, 'C': 4.0, 'D': 56.26953125,
+    'E': 4.6328125, 'F': 13.36328125, 'G': 5.0, 'H': 10.0,
+    'I': 18.0, 'J': 18.0, 'K': 18.0, 'L': 18.0, 'M': 18.0,
+    'N': 18.0, 'O': 18.0, 'P': 18.0, 'Q': 18.0
+}
 
 # Row constants
 EXPENSE_HEADER_ROW = 40
@@ -113,14 +121,22 @@ def _subcategory_sort_key(label):
     return (0, text.lower())
 
 
-def _write_dynamic_category_headers(ws, root_cats, header_row=40, start_col=9, template_end_col=17):
-    last_used_col = max(template_end_col, start_col + len(root_cats) - 1)
-    for col in range(start_col, last_used_col + 1):
+def _write_dynamic_category_headers(ws, root_cats, header_row=40, start_col=9, template_end_col=30):
+    from openpyxl.styles import PatternFill, Border, Side
+    no_fill = PatternFill(fill_type=None)
+    no_border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+
+    last_cat_col = start_col + len(root_cats) - 1
+
+    # Reset styling for all potential ghost columns
+    for col in range(start_col, template_end_col + 1):
         cell = ws.cell(row=header_row, column=col)
         if isinstance(cell, MergedCell):
             continue
-        if col >= start_col + len(root_cats):
+        if col > last_cat_col:
             cell.value = None
+            cell.fill = no_fill
+            cell.border = no_border
 
     for offset, category in enumerate(root_cats):
         col = start_col + offset
@@ -266,6 +282,53 @@ def _add_image_to_sheet(ws, img_path, anchor, width=None, height=None):
     except Exception as e:
         logger.error(f"Failed to add image {img_path} to Excel: {e}")
 
+
+def _apply_autofit_sheet1(ws, last_col_idx):
+    """
+    Logika AutoFit Dinamis (Hanya Sheet 1):
+    - Kolom A-Q: DIKUNCI MATI (Fixed) sesuai daftar MIN_WIDTHS agar presisi.
+    - Kolom > Q (Kategori tambahan): Baru menggunakan AutoFit dinamis.
+    """
+    # Pastikan kita memproses minimal sampai kolom Q (17) untuk Table 1 & 2
+    max_process_col = max(last_col_idx, 17)
+
+    for col_idx in range(1, max_process_col + 1):
+        col_letter = get_column_letter(col_idx)
+
+        # 1. JIKA KOLOM TERDAFTAR DI MIN_WIDTHS (A-Q), PAKSA NILAINYA (FIXED)
+        if col_letter in MIN_WIDTHS:
+            ws.column_dimensions[col_letter].width = MIN_WIDTHS[col_letter]
+            continue
+
+        # 2. UNTUK KOLOM DINAMIS (> Q), BARU GUNAKAN LOGIKA AUTOFIT
+        max_length = 0
+        # Scan baris 6 sampai max_row
+        for row in range(6, ws.max_row + 1):
+            cell = ws.cell(row=row, column=col_idx)
+
+            # Skip if cell value is None or it's a merged cell (but not the top-left one)
+            if cell.value is None or isinstance(cell, MergedCell):
+                continue
+
+            # Abaikan teks vertikal (seperti di Tabel 3 header Source, Currency, Rate)
+            if cell.alignment and cell.alignment.text_rotation == 90:
+                continue
+
+            # Penanganan tanggal (visual format 11-Jan-24)
+            if isinstance(cell.value, (datetime, date)):
+                length = 11
+            else:
+                length = len(str(cell.value))
+
+            if length > max_length:
+                max_length = length
+
+        # Hitung lebar akhir dengan 18.0 sebagai batas bawah untuk kategori tambahan
+        ws.column_dimensions[col_letter].width = max(18.0, max_length * 1.1)
+
+    # Kolom A selalu pake MIN_WIDTHS
+    if 'A' in MIN_WIDTHS:
+        ws.column_dimensions['A'].width = MIN_WIDTHS['A']
 
 def _is_true(value):
     if value is None:
@@ -763,7 +826,22 @@ def _build_annual_pdf_bytes(payload):
         elements.append(t_div); elements.append(Spacer(1, 15))
     # tabel expense
     elements.append(Paragraph("PENGELUARAN & OPERATION COST", styles['Heading3']))
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order, Category.id).all()
+
+    # ✅ Pre-calculate totals per root category to filter zero ones
+    all_cats_sync = Category.query.all()
+    cat_map = {c.id: c for c in all_cats_sync}
+    root_totals = {}
+    for e in expenses:
+        nominal = _expense_amount_for_display(e)
+        r_name, _ = _root_category_info(e.get('category_id'), cat_map)
+        if r_name:
+            root_totals[r_name] = root_totals.get(r_name, 0.0) + nominal
+
+    root_cats_all = Category.query.filter_by(parent_id=None).order_by(Category.sort_order, Category.id).all()
+    root_cats = [c for c in root_cats_all if root_totals.get(c.name, 0.0) > 0]
+    if not root_cats and root_cats_all:
+        root_cats = [root_cats_all[0]]
+
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns
 
@@ -924,7 +1002,23 @@ def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name, expense_
     _safe_set_cell_with_merge(ws_bs, 1, 1, f'Business Summary {year}')
     ws_bs['A1'].font = Font(bold=True, size=14)
     # Fetch root categories dynamically from DB
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+    root_cats_all = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+
+    # ✅ Pre-calculate totals per root category to filter zero ones
+    all_cats_sync = Category.query.all()
+    cat_map = {c.id: c for c in all_cats_sync}
+    root_totals = {}
+    for e in expenses:
+        nominal = _expense_amount_for_display(e)
+        r_name, _ = _root_category_info(e.get('category_id'), cat_map)
+        if r_name:
+            root_totals[r_name] = root_totals.get(r_name, 0.0) + nominal
+
+    # Filter root_cats to only those with data
+    root_cats = [c for c in root_cats_all if root_totals.get(c.name, 0.0) > 0]
+    if not root_cats and root_cats_all:
+        root_cats = [root_cats_all[0]]
+
     cat_names = [c.name for c in root_cats]
     last_cat_col_letter = get_column_letter(9 + len(cat_names) - 1)
 
@@ -1103,11 +1197,20 @@ def _render_expense_section_from_data(
     """
     logger.debug('Starting data-driven expense rendering')
     last_category_col = 9 + len(cat_names) - 1
+    # Define a safe maximum column to clear template "ghost" data (up to column 30/AD)
+    SAFE_MAX_COL = 30
+    actual_last_col = max(last_category_col, SAFE_MAX_COL)
+
+    from openpyxl.styles import PatternFill, Border, Side
+    no_fill = PatternFill(fill_type=None)
+    no_border = Border(left=Side(style=None), right=Side(style=None), top=Side(style=None), bottom=Side(style=None))
+
     white_fill = PatternFill(fill_type='solid', fgColor='FFFFFF')
     green_fill = GREEN_FILL
     blue_fill = BLUE_FILL
 
     # ✅ STEP 1: Separate batch vs single expenses
+
     batch_expenses = [
         e for e in expenses
         if _is_batch_settlement(e.get('settlement_type'), e.get('settlement_title'))
@@ -1131,19 +1234,26 @@ def _render_expense_section_from_data(
     has_single_data = bool(single_grouped['groups']) or bool(single_grouped['uncategorized'])
     if has_single_data:
         for subcat, items in single_grouped['groups'].items():
-            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-            _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+            _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
                 cell.fill = copy(white_fill)
                 cell.border = THIN_BORDER
             _safe_set_cell(ws, row_cursor, 4, subcat)
             ws.cell(row=row_cursor, column=4).font = ws.cell(row=row_cursor, column=4).font.copy(bold=True)
+            ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
+
+            # Clear ghost borders for subcategory header in Single
+            for col in range(last_category_col + 1, actual_last_col + 1):
+                ws.cell(row=row_cursor, column=col).border = no_border
+                ws.cell(row=row_cursor, column=col).fill = no_fill
+
             row_cursor += 1
 
             for expense in items:
-                _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-                _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+                _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+                _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
                     if not isinstance(cell, MergedCell):
@@ -1153,8 +1263,14 @@ def _render_expense_section_from_data(
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                 _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
+                ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
+                ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
+                ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+                ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
+                ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1167,12 +1283,17 @@ def _render_expense_section_from_data(
                 if cat_idx is not None:
                     _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
+                # ✅ CRITICAL: Reset borders for ALL ghost columns in this row
+                for col in range(last_category_col + 1, actual_last_col + 1):
+                    ws.cell(row=row_cursor, column=col).border = no_border
+                    ws.cell(row=row_cursor, column=col).fill = no_fill
+
                 row_cursor += 1
                 seq_counter += 1
 
         for expense in single_grouped['uncategorized']:
-            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-            _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+            _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
                 if not isinstance(cell, MergedCell):
@@ -1182,9 +1303,14 @@ def _render_expense_section_from_data(
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
             _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
+            ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
+            ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
+            ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-            _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
+            ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
+            ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
             _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
             _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
@@ -1196,11 +1322,16 @@ def _render_expense_section_from_data(
             if cat_idx is not None:
                 _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
+            # Clear ghost borders for uncategorized in Single
+            for col in range(last_category_col + 1, actual_last_col + 1):
+                ws.cell(row=row_cursor, column=col).border = no_border
+                ws.cell(row=row_cursor, column=col).fill = no_fill
+
             row_cursor += 1
             seq_counter += 1
     else:
-        _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-        _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+        _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+        _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row_cursor, column=col)
             if not isinstance(cell, MergedCell):
@@ -1213,11 +1344,16 @@ def _render_expense_section_from_data(
 
     # ✅ STEP 3: Render separator (green fill)
     separator_row = row_cursor
-    _clear_range(ws, separator_row, separator_row, 2, last_category_col)
+    _clear_range(ws, separator_row, separator_row, 2, actual_last_col)
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=separator_row, column=col)
         cell.fill = green_fill
         cell.border = THIN_BORDER
+
+    # Clear ghost borders for separator row
+    for col in range(last_category_col + 1, actual_last_col + 1):
+        ws.cell(row=separator_row, column=col).border = no_border
+        ws.cell(row=separator_row, column=col).fill = no_fill
 
     _safe_set_cell(ws, separator_row, 4, 'OPERATION COST AND OFFICE - Expenses Report')
     ws.cell(row=separator_row, column=4).font = Font(bold=True)
@@ -1246,37 +1382,56 @@ def _render_expense_section_from_data(
 
             # Batch header (blue fill)
             batch_header_row = row_cursor
-            _clear_range(ws, batch_header_row, batch_header_row, 2, last_category_col)
+            _clear_range(ws, batch_header_row, batch_header_row, 2, actual_last_col)
+            header_font = Font(bold=True, size=12, name='Arial Narrow', color='000000')
+
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=batch_header_row, column=col)
                 cell.fill = blue_fill
                 cell.border = THIN_BORDER
+                cell.font = header_font
+                cell.alignment = Alignment(vertical='center')
+
+            # Clear ghost borders for batch header
+            for col in range(last_category_col + 1, actual_last_col + 1):
+                ws.cell(row=batch_header_row, column=col).border = no_border
+                ws.cell(row=batch_header_row, column=col).fill = no_fill
 
             _safe_set_cell(ws, batch_header_row, 2, f'Expense#{batch_counter}')
+            ws.cell(row=batch_header_row, column=2).alignment = Alignment(horizontal='left', vertical='center')
+
+            # ✅ FIX COLON: Bold, Center, Arial Narrow 12
             _safe_set_cell(ws, batch_header_row, 3, ':')
+            ws.cell(row=batch_header_row, column=3).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=batch_header_row, column=3).font = header_font
+
             _safe_set_cell(ws, batch_header_row, 4, settlement_title)
-            ws.cell(row=batch_header_row, column=2).font = Font(bold=True, color='000000')
-            ws.cell(row=batch_header_row, column=4).font = Font(bold=True, color='000000')
-            ws.cell(row=batch_header_row, column=4).alignment = Alignment(wrap_text=False, vertical='center')
+            ws.cell(row=batch_header_row, column=4).alignment = Alignment(horizontal='left', vertical='center')
             row_cursor += 1
 
             # Group batch items by subcategory
             batch_grouped = _group_expenses_by_subcategory(batch_items)
             for subcat, items in batch_grouped['groups'].items():
-                _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+                _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
                     cell.fill = copy(white_fill)
                     cell.border = THIN_BORDER
+                    cell.alignment = Alignment(vertical='center')
 
                 _safe_set_cell(ws, row_cursor, 4, subcat)
                 ws.cell(row=row_cursor, column=4).font = Font(bold=True)
-                ws.cell(row=row_cursor, column=4).alignment = Alignment(wrap_text=False, vertical='center')
+                ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
+                # Clear ghost borders
+                for col in range(last_category_col + 1, actual_last_col + 1):
+                    ws.cell(row=row_cursor, column=col).border = no_border
+                    ws.cell(row=row_cursor, column=col).fill = no_fill
+
                 row_cursor += 1
 
                 for expense in items:
-                    _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=last_category_col)
-                    _clear_range(ws, row_cursor, row_cursor, 2, last_category_col)
+                    _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+                    _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                     for col in range(2, last_category_col + 1):
                         cell = ws.cell(row=row_cursor, column=col)
                         if not isinstance(cell, MergedCell):
@@ -1286,8 +1441,14 @@ def _render_expense_section_from_data(
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                     _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
+                    ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
+                    ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
                     _safe_set_cell(ws, row_cursor, 3, seq_counter)
+                    ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
+                    ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
+                    ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                     _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
                     _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1300,12 +1461,24 @@ def _render_expense_section_from_data(
                     if cat_idx is not None:
                         _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
 
-                    row_cursor += 1
-                    seq_counter += 1
+                    # Clear ghost columns values AND borders
+                    for col in range(last_category_col + 1, actual_last_col + 1):
+                        cell = ws.cell(row=row_cursor, column=col)
+                        cell.value = None
+                        cell.border = no_border
+                        cell.fill = no_fill
+
+                # Clear ghost borders
+                for col in range(last_category_col + 1, actual_last_col + 1):
+                    ws.cell(row=row_cursor, column=col).border = no_border
+                    ws.cell(row=row_cursor, column=col).fill = no_fill
+
+                row_cursor += 1
+                seq_counter += 1
 
     # ✅ STEP 5: Render TOTAL row
     total_row = row_cursor
-    _clear_range(ws, total_row, total_row, 2, 5)
+    _clear_range(ws, total_row, total_row, 2, actual_last_col)
     merge_range = f'B{total_row}:H{total_row}'
     try:
         ws.unmerge_cells(merge_range)
@@ -1318,8 +1491,15 @@ def _render_expense_section_from_data(
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
     for i, total_val in enumerate(cost_totals):
         col = 9 + i
-        _safe_set_number(ws, total_row, col, total_val)
+        # ✅ ROUND to avoid decimals in formula bar
+        _safe_set_number(ws, total_row, col, round(total_val))
         ws.cell(row=total_row, column=col).font = Font(bold=True)
+        ws.cell(row=total_row, column=col).alignment = Alignment(horizontal='right', vertical='center')
+
+    # Clear ghost borders for TOTAL row
+    for col in range(last_category_col + 1, actual_last_col + 1):
+        ws.cell(row=total_row, column=col).border = no_border
+        ws.cell(row=total_row, column=col).fill = no_fill
 
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=total_row, column=col)
@@ -1681,12 +1861,24 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
     pph23_total = sum(_to_float(row.get('pph_23')) for row in revenues)
 
     # Fetch root categories dynamically from DB
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
-    cat_names = [c.name for c in root_cats]
+    root_cats_all = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
 
-    # ✅ FIX: Map MUST contain ALL categories (roots & children) so _operation_cost_totals_by_column can traverse up
+    # ✅ Pre-calculate totals per root category to filter zero ones
     all_cats_sync = Category.query.all()
     category_by_id_map = {c.id: c for c in all_cats_sync}
+    root_totals = {}
+    for e in expenses:
+        nominal = _expense_amount_for_display(e)
+        r_name, _ = _root_category_info(e.get('category_id'), category_by_id_map)
+        if r_name:
+            root_totals[r_name] = root_totals.get(r_name, 0.0) + nominal
+
+    # Filter root_cats to only those with data
+    root_cats = [c for c in root_cats_all if root_totals.get(c.name, 0.0) > 0]
+    if not root_cats and root_cats_all:
+        root_cats = [root_cats_all[0]]
+
+    cat_names = [c.name for c in root_cats]
 
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
     total_cost = sum(cost_totals)
@@ -1764,17 +1956,17 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             top_s = s_thin if style_type in ('total', 'final', 'header') else s_none
             bottom_s = s_thin if style_type == 'total' else (s_double if style_type == 'final' else s_none)
 
-            # ✅ UNIFIED BOX LOGIC: Remove all internal vertical borders for a cleaner look
+            # ✅ UNIFIED BOX LOGIC: Tambahkan garis vertikal antara Deskripsi dan simbol Rp
             # Laba Rugi Side (B-E)
             ws_lr.cell(row=r, column=2).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
-            ws_lr.cell(row=r, column=3).border = Border(top=top_s, bottom=bottom_s)
-            ws_lr.cell(row=r, column=4).border = Border(top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=3).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=4).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
             ws_lr.cell(row=r, column=5).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
 
             # Neraca Side (G-J)
             ws_lr.cell(row=r, column=7).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
-            ws_lr.cell(row=r, column=8).border = Border(top=top_s, bottom=bottom_s)
-            ws_lr.cell(row=r, column=9).border = Border(top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=8).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=9).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
             ws_lr.cell(row=r, column=10).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
 
             # Alignment for Laba Rugi
@@ -1827,11 +2019,6 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # bersihkan nilai template dummy spesifik di neraca
         if ws_lr['J10'].value in (161401093, '=161401093', 161401093.0):
             ws_lr['J10'] = 0
-
-        # ✅ NEW: Apply consistent styling to the entire range (8-50) for both sides
-        # This ensures boxes are drawn even if one side is empty
-        for r in range(8, 51):
-            _apply_pl_row_style(r, 'data')
 
         # ✅ REVENUE TOTALS BY TYPE - Hitung dengan SUM langsung ke baris sesuai tipe
         direct_count = sum(1 for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung').strip().lower() != 'pendapatan_lain_lain')
@@ -2012,18 +2199,81 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         _apply_pl_row_style(row, 'final')
         laba_bersih_row = row
 
-        # Place signature below the table
-        last_row = max(row + 4, 52)
-        sig_name_row = last_row
-        sig_title_row = last_row + 1
+        # ✅ Track last Laba Rugi row
+        final_lr_row = row
+
+        # ✅ Tentukan posisi tanda tangan: Jeda 3 baris dari tabel terpanjang
+        final_neraca_row = 46
+        gap_size = 3
+        sig_name_row = max(final_lr_row, final_neraca_row) + gap_size
+        sig_title_row = sig_name_row + 1
+
+        # ✅ BERSIHKAN AREA GAP (Hapus garis gantung)
+        # Scan dari baris setelah tabel sampai baris tanda tangan
+        start_cleanup = min(final_lr_row, final_neraca_row) + 1
+        _clear_range_force(ws_lr, start_cleanup, sig_name_row - 1, 1, 10, reset_style=True)
+
+        # Apply data styling and labels to all Neraca rows from 8 to 46
+        neraca_content = {
+            8: ('AKTIVA', None), 9: ('AKTIVA LANCAR', None),
+            10: ('  KAS DAN SETARA KAS TAHUN SEBELUMNYA', 'Rp'),
+            11: ('  KAS DAN SETARA KAS TAHUN LAPORAN', 'Rp'),
+            12: ('  PIUTANG USAHA', 'Rp'), 13: ('  PAJAK BAYAR DI MUKA (pph23)', 'Rp'),
+            14: ('  BIAYA BAYAR DI MUKA', 'Rp'), 15: ('  PIUTANG LAIN LAIN', 'Rp'),
+            16: ('TOTAL AKTIVA LANCAR', 'Rp'), 17: ('ACTIVA TETAP', None),
+            20: ('  INVENTARIS KANTOR', 'Rp'), 22: ('TOTAL AKTIVA TETAP', 'Rp'),
+            24: ('ACTIVA LAIN LAIN', None), 25: ('  TOTAL AKTIVA LAIN LAIN', 'Rp'),
+            28: ('TOTAL AKTIVA', 'Rp'), 30: ('HUTANG DAN MODAL', None),
+            32: ('HUTANG LANCAR', None), 33: ('  HUTANG USAHA', 'Rp'),
+            34: ('  HUTANG GAJI', 'Rp'), 35: ('  HUTANG PEMEGANG SAHAM', 'Rp'),
+            36: ('  BIAYA YANG MASIH HARUS DI BAYAR', 'Rp'),
+            38: ('TOTAL HUTANG LANCAR', 'Rp'), 40: ('MODAL', None),
+            41: ('  MODAL SAHAM', 'Rp'), 42: ('  LABA DI TAHAN', 'Rp'),
+            43: ('  TOTAL LABA (RUGI) DITAHAN', 'Rp'), 44: ('TOTAL MODAL', 'Rp'),
+            46: ('TOTAL HUTANG DAN MODAL', 'Rp')
+        }
+
+        for r in range(8, final_neraca_row + 1):
+            s_type = 'header' if r in (8, 17, 24, 30, 32, 40) else ('total' if r in (16, 22, 25, 28, 38, 44) else ('final' if r == 46 else 'data'))
+
+            # Apply labels
+            if r in neraca_content:
+                lbl, rp_sym = neraca_content[r]
+                ws_lr[f'H{r}'] = lbl
+                if rp_sym: ws_lr[f'I{r}'] = rp_sym
+
+            # Helper to clear and apply Neraca side borders
+            s_thin = Side(style='thin')
+            top_s = s_thin if s_type in ('total', 'final', 'header') else Side(style=None)
+            bottom_s = s_thin if s_type == 'total' else (Side(style='double') if s_type == 'final' else Side(style=None))
+
+            ws_lr.cell(row=r, column=7).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=8).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=9).border = Border(left=s_thin, top=top_s, bottom=bottom_s)
+            ws_lr.cell(row=r, column=10).border = Border(right=s_thin, top=top_s, bottom=bottom_s)
+
+            # Standard Neraca Alignment & Font
+            font_n = Font(bold=(s_type in ('header', 'total', 'final')), size=11, name='Arial Narrow')
+            for c in range(7, 11):
+                cell_n = ws_lr.cell(row=r, column=c)
+                cell_n.font = font_n
+                if c == 7: cell_n.alignment = Alignment(horizontal='left', vertical='center')
+                elif c == 8: cell_n.alignment = Alignment(horizontal='left', vertical='center')
+                elif c == 9: cell_n.alignment = Alignment(horizontal='right', vertical='center')
+                elif c == 10:
+                    cell_n.alignment = Alignment(horizontal='right', vertical='center')
+                    cell_n.number_format = '#,##0'
 
         # ✅ ALIGNED BRANDING & MERGED SIGNATURES
         logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
+        logo_expsan_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
         profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
-        # Top Logos - Enlarged to ~6.5cm (approx 250 pixels)
+        # Top Logos - Menggunakan expsan excel.png dengan ukuran presisi
+        # Digeser ke E1 dan J1 agar sejajar dengan kolom nilai (Rp)
         ws_lr._images.clear()
-        _add_image_to_sheet(ws_lr, logo_path, 'D1', width=250, height=75)
+        _add_image_to_sheet(ws_lr, logo_expsan_path, 'E1', width=220, height=65)
+        _add_image_to_sheet(ws_lr, logo_expsan_path, 'J1', width=220, height=65)
 
         # Left Side Signature (Merge B-E and Center)
         ws_lr.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
@@ -2047,34 +2297,31 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         ws_lr[f'G{sig_title_row}'].font = Font(bold=True)
         ws_lr[f'G{sig_title_row}'].alignment = Alignment(horizontal='center')
 
-        # Bottom Footers - Mepet below Direktur
+        # Bottom Footers - Presisi sesuai screenshot (15.22cm x 1.25cm -> ~575px x 47px)
         footer_row = sig_title_row + 1
-        _add_image_to_sheet(ws_lr, profile_path, f'B{footer_row}', width=550, height=45)
-        _add_image_to_sheet(ws_lr, profile_path, f'G{footer_row}', width=550, height=45)
+        _add_image_to_sheet(ws_lr, profile_path, f'B{footer_row}', width=575, height=47)
+        _add_image_to_sheet(ws_lr, profile_path, f'G{footer_row}', width=575, height=47)
 
-        # input dan formula neraca
-        ws_lr['J10'] = opening_cash_balance
-        # ✅ FIX: Ensure J11 doesn't point to itself (even if laba_bersih_row is 11)
-        # Usually laba_bersih_row is > 20, but we'll use a safer reference if needed.
-        ws_lr['J11'] = f"=E{laba_bersih_row}-'Business Summary'!E13"
-        ws_lr['J11'].number_format = '#,##0'
-        ws_lr['J12'] = accounts_receivable
-        ws_lr['J13'] = prepaid_tax_pph23
-        ws_lr['J14'] = prepaid_expenses
-        ws_lr['J15'] = other_receivables
+        # input dan formula neraca (ROUNDED)
+        ws_lr['J10'] = round(opening_cash_balance)
+        ws_lr['J11'] = f"=ROUND(E{laba_bersih_row}-'Business Summary'!E13, 0)"
+        ws_lr['J12'] = round(accounts_receivable)
+        ws_lr['J13'] = round(prepaid_tax_pph23)
+        ws_lr['J14'] = round(prepaid_expenses)
+        ws_lr['J15'] = round(other_receivables)
         ws_lr['J16'] = '=SUM(J10:J15)'
-        ws_lr['J20'] = office_inventory
+        ws_lr['J20'] = round(office_inventory)
         ws_lr['J22'] = '=J20'
-        ws_lr['J25'] = other_assets
+        ws_lr['J25'] = round(other_assets)
         ws_lr['J26'] = '=SUM(J25:J25)'
         ws_lr['J28'] = '=J26+J22+J16'
-        ws_lr['J33'] = accounts_payable
-        ws_lr['J34'] = salary_payable
-        ws_lr['J35'] = shareholder_payable
-        ws_lr['J36'] = accrued_expenses
+        ws_lr['J33'] = round(accounts_payable)
+        ws_lr['J34'] = round(salary_payable)
+        ws_lr['J35'] = round(shareholder_payable)
+        ws_lr['J36'] = round(accrued_expenses)
         ws_lr['J38'] = '=SUM(J33:J36)'
-        ws_lr['J41'] = share_capital
-        ws_lr['J42'] = retained_earnings_balance
+        ws_lr['J41'] = round(share_capital)
+        ws_lr['J42'] = round(retained_earnings_balance)
         ws_lr['J43'] = '=J28-J38-J41-J42'
         ws_lr['J44'] = '=SUM(J41:J43)'
         ws_lr['J46'] = '=J44+J38'
@@ -2229,11 +2476,12 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         # ✅ ADD BRANDING TO BUSINESS SUMMARY
         logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
+        logo_expsan_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'expsan excel.png'))
         profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
-        # Top Logo - Balanced size (approx 5.89cm)
+        # Top Logo - Balanced size (match Sheet 2: 220px x 65px)
         ws_bs._images.clear()
-        _add_image_to_sheet(ws_bs, logo_path, 'D1', width=220, height=65)
+        _add_image_to_sheet(ws_bs, logo_expsan_path, 'D1', width=220, height=65)
 
         # Footer Profile - Restored "Gap Panjang" (4 rows below last_row to stay at the bottom)
         footer_row = last_row + 4
@@ -2440,6 +2688,9 @@ def get_annual_report_excel():
             ws = wb.active
             ws.title = f'Revenue-Cost_{year}'
 
+        # ✅ HILANGKAN GRIDLINES agar tampilan bersih putih polos
+        ws.sheet_view.showGridLines = False
+
         # Update header document
         _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
         _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
@@ -2524,15 +2775,8 @@ def get_annual_report_excel():
 
         _clear_range_force(ws, row_cursor, row_cursor, 2, 17, reset_style=False)
 
-        # ✅ MERGE D:E for empty state message (same as data rows)
-        merge_range = f'D{row_cursor}:E{row_cursor}'
-        try:
-            ws.unmerge_cells(merge_range)
-        except Exception:
-            pass
-        ws.merge_cells(merge_range)
-
-        _safe_set_cell(ws, row_cursor, 4, 'Belum ada data revenue dan pajak')
+        # ✅ MERGE D:E for empty state message using helper
+        _merge_description_cell(ws, row_cursor, 'Belum ada data revenue dan pajak', col_start=4, col_end=5)
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
@@ -2676,18 +2920,11 @@ def get_annual_report_excel():
 
     # Handle no tax data
     if not taxes:
-        # ✅ MERGE D:E for empty state message
-        try:
-            ws.unmerge_cells(f'D{tax_start_row}:E{tax_start_row}')
-        except Exception:
-            pass
-        ws.merge_cells(f'D{tax_start_row}:E{tax_start_row}')
-
         # ✅ FIX: Clone style FIRST, then write
         _copy_template_row(ws, TAX_DATA_TEMPLATE_ROW, tax_start_row, start_col=2, end_col=17, include_values=False)
 
-        # ✅ DON'T write "1" in column # - leave it empty like Table 1 and Table 3
-        _safe_set_cell(ws, tax_start_row, 4, 'Belum ada data pajak')
+        # ✅ MERGE D:E for empty state message using helper
+        _merge_description_cell(ws, tax_start_row, 'Belum ada data pajak', col_start=4, col_end=5)
         cell = ws.cell(row=tax_start_row, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
@@ -2746,25 +2983,29 @@ def get_annual_report_excel():
     _set_rows_hidden(ws, expense_gap_row, expense_start_row, False)
 
     # Fetch root categories dynamically from DB - ORDER BY sort_order (from Kategori Tabular)
-    root_cats = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+    root_cats_all = Category.query.filter_by(parent_id=None).order_by(Category.sort_order).all()
+
+    # ✅ Pre-calculate totals per root category to filter zero ones
+    all_cats_sync = Category.query.all()
+    category_by_id_map = {c.id: c for c in all_cats_sync}
+    root_totals = {}
+    for e in expenses:
+        nominal = _expense_amount_for_display(e)
+        r_name, _ = _root_category_info(e.get('category_id'), category_by_id_map)
+        if r_name:
+            root_totals[r_name] = root_totals.get(r_name, 0.0) + nominal
+
+    # Filter root_cats to only those with data
+    root_cats = [c for c in root_cats_all if root_totals.get(c.name, 0.0) > 0]
+
+    # If NO categories have data, fallback to show at least one (or handle empty state)
+    if not root_cats and root_cats_all:
+        root_cats = [root_cats_all[0]]
+
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns # for mapping
 
-    # ✅ FIX: Map MUST contain ALL categories (roots & children) so _root_category_info can traverse up
-    all_cats = Category.query.all()
-    category_by_id_map = {c.id: c for c in all_cats}
     _write_dynamic_category_headers(ws, root_cats, header_row=expense_header_row)
-
-    # SET UNIFORM COLUMN WIDTH FOR ALL CATEGORIES
-    start_col = 9
-    for offset in range(len(root_cats)):
-        col = start_col + offset
-        col_letter = get_column_letter(col)
-        ws.column_dimensions[col_letter].width = COLUMN_WIDTH_CATEGORY
-
-    # FIX: Set column width for Currency (G) and Currency Exchange (H)
-    ws.column_dimensions['G'].width = COLUMN_WIDTH_CURRENCY
-    ws.column_dimensions['H'].width = COLUMN_WIDTH_EXCHANGE
 
     # ✅ FIX: Override font for Expense header row (row 40) to Arial Narrow 12
     # Template uses Aptos Narrow 10, we want Arial Narrow 12
@@ -2797,15 +3038,15 @@ def get_annual_report_excel():
 
     # ✅ ALIGNED BRANDING & MERGED SIGNATURES
     logo_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'sheet1.png'))
-    profile_path = os.path.abspath(os.path.join(current_app.root_path, '..', 'frontend', 'assets', 'images', 'profil.png'))
 
-    # Top Logo - Enlarged to ~6.5cm (approx 250 pixels)
-    ws._images.clear()  # Clear potential template logos
-    
-    
-    _add_image_to_sheet(ws, logo_path, 'B1', width=200, height=60)
+    # Clear ALL images from template to start fresh
+    ws._images.clear()
 
-    # Signature & Footer at the bottom of Table 3
+    # Top Logo - Presisi agar terlihat rata kanan di kolom Q
+    # Kita ikat di 'P1' agar gambar membentang menutupi P dan berakhir di ujung Q
+    _add_image_to_sheet(ws, logo_path, 'O1', width=308, height=78)
+
+    # Signature at the bottom of Table 3
     sig_name_row = total_row + 4
     sig_title_row = total_row + 5
 
@@ -2819,9 +3060,11 @@ def get_annual_report_excel():
     ws[f'B{sig_title_row}'].font = Font(bold=True)
     ws[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
 
-    footer_row = sig_title_row + 2
-    # Width 550 to span the table width edge-to-edge
-    _add_image_to_sheet(ws, profile_path, f'B{footer_row}', width=550, height=45)
+    # ✅ FOOTER IMAGE REMOVED (As requested)
+
+    # ✅ APPLY AUTOFIT TO SHEET 1
+    # Use last_category_col to define the range of columns to autofit
+    _apply_autofit_sheet1(ws, last_category_col)
 
     # DO NOT REMOVE TABLES - Keep template structure intact
     logger.debug('Keeping Excel tables for proper Alt+A behavior')

@@ -12,6 +12,7 @@ import '../management/category_tabular_screen.dart';
 import '../management/dividend_management_screen.dart';
 import '../management/revenue_management_screen.dart';
 import '../management/tax_management_screen.dart';
+import '../../widgets/app_scrollbar.dart';
 
 class AnnualReportScreen extends StatefulWidget {
   const AnnualReportScreen({super.key});
@@ -380,19 +381,6 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     return groups;
   }
 
-  int _getCategoryIndexFromDynamic(String categoryName) {
-    final targetName = categoryName.toLowerCase().trim();
-    for (int i = 0; i < _categories.length; i++) {
-      final catName = (_categories[i]['name'] ?? '').toString().toLowerCase();
-      if (catName == targetName ||
-          catName.contains(targetName) ||
-          targetName.contains(catName)) {
-        return i;
-      }
-    }
-    return 0;
-  }
-
   String _expenseSubcategoryLabel(Map<String, dynamic> item) {
     final backendSub = (item['subcategory_name'] ?? '').toString().trim();
     if (backendSub.isNotEmpty && backendSub != '-') return backendSub;
@@ -506,25 +494,22 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                 border: Border.all(color: _dividerColor(context)),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Scrollbar(
+              child: AppScrollbar(
                 controller: verticalController,
                 thumbVisibility: true,
                 interactive: true,
-                thickness: 6,
                 scrollbarOrientation: ScrollbarOrientation.left,
                 notificationPredicate: (notification) =>
                     notification.metrics.axis == Axis.vertical,
-                radius: const Radius.circular(4),
                 child: Padding(
                   padding: const EdgeInsets.only(left: leftScrollbarSpace),
-                  child: Scrollbar(
+                  child: AppScrollbar(
                     controller: controller,
                     thumbVisibility: true,
                     interactive: true,
-                    thickness: 6,
+                    scrollDirection: Axis.horizontal,
                     notificationPredicate: (notification) =>
                         notification.metrics.axis == Axis.horizontal,
-                    radius: const Radius.circular(4),
                     child: SingleChildScrollView(
                       controller: controller,
                       scrollDirection: Axis.horizontal,
@@ -864,13 +849,6 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       _fmtMoney(_reportData?['dividend']?['dividend_per_person'] ?? 0),
     ]);
 
-    final catHeaders = _categories.isNotEmpty
-        ? _categories.map((c) => (c['name'] ?? '').toString()).toList()
-        : ['Expenses'];
-    final catTotals = List<double>.filled(catHeaders.length, 0);
-    final List<List<String>> expenseRows = <List<String>>[];
-    final expenseBoldRows = <int>{};
-
     // ✅ Optimasi: Gunakan cache jika tersedia dan tahun laporan tidak berubah
     final List<List<Map<String, dynamic>>> expenseGroups;
     if (_cachedGroupedExpenses != null &&
@@ -879,6 +857,51 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     } else {
       expenseGroups = _groupAnnualExpenses(expenseData);
     }
+
+    // ✅ 1. Pre-calculate totals for ALL categories first to identify non-zero ones
+    final Map<int, double> tempTotals = {};
+    for (var group in expenseGroups) {
+      for (var e in group) {
+        final catName = e['category_name']?.toString() ?? '';
+        final amount = _toDouble(e['idr_amount'] ?? e['amount']);
+        // Find category ID by name
+        int catId = -1;
+        for (var c in _categories) {
+          if ((c['name'] ?? '').toString().toLowerCase() == catName.toLowerCase()) {
+            catId = c['id'];
+            break;
+          }
+        }
+        if (catId != -1) {
+          tempTotals[catId] = (tempTotals[catId] ?? 0) + amount;
+        }
+      }
+    }
+
+    // ✅ 2. Filter categories that have total > 0
+    final filteredCategories = _categories.where((c) {
+      final id = c['id'];
+      return (tempTotals[id] ?? 0) > 0;
+    }).toList();
+
+    // ✅ 3. Build headers and totals based on filtered categories
+    final catHeaders = filteredCategories.isNotEmpty
+        ? filteredCategories.map((c) => (c['name'] ?? '').toString()).toList()
+        : ['Expenses'];
+    final catTotals = List<double>.filled(catHeaders.length, 0);
+
+    // Helper to get index in filtered list
+    int getFilteredCatIndex(String categoryName) {
+      final target = categoryName.toLowerCase().trim();
+      for (int i = 0; i < filteredCategories.length; i++) {
+        final name = (filteredCategories[i]['name'] ?? '').toString().toLowerCase();
+        if (name == target) return i;
+      }
+      return -1;
+    }
+
+    final List<List<String>> expenseRows = <List<String>>[];
+    final expenseBoldRows = <int>{};
 
     // RESTORE GROUPING LOGIC EXACTLY
     final List<Map<String, dynamic>> allSingles = [];
@@ -929,7 +952,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       for (final e in singleMap[sub]!) {
         singleCounter++;
         final amount = _toDouble(e['idr_amount'] ?? e['amount']);
-        final idx = _getCategoryIndexFromDynamic(e['category_name'] ?? '');
+        final idx = getFilteredCatIndex(e['category_name'] ?? '');
         final rowCats = List<String>.filled(catHeaders.length, '-');
         if (idx < catHeaders.length) {
           rowCats[idx] = _fmtMoney(amount);
@@ -1010,7 +1033,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         for (final e in subMap[sub]!) {
           subCounter++;
           final amount = _toDouble(e['idr_amount'] ?? e['amount']);
-          final idx = _getCategoryIndexFromDynamic(e['category_name'] ?? '');
+          final idx = getFilteredCatIndex(e['category_name'] ?? '');
           final rowCats = List<String>.filled(catHeaders.length, '-');
           if (idx < catHeaders.length) {
             rowCats[idx] = _fmtMoney(amount);
@@ -1247,13 +1270,11 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                 style: TextStyle(color: _titleColor(context)),
               ),
             )
-          : Scrollbar(
+          : AppScrollbar(
               controller: _scrollController,
               thumbVisibility: showMainScrollbar,
               trackVisibility: showMainScrollbar,
-              thickness: 6,
               interactive: true,
-              radius: const Radius.circular(4),
               child: SingleChildScrollView(
                 controller: _scrollController,
                 padding: EdgeInsets.fromLTRB(
