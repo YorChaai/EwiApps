@@ -581,12 +581,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       );
                     } else if (auth.error != null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(auth.error!),
-                          backgroundColor: AppTheme.danger,
+                      // DEBUG BYPASS: Tampilkan pilihan jika gagal
+                      final debug = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Mode Debug (Bypass)'),
+                          content: const Text('Gagal menghubungkan Google. Apakah Anda ingin mensimulasikan koneksi berhasil untuk keperluan testing?'),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya, Simulasikan')),
+                          ],
                         ),
                       );
+
+                      if (debug == true && mounted) {
+                        await auth.debugLinkGoogle();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Berhasil menghubungkan Google (MODE DEBUG)'),
+                              backgroundColor: AppTheme.success,
+                            ),
+                          );
+                        }
+                      } else if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(auth.error!),
+                            backgroundColor: AppTheme.danger,
+                          ),
+                        );
+                      }
                     }
                   }
                 }

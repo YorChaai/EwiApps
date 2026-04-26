@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../providers/advance_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/file_helper.dart';
 import '../utils/context_extensions.dart';
+import '../utils/app_dialogs.dart';
 import '../widgets/notification_bell_icon.dart';
 import 'settlement/settlement_detail_screen.dart';
 import 'reports/report_screen.dart';
@@ -65,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final settlementProvider = context.read<SettlementProvider>();
       final advanceProvider = context.read<AdvanceProvider>();
       final notificationProvider = context.read<NotificationProvider>();
-      
+
       // Sync report years from settings first
       await Future.wait([
         settlementProvider.syncReportYear(),
@@ -188,43 +190,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _confirmLogout() async {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.logout_rounded, color: AppTheme.danger),
-            SizedBox(width: 12),
-            Text('Konfirmasi Logout'),
-          ],
-        ),
-        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Batal',
-              style: TextStyle(
-                color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary,
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.danger,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Keluar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && mounted) {
+    final confirmed = await AppDialogs.showExitConfirmation(context, isLogout: true);
+    if (confirmed && mounted) {
       context.read<AuthProvider>().logout();
     }
   }
@@ -254,8 +221,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // UI Scaling for mobile-like windows
     final useCompact = isMobile || safeWidth < 500;
 
-    return Scaffold(
-      body: Row(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final confirmed = await AppDialogs.showExitConfirmation(context, isLogout: false);
+        if (confirmed && mounted) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
+        body: Row(
         children: [
           if (showSidebar)
             SizedBox(
@@ -401,7 +377,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Icons.logout_rounded,
                             size: useCompact ? 18 : 20,
                           ),
-                          onPressed: () => auth.logout(),
+                          onPressed: _confirmLogout,
                           color: _bodyColor(context),
                           tooltip: 'Logout',
                         ),
@@ -417,8 +393,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _SettlementListView extends StatefulWidget {
@@ -1103,23 +1080,26 @@ class _SettlementListViewState extends State<_SettlementListView> {
             color: context.isDark ? AppTheme.divider : AppTheme.lightDivider,
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildToggleButton(
-              label: 'Pengeluaran Sendiri',
-              count: singlesCount,
-              value: 'single',
-              useCompact: useCompact,
-            ),
-            const SizedBox(width: 4),
-            _buildToggleButton(
-              label: 'Pengeluaran Batch',
-              count: batchesCount,
-              value: 'batch',
-              useCompact: useCompact,
-            ),
-          ],
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildToggleButton(
+                label: 'Pengeluaran Sendiri',
+                count: singlesCount,
+                value: 'single',
+                useCompact: useCompact,
+              ),
+              const SizedBox(width: 4),
+              _buildToggleButton(
+                label: 'Pengeluaran Batch',
+                count: batchesCount,
+                value: 'batch',
+                useCompact: useCompact,
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -516,11 +516,12 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
             controller: controller,
             thumbVisibility: true,
             interactive: true,
+            scrollbarOrientation: ScrollbarOrientation.left,
             child: ReorderableListView.builder(
               scrollController: controller,
               onReorder: onReorder,
               buildDefaultDragHandles: false,
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(left: 12, right: 8),
               itemCount: items.length,
               itemBuilder: (ctx, idx) {
                 final cat = items[idx];
@@ -536,7 +537,18 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
                   ),
                   child: ListTile(
                     dense: true,
-                    contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    leading: ReorderableDragStartListener(
+                      index: idx,
+                      child: const Padding(
+                        padding: EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.drag_handle_rounded,
+                          color: Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                    ),
                     title: Text(
                       cat['name'],
                       style: const TextStyle(
@@ -544,32 +556,13 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 16,
-                          ),
-                          onPressed: () => onMove(cat),
-                          tooltip: 'Pindah grup',
-                        ),
-                        ReorderableDragStartListener(
-                          index: idx,
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 10,
-                            ),
-                            child: Icon(
-                              Icons.drag_handle_rounded,
-                              color: Colors.grey,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                      ],
+                    trailing: IconButton(
+                      icon: const Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                      ),
+                      onPressed: () => onMove(cat),
+                      tooltip: 'Pindah grup',
                     ),
                   ),
                 );

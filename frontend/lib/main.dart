@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:window_manager/window_manager.dart';
 import 'providers/auth_provider.dart';
 import 'providers/settlement_provider.dart';
 import 'providers/advance_provider.dart';
@@ -40,8 +41,6 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
       // Keep scrollbar for web with proper controller
       return AppScrollbar(
         controller: details.controller,
-        thumbVisibility: true,
-        trackVisibility: true,
         interactive: true,
         child: child,
       );
@@ -53,6 +52,29 @@ class MyCustomScrollBehavior extends MaterialScrollBehavior {
 void main() async {
   // Ensure Flutter binding is initialized before calling SystemChrome
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize window manager for desktop
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.linux || defaultTargetPlatform == TargetPlatform.macOS)) {
+    try {
+      await windowManager.ensureInitialized();
+
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(1440, 900), // Ukuran ideal untuk laptop 16,5 inci (Landscape)
+        minimumSize: Size(400, 866), // Tetap bisa dikecilkan sampai rasio HP Anda
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.normal,
+      );
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    } catch (e) {
+      debugPrint('Window Manager failed to initialize: $e');
+    }
+  }
 
   // Lock orientation to portrait mode
   await SystemChrome.setPreferredOrientations([
@@ -89,10 +111,7 @@ void main() async {
                 const SizedBox(height: 12),
                 const Text(
                   'Silakan restart aplikasi atau hubungi support jika masalah berlanjut.',
-                  style: TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
@@ -124,8 +143,10 @@ class ExpenseApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
-          create: (context) => NotificationProvider(context.read<AuthProvider>().api),
-          update: (context, auth, prev) => prev ?? NotificationProvider(auth.api),
+          create: (context) =>
+              NotificationProvider(context.read<AuthProvider>().api),
+          update: (context, auth, prev) =>
+              prev ?? NotificationProvider(auth.api),
         ),
         ChangeNotifierProxyProvider<AuthProvider, SettlementProvider>(
           create: (context) => SettlementProvider(),

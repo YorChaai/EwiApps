@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
@@ -17,7 +18,8 @@ class ItemDetailPreviewDialog extends StatefulWidget {
   });
 
   @override
-  State<ItemDetailPreviewDialog> createState() => _ItemDetailPreviewDialogState();
+  State<ItemDetailPreviewDialog> createState() =>
+      _ItemDetailPreviewDialogState();
 }
 
 class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
@@ -43,31 +45,71 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
   Widget build(BuildContext context) {
     final isDark = context.isDark;
     final cardColor = isDark ? AppTheme.card : AppTheme.lightCard;
-    final textSecondary = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
     final infoColor = isDark ? AppTheme.accent : AppTheme.primary;
     final screenWidth = MediaQuery.of(context).size.width;
 
     // Extract fields based on whether it's settlement or advance
     final item = widget.item;
-    final List<Map<String, dynamic>> fields = [
-      {'label': 'Tanggal', 'value': item['date'] ?? '-', 'icon': Icons.calendar_today_rounded},
-      {'label': 'Kategori', 'value': item['category_name'] ?? '-', 'icon': Icons.category_rounded},
-      {
-        'label': 'Amount',
-        'value': _formatAmount(item['amount'] ?? item['estimated_amount'], item['currency']),
-        'icon': Icons.payments_rounded,
-        'color': AppTheme.primary
-      },
-    ];
+    final List<Map<String, dynamic>> fields = [];
 
-    if (item['source'] != null) {
-      fields.add({'label': 'Sumber', 'value': item['source'], 'icon': Icons.account_balance_wallet_rounded});
+    if (item['title'] != null && item['title'].toString().isNotEmpty) {
+      fields.add({
+        'label': 'Judul',
+        'value': item['title'],
+        'icon': Icons.title_rounded,
+      });
     }
 
-    fields.add({'label': 'Deskripsi', 'value': item['description'] ?? '-', 'icon': Icons.description_rounded});
+    fields.addAll([
+      {
+        'label': 'Tanggal',
+        'value': item['date'] ?? '-',
+        'icon': Icons.calendar_today_rounded,
+      },
+      {
+        'label': 'Kategori',
+        'value': item['category_name'] ?? '-',
+        'icon': Icons.category_rounded,
+      },
+      {
+        'label': 'Amount',
+        'value': _formatAmount(
+          item['amount'] ?? item['estimated_amount'],
+          item['currency'],
+        ),
+        'icon': Icons.payments_rounded,
+        'color': AppTheme.primary,
+      },
+    ]);
+
+    if (item['source'] != null) {
+      fields.add({
+        'label': 'Sumber',
+        'value': item['source'],
+        'icon': Icons.account_balance_wallet_rounded,
+      });
+    }
+
+    // Clean description if it contains system info
+    String cleanDescription = (item['description'] ?? '-').toString();
+    if (cleanDescription.contains('Imported from')) {
+      cleanDescription = cleanDescription.split('Imported from').first.trim();
+    }
+    if (cleanDescription.isEmpty) cleanDescription = '-';
+
+    fields.add({
+      'label': 'Deskripsi',
+      'value': cleanDescription,
+      'icon': Icons.description_rounded,
+    });
 
     // Add IDR Amount if it's a foreign currency
-    if (item['currency'] != null && item['currency'] != 'IDR' && item['idr_amount'] != null) {
+    if (item['currency'] != null &&
+        item['currency'] != 'IDR' &&
+        item['idr_amount'] != null) {
       fields.add({
         'label': 'Amount (IDR)',
         'value': 'Rp ${_currencyFormat.format(item['idr_amount'])}',
@@ -76,7 +118,21 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
     }
 
     if (item['notes'] != null && item['notes'].toString().isNotEmpty) {
-      fields.add({'label': 'Catatan / Komentar', 'value': item['notes'], 'icon': Icons.comment_rounded});
+      fields.add({
+        'label': 'Catatan / Komentar',
+        'value': item['notes'],
+        'icon': Icons.comment_rounded,
+        'isNotes': true,
+      });
+    }
+
+    if (item['batch_notes'] != null && item['batch_notes'].toString().isNotEmpty) {
+      fields.add({
+        'label': 'Catatan Batch',
+        'value': item['batch_notes'],
+        'icon': Icons.assignment_rounded,
+        'color': AppTheme.warning,
+      });
     }
 
     final status = (item['status'] ?? 'pending').toString().toLowerCase();
@@ -120,8 +176,10 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
                 children: [
                   // Status Badge
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: _getStatusColor(status).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -151,71 +209,83 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
                   ),
                   const SizedBox(height: 20),
 
-                // Field List
-                ...fields.map((f) => _buildFieldRow(context, f, isDark)),
+                  // Field List
+                  ...fields.map((f) => _buildFieldRow(context, f, isDark)),
 
-                // Evidence Section
-                if (item['evidence_path'] != null) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(),
-                  ),
-                  Text(
-                    'Evidence / Bukti:',
-                    style: TextStyle(
-                      color: textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  // Evidence Section
+                  if (item['evidence_path'] != null) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Divider(),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  InkWell(
-                    onTap: () {
-                      if (widget.onViewEvidence != null) {
-                        widget.onViewEvidence!(item['evidence_path'], item['evidence_filename']);
-                      }
-                    },
-                    child: Container(
-                      height: 150,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.divider),
+                    Text(
+                      'Evidence / Bukti:',
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            const Center(
-                              child: Icon(Icons.image_rounded, size: 40, color: AppTheme.textSecondary),
-                            ),
-                            Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  const SizedBox(height: 40),
-                                  Text(
-                                    'Klik untuk melihat bukti',
-                                    style: TextStyle(color: textSecondary, fontSize: 11),
-                                  ),
-                                ],
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () {
+                        if (widget.onViewEvidence != null) {
+                          widget.onViewEvidence!(
+                            item['evidence_path'],
+                            item['evidence_filename'],
+                          );
+                        }
+                      },
+                      child: Container(
+                        height: 150,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.black26
+                              : Colors.black.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.divider),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              const Center(
+                                child: Icon(
+                                  Icons.image_rounded,
+                                  size: 40,
+                                  color: AppTheme.textSecondary,
+                                ),
                               ),
-                            ),
-                          ],
+                              Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    const SizedBox(height: 40),
+                                    Text(
+                                      'Klik untuk melihat bukti',
+                                      style: TextStyle(
+                                        color: textSecondary,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-    actions: [
+      actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Tutup'),
@@ -224,9 +294,98 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
     );
   }
 
-  Widget _buildFieldRow(BuildContext context, Map<String, dynamic> field, bool isDark) {
-    final textSecondary = isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
-    final textPrimary = isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+  Widget _buildFieldRow(
+    BuildContext context,
+    Map<String, dynamic> field,
+    bool isDark,
+  ) {
+    final textSecondary = isDark
+        ? AppTheme.textSecondary
+        : AppTheme.lightTextSecondary;
+    final textPrimary = isDark
+        ? AppTheme.textPrimary
+        : AppTheme.lightTextPrimary;
+    final isNotes = field['isNotes'] == true;
+
+    if (isNotes) {
+      final comments = _getCommentsFromNotes(field['value'].toString());
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(field['icon'] as IconData, size: 14, color: textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  'Komentar Penolakan',
+                  style: TextStyle(
+                    color: textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            if (comments.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 22, top: 4),
+                child: Text(
+                  'Tidak ada komentar',
+                  style: TextStyle(
+                    color: textSecondary.withValues(alpha: 0.5),
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(left: 22),
+                child: Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _showCommentsDialog(context, comments, isDark),
+                      icon: const Icon(Icons.comment_rounded, size: 16),
+                      label: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Lihat Komentar'),
+                          const SizedBox(width: 4),
+                          Transform.translate(
+                            offset: const Offset(0, -5),
+                            child: Text(
+                              comments.length.toString(),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.accent,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                        foregroundColor: AppTheme.primary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          side: BorderSide(color: AppTheme.primary.withValues(alpha: 0.2)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -252,14 +411,22 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.03),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.2)
+                  : Colors.black.withValues(alpha: 0.03),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppTheme.divider.withValues(alpha: 0.5)),
+              border: Border.all(
+                color: AppTheme.divider.withValues(alpha: 0.5),
+              ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.subdirectory_arrow_right_rounded, size: 14, color: AppTheme.primary.withValues(alpha: 0.5)),
+                Icon(
+                  Icons.subdirectory_arrow_right_rounded,
+                  size: 14,
+                  color: AppTheme.primary.withValues(alpha: 0.5),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: SelectableText(
@@ -273,6 +440,120 @@ class _ItemDetailPreviewDialogState extends State<ItemDetailPreviewDialog> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _getCommentsFromNotes(String notes) {
+    if (notes.isEmpty) return [];
+
+    final systemPrefixes = [
+      'Disetujui oleh',
+      'Imported from',
+      'Subcategory:',
+      'Approved by',
+      'System:',
+    ];
+
+    try {
+      final decoded = json.decode(notes);
+      if (decoded is List) {
+        final List<String> comments = [];
+        for (var item in decoded) {
+          final text = (item is Map ? item['text'] : item).toString();
+
+          bool isSystem = false;
+          for (var prefix in systemPrefixes) {
+            if (text.trim().startsWith(prefix)) {
+              isSystem = true;
+              break;
+            }
+          }
+
+          if (!isSystem && text.trim().isNotEmpty) {
+            comments.add(text.trim());
+          }
+        }
+        return comments;
+      }
+      return [];
+    } catch (_) {
+      bool isSystem = false;
+      for (var prefix in systemPrefixes) {
+        if (notes.trim().startsWith(prefix)) {
+          isSystem = true;
+          break;
+        }
+      }
+      return isSystem || notes.trim().isEmpty ? [] : [notes.trim()];
+    }
+  }
+
+  void _showCommentsDialog(BuildContext context, List<String> comments, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.comment_rounded, color: AppTheme.accent),
+            const SizedBox(width: 10),
+            const Text('Riwayat Komentar'),
+            const Spacer(),
+            IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: comments.length,
+            separatorBuilder: (c, i) => const Divider(),
+            itemBuilder: (c, i) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      (i + 1).toString(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SelectableText(
+                      comments[i],
+                      style: TextStyle(
+                        color: isDark ? AppTheme.cream : AppTheme.lightTextPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
           ),
         ],
       ),

@@ -424,4 +424,58 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('user_data');
     notifyListeners();
   }
+
+  // --- DEBUG METHODS UNTUK TESTING ---
+  
+  Future<bool> debugLogin() async {
+    _loading = true;
+    notifyListeners();
+    await Future.delayed(const Duration(seconds: 1));
+    _token = 'debug_token_123';
+    _user = {
+      'id': 1,
+      'username': 'admin',
+      'full_name': 'Anevril Chairu (DEBUG)',
+      'role': 'manager',
+      'email': 'anevril@debug.com',
+      'phone_number': '08118861201',
+      'workplace': 'Mercu Buana',
+    };
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('token', _token!);
+    _loading = false;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> debugLinkGoogle() async {
+    _loading = true;
+    notifyListeners();
+    await Future.delayed(const Duration(seconds: 1));
+    if (_user != null) {
+      _user!['google_id'] = 'debug_google_id_999';
+      _user!['email'] = 'anevril@gmail.com';
+    }
+    _loading = false;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> debugForgotPassword(String email) async {
+    _loading = true;
+    notifyListeners();
+    await Future.delayed(const Duration(seconds: 1));
+    _loading = false;
+    notifyListeners();
+    return true; // Selalu anggap berhasil
+  }
+
+  Future<bool> debugResetPassword() async {
+    _loading = true;
+    notifyListeners();
+    await Future.delayed(const Duration(seconds: 1));
+    _loading = false;
+    notifyListeners();
+    return true; // Selalu anggap berhasil
+  }
 }

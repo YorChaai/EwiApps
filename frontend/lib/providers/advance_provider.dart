@@ -369,7 +369,26 @@ class AdvanceProvider extends ChangeNotifier {
 
   Future<bool> approveAdvanceItem(int itemId, String action, {String notes = ''}) async {
     try {
-      await _api.approveAdvanceItem(itemId, action, notes: notes);
+      // Preserve existing notes if approving and no new notes provided
+      String finalNotes = notes;
+      if (action == 'approve' && finalNotes.isEmpty && _currentAdvance != null) {
+        final items = _currentAdvance!['items'] as List? ?? [];
+        final existing = items.firstWhere(
+          (e) => e['id'] == itemId,
+          orElse: () => null,
+        );
+        if (existing != null && existing['notes'] != null) {
+          finalNotes = existing['notes'].toString();
+        }
+      }
+
+      await _api.approveAdvanceItem(itemId, action, notes: finalNotes);
+      
+      // Reload current advance to sync state
+      if (_currentAdvance != null) {
+        await loadAdvance(_currentAdvance!['id']);
+      }
+      
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

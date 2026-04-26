@@ -526,7 +526,20 @@ class SettlementProvider extends ChangeNotifier {
     String notes = '',
   }) async {
     try {
-      await _api.approveExpense(expenseId, action, notes: notes);
+      // Preserve existing notes if approving and no new notes provided
+      String finalNotes = notes;
+      if (action == 'approve' && finalNotes.isEmpty && _currentSettlement != null) {
+        final expenses = _currentSettlement!['expenses'] as List? ?? [];
+        final existing = expenses.firstWhere(
+          (e) => e['id'] == expenseId,
+          orElse: () => null,
+        );
+        if (existing != null && existing['notes'] != null) {
+          finalNotes = existing['notes'].toString();
+        }
+      }
+
+      await _api.approveExpense(expenseId, action, notes: finalNotes);
       if (_currentSettlement != null) {
         await loadSettlement(_currentSettlement!['id']);
       }

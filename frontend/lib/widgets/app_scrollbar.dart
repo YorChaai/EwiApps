@@ -107,10 +107,10 @@ class _AppScrollbarState extends State<AppScrollbar> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final thumbColor = isDark 
-        ? AppTheme.accent.withValues(alpha: 0.9) 
+    final thumbColor = isDark
+        ? AppTheme.accent.withValues(alpha: 0.9)
         : AppTheme.primary.withValues(alpha: 0.9);
-    
+
     // Pertajam warna track agar terlihat jelas bedanya dengan background halaman
     final trackColor = isDark 
         ? Colors.white.withValues(alpha: 0.15) 
@@ -125,7 +125,7 @@ class _AppScrollbarState extends State<AppScrollbar> {
         final size = renderBox.size;
 
         bool inScrollbarArea = false;
-        const hitSlop = 24.0; 
+        const hitSlop = 24.0;
 
         if (widget.scrollDirection == Axis.vertical) {
           if (widget.scrollbarOrientation == ScrollbarOrientation.left) {
@@ -154,7 +154,7 @@ class _AppScrollbarState extends State<AppScrollbar> {
           final thumbOffset = (currentScroll / totalContent) * viewport;
 
           double touchCoord = widget.scrollDirection == Axis.vertical ? localPos.dy : localPos.dx;
-          
+
           if (touchCoord >= thumbOffset - 5 && touchCoord <= thumbOffset + thumbLength + 5) {
             return;
           }
@@ -168,7 +168,7 @@ class _AppScrollbarState extends State<AppScrollbar> {
         controller: widget.controller,
         thumbVisibility: widget.thumbVisibility,
         trackVisibility: false,
-        thickness: 24.0, 
+        thickness: 24.0,
         radius: widget.radius,
         interactive: true,
         notificationPredicate: widget.notificationPredicate ?? defaultScrollNotificationPredicate,
@@ -180,7 +180,7 @@ class _AppScrollbarState extends State<AppScrollbar> {
               controller: widget.controller,
               thumbVisibility: widget.thumbVisibility,
               trackVisibility: widget.trackVisibility,
-              thickness: 8.0, 
+              thickness: 8.0,
               radius: widget.radius,
               interactive: false,
               notificationPredicate: widget.notificationPredicate ?? defaultScrollNotificationPredicate,

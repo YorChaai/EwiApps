@@ -14,6 +14,7 @@ import '../../widgets/category_preview_dialog.dart';
 import '../../utils/currency_formatter.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/responsive_layout.dart';
+import '../../utils/app_dialogs.dart';
 import '../../services/api_service.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
@@ -81,6 +82,16 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       ),
       (route) => false,
     );
+  }
+
+  Future<void> _confirmLogout() async {
+    final confirmed = await AppDialogs.showExitConfirmation(
+      context,
+      isLogout: true,
+    );
+    if (confirmed && mounted) {
+      context.read<AuthProvider>().logout();
+    }
   }
 
   @override
@@ -239,7 +250,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     if (items.isNotEmpty) {
       actions.add(
         SettlementActionButton(
-          onPressed: () => _showAllItemsPreview(items),
+          onPressed: () => _showAllItemsPreview(items, adv),
           icon: Icons.list_alt_rounded,
           label: 'Pratinjau List',
           isOutlined: true,
@@ -260,7 +271,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     }
 
     if (canSubmit) {
-      final label = adv['status'] == 'revision_draft' ||
+      final label =
+          adv['status'] == 'revision_draft' ||
               adv['status'] == 'revision_rejected'
           ? 'Submit Revisi'
           : 'Submit';
@@ -365,6 +377,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
     return actions;
   }
+
   Widget _buildMobileAdvanceActionBar(
     BuildContext context,
     Map<String, dynamic> adv,
@@ -397,13 +410,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           bottom: BorderSide(color: AppTheme.divider.withValues(alpha: 0.6)),
         ),
       ),
-      child: AppScrollbar(
-        thumbVisibility: true,
-        interactive: true,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
             if (_selectedItemIds.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -425,9 +435,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Future<void> _startRevision() async {
     final prov = context.read<AdvanceProvider>();
@@ -471,7 +480,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         builder: (_) => SettlementDetailScreen(settlementId: settlement['id']),
       ),
     );
-    }
+  }
+
   Future<void> _viewSettlement(int settlementId) async {
     await Navigator.push(
       context,
@@ -674,10 +684,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
-        title: Text(
-          'Edit Kasbon',
-          style: TextStyle(color: _creamColor(ctx)),
-        ),
+        title: Text('Edit Kasbon', style: TextStyle(color: _creamColor(ctx))),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -713,6 +720,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         ],
       ),
     );
+
+    titleCtrl.dispose();
   }
 
   void _showAddItemDialog(BuildContext context, [Map<String, dynamic>? item]) {
@@ -720,7 +729,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final isEditing = item != null;
     final reportYear = context.read<AdvanceProvider>().reportYear;
     final now = DateTime.now();
-    final defaultDate = reportYear == 0 || reportYear == now.year ? now : DateTime(reportYear, 12, 31);
+    final defaultDate = reportYear == 0 || reportYear == now.year
+        ? now
+        : DateTime(reportYear, 12, 31);
     final descCtrl = TextEditingController(text: item?['description']);
     final amountCtrl = TextEditingController(
       text: item?['estimated_amount'] != null
@@ -802,7 +813,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               .whereType<int>()
               .toSet();
           // Filter out subcategory IDs that no longer belong to selected parent
-          selectedSubCategoryIds = selectedSubCategoryIds.intersection(childIds);
+          selectedSubCategoryIds = selectedSubCategoryIds.intersection(
+            childIds,
+          );
 
           return AlertDialog(
             backgroundColor: _cardColor(ctx),
@@ -822,320 +835,373 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                    const SizedBox(height: 10), // Ruang ekstra agar label terbaca
-                    // dropdown kategori utama
-                    DropdownButtonFormField<int>(
-                      decoration: const InputDecoration(
-                        labelText: 'Kategori Utama',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                      ),
-                      isExpanded: true,
-                      dropdownColor: _cardColor(ctx),
-                      style: TextStyle(color: _primaryText(ctx)),
-                      initialValue: effectiveParentId,
-                      items: categories.map((c) {
-                        final isPending = c['status'] == 'pending';
-                        return DropdownMenuItem<int>(
-                          value: c['id'] as int,
-                          child: Text(
-                            isPending ? '${c['name']} (Pending)' : c['name'],
-                            style: TextStyle(
-                              color: isPending ? AppTheme.warning : _primaryText(ctx),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (v) => setDialogState(() {
-                        selectedParentId = v;
-                        selectedSubCategoryIds = {}; // reset sub
-                      }),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Checklist Sub Kategori
-                    if (effectiveParentId != null) ...[
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          children.isNotEmpty ? 'Pilih Sub Kategori:' : 'Hanya Kategori Utama',
-                          style: TextStyle(
-                            color: _secondaryText(ctx),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      const SizedBox(
+                        height: 10,
+                      ), // Ruang ekstra agar label terbaca
+                      // dropdown kategori utama
+                      DropdownButtonFormField<int>(
+                        decoration: const InputDecoration(
+                          labelText: 'Kategori Utama',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (children.isNotEmpty)
-                        Container(
-                          constraints: const BoxConstraints(maxHeight: 200),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _dividerColor(ctx)),
-                          ),
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: children.map((c) {
-                                final subId = c['id'] as int;
-                                final isPending = c['status'] == 'pending';
-                                final isSelected = selectedSubCategoryIds.contains(subId);
-
-                                return CheckboxListTile(
-                                  value: isSelected,
-                                  activeColor: AppTheme.primary,
-                                  checkColor: Colors.white,
-                                  dense: true,
-                                  title: Text(
-                                    isPending ? '${c['name']} (Pending)' : c['name'],
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? AppTheme.primary
-                                          : (isPending ? AppTheme.warning : _primaryText(ctx)),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  onChanged: (val) {
-                                    setDialogState(() {
-                                      if (val == true) {
-                                        selectedSubCategoryIds.add(subId);
-                                      } else {
-                                        selectedSubCategoryIds.remove(subId);
-                                      }
-                                    });
-                                  },
-                                  controlAffinity: ListTileControlAffinity.leading,
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                );
-                              }).toList(),
+                        isExpanded: true,
+                        dropdownColor: _cardColor(ctx),
+                        style: TextStyle(color: _primaryText(ctx)),
+                        initialValue: effectiveParentId,
+                        items: categories.map((c) {
+                          final isPending = c['status'] == 'pending';
+                          return DropdownMenuItem<int>(
+                            value: c['id'] as int,
+                            child: Text(
+                              isPending ? '${c['name']} (Pending)' : c['name'],
+                              style: TextStyle(
+                                color: isPending
+                                    ? AppTheme.warning
+                                    : _primaryText(ctx),
+                              ),
                             ),
-                          ),
-                        )
-                      else
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Text(
-                            'Kategori ini tidak memiliki sub-kategori.',
-                            style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                          ),
-                        ),
-                    ],
-
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: TextButton.icon(
-                            onPressed: () => _showAddCategoryDialog(
-                              ctx,
-                              setDialogState,
-                              (newCat) {
-                                final parentID = newCat['parent_id'];
-                                final catID = newCat['id'] as int;
-                                setDialogState(() {
-                                  if (parentID != null) {
-                                    selectedParentId = parentID;
-                                    selectedSubCategoryIds.add(catID);
-                                  } else {
-                                    selectedParentId = catID;
-                                    selectedSubCategoryIds = {};
-                                  }
-                                });
-                              },
-                              parentId: selectedParentId,
-                            ),
-                            icon: const Icon(Icons.add_circle_outline, size: 16),
-                            label: Text(
-                              selectedParentId != null
-                                  ? 'Tambah Sub-Kategori Baru'
-                                  : 'Tambah Kategori Baru',
-                              style: const TextStyle(fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.category_rounded, color: AppTheme.primary, size: 20),
-                          tooltip: 'Pratinjau Struktur Kategori',
-                          onPressed: () => showCategoryPreviewDialog(context, context.read<SettlementProvider>().categories),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextField(
-                      controller: descCtrl,
-                      decoration: const InputDecoration(labelText: 'Deskripsi'),
-                      style: TextStyle(color: _primaryText(ctx)),
-                      onChanged: (val) {
-                        final lower = val.toLowerCase();
-                        for (final p in categories) {
-                          final pName = p['name'].toString().toLowerCase();
-                          if (lower.contains(pName)) {
-                            setDialogState(() {
-                              selectedParentId = p['id'];
-                            });
-                          }
-                          final childrenList = _asMapList(p['children'] as List?);
-                          for (final c in childrenList) {
-                            final cName = c['name'].toString().toLowerCase();
-                            if (lower.contains(cName)) {
-                              setDialogState(() {
-                                selectedParentId = p['id'];
-                                selectedSubCategoryIds.add(c['id'] as int);
-                              });
-                            }
-                          }
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: dateCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Tanggal',
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.calendar_today, size: 18),
-                        onPressed: () async {
-                          final initialDate =
-                              DateTime.tryParse(dateCtrl.text) ?? defaultDate;
-                          final d = await showDatePicker(
-                            context: ctx,
-                            initialDate: initialDate,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2100),
                           );
-                            if (d != null) {
-                              dateCtrl.text = DateFormat(
-                                'yyyy-MM-dd',
-                              ).format(d);
-                            }
-                          },
-                        ),
+                        }).toList(),
+                        onChanged: (v) => setDialogState(() {
+                          selectedParentId = v;
+                          selectedSubCategoryIds = {}; // reset sub
+                        }),
                       ),
-                      style: const TextStyle(color: AppTheme.textPrimary),
-                      readOnly: true,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: DropdownButtonFormField<String>(
-                            decoration: const InputDecoration(
-                              labelText: 'Mata Uang',
+                      const SizedBox(height: 12),
+
+                      // Checklist Sub Kategori
+                      if (effectiveParentId != null) ...[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            children.isNotEmpty
+                                ? 'Pilih Sub Kategori:'
+                                : 'Hanya Kategori Utama',
+                            style: TextStyle(
+                              color: _secondaryText(ctx),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
                             ),
-                            dropdownColor: AppTheme.card,
-                            style: const TextStyle(color: AppTheme.textPrimary),
-                            initialValue: selectedCurrency,
-                            items: const [
-                              DropdownMenuItem(
-                                value: 'IDR',
-                                child: Text('IDR'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'USD',
-                                child: Text('USD'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'EUR',
-                                child: Text('EUR'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'GBP',
-                                child: Text('GBP'),
-                              ),
-                              DropdownMenuItem(
-                                value: 'JPY',
-                                child: Text('JPY'),
-                              ),
-                            ],
-                            onChanged: (v) => setDialogState(() {
-                              selectedCurrency = v ?? 'IDR';
-                              if (selectedCurrency == 'IDR') {
-                                exchangeRateCtrl.text = '1';
-                              }
-                            }),
                           ),
                         ),
-                        if (selectedCurrency != 'IDR') ...[
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 3,
-                            child: TextField(
-                              controller: exchangeRateCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Kurs (ke IDR)',
+                        const SizedBox(height: 8),
+                        if (children.isNotEmpty)
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _dividerColor(ctx)),
+                            ),
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: children.map((c) {
+                                  final subId = c['id'] as int;
+                                  final isPending = c['status'] == 'pending';
+                                  final isSelected = selectedSubCategoryIds
+                                      .contains(subId);
+
+                                  return CheckboxListTile(
+                                    value: isSelected,
+                                    activeColor: AppTheme.primary,
+                                    checkColor: Colors.white,
+                                    dense: true,
+                                    title: Text(
+                                      isPending
+                                          ? '${c['name']} (Pending)'
+                                          : c['name'],
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? AppTheme.primary
+                                            : (isPending
+                                                  ? AppTheme.warning
+                                                  : _primaryText(ctx)),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    onChanged: (val) {
+                                      setDialogState(() {
+                                        if (val == true) {
+                                          selectedSubCategoryIds.add(subId);
+                                        } else {
+                                          selectedSubCategoryIds.remove(subId);
+                                        }
+                                      });
+                                    },
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  );
+                                }).toList(),
                               ),
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
+                            ),
+                          )
+                        else
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'Kategori ini tidak memiliki sub-kategori.',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 12,
                               ),
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [CurrencyInputFormatter()],
+                            ),
+                          ),
+                      ],
+
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: TextButton.icon(
+                              onPressed: () => _showAddCategoryDialog(
+                                ctx,
+                                setDialogState,
+                                (newCat) {
+                                  final parentID = newCat['parent_id'];
+                                  final catID = newCat['id'] as int;
+                                  setDialogState(() {
+                                    if (parentID != null) {
+                                      selectedParentId = parentID;
+                                      selectedSubCategoryIds.add(catID);
+                                    } else {
+                                      selectedParentId = catID;
+                                      selectedSubCategoryIds = {};
+                                    }
+                                  });
+                                },
+                                parentId: selectedParentId,
+                              ),
+                              icon: const Icon(
+                                Icons.add_circle_outline,
+                                size: 16,
+                              ),
+                              label: Text(
+                                selectedParentId != null
+                                    ? 'Tambah Sub-Kategori Baru'
+                                    : 'Tambah Kategori Baru',
+                                style: const TextStyle(fontSize: 12),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.category_rounded,
+                              color: AppTheme.primary,
+                              size: 20,
+                            ),
+                            tooltip: 'Pratinjau Struktur Kategori',
+                            onPressed: () => showCategoryPreviewDialog(
+                              context,
+                              context.read<SettlementProvider>().categories,
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    TextField(
-                      controller: amountCtrl,
-                      decoration: InputDecoration(
-                        labelText: 'Amount ($selectedCurrency)',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
-                        hintText: '10.000',
-                        hintStyle: TextStyle(color: _secondaryText(ctx).withValues(alpha: 0.5)),
                       ),
-                      style: TextStyle(color: _primaryText(ctx)),
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [CurrencyInputFormatter()],
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final result = await FilePicker.pickFiles(
-                          type: FileType.custom,
-                          allowedExtensions: [
-                            'jpg',
-                            'jpeg',
-                            'png',
-                            'pdf',
-                            'webp',
-                          ],
-                        );
-                        if (result != null) {
-                          setDialogState(() {
-                            selectedFilePath = result.files.single.path;
-                            selectedFileName = result.files.single.name;
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.upload_file_rounded),
-                      label: Text(
-                        selectedFileName ??
-                            (item?['evidence_filename'] ??
-                                'Upload Berkas (opsional)'),
+                      TextField(
+                        controller: descCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Deskripsi',
+                        ),
+                        style: TextStyle(color: _primaryText(ctx)),
+                        onChanged: (val) {
+                          final lower = val.toLowerCase();
+                          for (final p in categories) {
+                            final pName = p['name'].toString().toLowerCase();
+                            if (lower.contains(pName)) {
+                              setDialogState(() {
+                                selectedParentId = p['id'];
+                              });
+                            }
+                            final childrenList = _asMapList(
+                              p['children'] as List?,
+                            );
+                            for (final c in childrenList) {
+                              final cName = c['name'].toString().toLowerCase();
+                              if (lower.contains(cName)) {
+                                setDialogState(() {
+                                  selectedParentId = p['id'];
+                                  selectedSubCategoryIds.add(c['id'] as int);
+                                });
+                              }
+                            }
+                          }
+                        },
                       ),
-                    ),
-                    if (selectedFileName != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '✓ $selectedFileName',
-                          style: const TextStyle(
-                            color: AppTheme.success,
-                            fontSize: 12,
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: dateCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Tanggal',
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.calendar_today, size: 18),
+                            onPressed: () async {
+                              final initialDate =
+                                  DateTime.tryParse(dateCtrl.text) ??
+                                  defaultDate;
+                              final d = await showDatePicker(
+                                context: ctx,
+                                initialDate: initialDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2100),
+                              );
+                              if (d != null) {
+                                dateCtrl.text = DateFormat(
+                                  'yyyy-MM-dd',
+                                ).format(d);
+                              }
+                            },
                           ),
                         ),
+                        style: const TextStyle(color: AppTheme.textPrimary),
+                        readOnly: true,
                       ),
-                  ],
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: DropdownButtonFormField<String>(
+                              decoration: const InputDecoration(
+                                labelText: 'Mata Uang',
+                              ),
+                              dropdownColor: AppTheme.card,
+                              style: const TextStyle(
+                                color: AppTheme.textPrimary,
+                              ),
+                              initialValue: selectedCurrency,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'IDR',
+                                  child: Text('IDR'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'USD',
+                                  child: Text('USD'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'EUR',
+                                  child: Text('EUR'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'GBP',
+                                  child: Text('GBP'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'JPY',
+                                  child: Text('JPY'),
+                                ),
+                              ],
+                              onChanged: (v) => setDialogState(() {
+                                selectedCurrency = v ?? 'IDR';
+                                if (selectedCurrency == 'IDR') {
+                                  exchangeRateCtrl.text = '1';
+                                }
+                              }),
+                            ),
+                          ),
+                          if (selectedCurrency != 'IDR') ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              flex: 3,
+                              child: TextField(
+                                controller: exchangeRateCtrl,
+                                decoration: const InputDecoration(
+                                  labelText: 'Kurs (ke IDR)',
+                                ),
+                                style: const TextStyle(
+                                  color: AppTheme.textPrimary,
+                                ),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [CurrencyInputFormatter()],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      TextField(
+                        controller: amountCtrl,
+                        decoration: InputDecoration(
+                          labelText: 'Amount ($selectedCurrency)',
+                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                          hintText: '10.000',
+                          hintStyle: TextStyle(
+                            color: _secondaryText(ctx).withValues(alpha: 0.5),
+                          ),
+                        ),
+                        style: TextStyle(color: _primaryText(ctx)),
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [CurrencyInputFormatter()],
+                      ),
+                      const SizedBox(height: 16),
+                      // Tampilkan evidence lama jika ada (mode edit)
+                      if (isEditing && item['evidence_filename'] != null && selectedFileName == null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.attach_file_rounded, size: 14, color: AppTheme.textSecondary),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Bukti saat ini: ${item['evidence_filename']}',
+                                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          try {
+                            final result = await FilePicker.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'webp'],
+                            );
+                            if (result != null && result.files.single.path != null) {
+                              setDialogState(() {
+                                selectedFilePath = result.files.single.path;
+                                selectedFileName = result.files.single.name;
+                              });
+                            }
+                          } catch (e) {
+                            debugPrint('FilePicker Error: $e');
+                          }
+                        },
+                        icon: const Icon(Icons.upload_file_rounded),
+                        label: Text(
+                          selectedFileName ??
+                              (isEditing ? 'Ganti / Tambah Bukti (opsional)' : 'Upload Bukti (opsional)'),
+                        ),
+                      ),
+                      if (selectedFileName != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '✓ $selectedFileName',
+                            style: const TextStyle(
+                              color: AppTheme.success,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            ),
             ),
             actions: [
               if (isEditing)
@@ -1172,7 +1238,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         final children = _asMapList(
                           parent['children'] as List?,
                         );
-                        if (children.isNotEmpty && selectedSubCategoryIds.isEmpty) {
+                        if (children.isNotEmpty &&
+                            selectedSubCategoryIds.isEmpty) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Pilih minimal satu Sub-Kategori'),
@@ -1210,13 +1277,21 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           );
                           return;
                         }
-                        final rateForValidation = double.tryParse(exchangeRateCtrl.text.replaceAll('.', '').replaceAll(',', '')) ?? 1.0;
+                        final rateForValidation =
+                            double.tryParse(
+                              exchangeRateCtrl.text
+                                  .replaceAll('.', '')
+                                  .replaceAll(',', ''),
+                            ) ??
+                            1.0;
                         final totalIdrValidation = amount * rateForValidation;
 
                         if (totalIdrValidation <= 100) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Nominal ekuivalen Rupiah harus lebih dari Rp 100'),
+                              content: Text(
+                                'Nominal ekuivalen Rupiah harus lebih dari Rp 100',
+                              ),
                               backgroundColor: AppTheme.danger,
                             ),
                           );
@@ -1227,29 +1302,33 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         setState(() => _isSaving = true);
 
                         try {
-                          final firstSubId = selectedSubCategoryIds.isNotEmpty ? selectedSubCategoryIds.first : null;
+                          final firstSubId = selectedSubCategoryIds.isNotEmpty
+                              ? selectedSubCategoryIds.first
+                              : null;
                           final finalCatId = firstSubId ?? selectedParentId!;
                           final subcatIds = selectedSubCategoryIds.toList();
                           final prov = context.read<AdvanceProvider>();
 
                           bool success;
                           if (item == null) {
-                            final items = prov.currentAdvance?['items'] as List? ?? [];
+                            final items =
+                                prov.currentAdvance?['items'] as List? ?? [];
                             final isFirstItem = items.isEmpty;
 
                             if (isFirstItem) {
-                              success = await prov.saveFirstItemAndCommitAdvance(
-                                advanceId: widget.advanceId,
-                                categoryId: finalCatId,
-                                categoryIds: subcatIds,
-                                desc: descCtrl.text.trim(),
-                                amount: amount,
-                                date: dateCtrl.text,
-                                source: selectedSource,
-                                currency: selectedCurrency,
-                                currencyExchange: rateForValidation,
-                                filePath: selectedFilePath,
-                              );
+                              success = await prov
+                                  .saveFirstItemAndCommitAdvance(
+                                    advanceId: widget.advanceId,
+                                    categoryId: finalCatId,
+                                    categoryIds: subcatIds,
+                                    desc: descCtrl.text.trim(),
+                                    amount: amount,
+                                    date: dateCtrl.text,
+                                    source: selectedSource,
+                                    currency: selectedCurrency,
+                                    currencyExchange: rateForValidation,
+                                    filePath: selectedFilePath,
+                                  );
                             } else {
                               success = await prov.addAdvanceItem(
                                 widget.advanceId,
@@ -1501,7 +1580,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   // Handle notification tap - navigate ke path yang dituju
                   await _handleNotificationTap(path);
                 },
-                onLogout: () => auth.logout(),
+                onLogout: _confirmLogout,
                 isMini: false,
                 isExpanded: _sidebarExpanded,
                 onToggleExpand: () {
@@ -1538,7 +1617,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 auth.fullName.isNotEmpty
                                     ? auth.fullName[0].toUpperCase()
                                     : 'U',
-                                style: const TextStyle(                                  color: Colors.white,
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 12,
                                 ),
@@ -1615,12 +1695,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           // Logout Button
                           IconButton(
                             icon: const Icon(Icons.logout_rounded, size: 20),
-                            onPressed: () => auth.logout(),
+                            onPressed: _confirmLogout,
                             color: _bodyColor(context),
                             tooltip: 'Logout',
                           ),
                           const SizedBox(width: 8),
-                        ],                      )
+                        ],
+                      )
                     : AppBar(
                         title: Text(
                           adv != null
@@ -1707,13 +1788,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 canStartRevision,
                                 canShowDownloadButtons,
                               ),
-                              _buildContent(
-                                context,
-                                adv,
-                                auth,
-                                prov,
-                                items,
-                              ),
+                              _buildContent(context, adv, auth, prov, items),
                             ],
                           ),
                         ),
@@ -1724,13 +1799,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         interactive: true,
                         child: SingleChildScrollView(
                           controller: _mainScrollController,
-                          child: _buildContent(
-                            context,
-                            adv,
-                            auth,
-                            prov,
-                            items,
-                          ),
+                          child: _buildContent(context, adv, auth, prov, items),
                         ),
                       ),
                 floatingActionButton: canAddItems
@@ -1775,7 +1844,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         ].contains(adv['status']);
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final useCompact = screenWidth < 600 || Theme.of(context).platform == TargetPlatform.android;
+    final useCompact =
+        screenWidth < 600 ||
+        Theme.of(context).platform == TargetPlatform.android;
 
     return Padding(
       padding: EdgeInsets.all(useCompact ? 16 : 24),
@@ -1785,16 +1856,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 650;
-              final currentTotal = items.fold(
-                0.0,
-                (sum, item) {
-                  final estimated = (item['estimated_amount'] ?? 0) as num;
-                  final kurs = (item['currency_exchange'] ?? 1.0) as num;
-                  final idrStr = item['idr_amount'];
-                  final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
-                  return sum + idr.toDouble();
-                },
-              );
+              final currentTotal = items.fold(0.0, (sum, item) {
+                final estimated = (item['estimated_amount'] ?? 0) as num;
+                final kurs = (item['currency_exchange'] ?? 1.0) as num;
+                final idrStr = item['idr_amount'];
+                final idr = (idrStr is num && idrStr > 0)
+                    ? idrStr
+                    : (estimated * kurs);
+                return sum + idr.toDouble();
+              });
 
               final cards = [
                 SummaryCard(
@@ -1912,7 +1982,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             _buildEmptyState(canEditItems)
           else
             _buildItemsTable(items, adv, auth),
-          SizedBox(height: useCompact ? 80 : 100), // Padding extra agar tidak tertabrak FAB
+          SizedBox(
+            height: useCompact ? 80 : 100,
+          ), // Padding extra agar tidak tertabrak FAB
         ],
       ),
     );
@@ -1984,10 +2056,14 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
                   dataRowMaxHeight: double.infinity,
-                  headingRowColor: WidgetStateProperty.all(_surfaceColor(context)),
+                  headingRowColor: WidgetStateProperty.all(
+                    _surfaceColor(context),
+                  ),
                   dataRowColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.hovered)) {
-                      return _isDark(context) ? AppTheme.cardHover : AppTheme.lightCardHover;
+                      return _isDark(context)
+                          ? AppTheme.cardHover
+                          : AppTheme.lightCardHover;
                     }
                     return _cardColor(context);
                   }),
@@ -2049,14 +2125,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     ),
                     DataColumn(
                       label: Text(
-                        'Berkas',
+                        'Evidence',
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: _creamColor(context),
                         ),
                       ),
-                    ),
-                    DataColumn(
+                    ),                    DataColumn(
                       label: Text(
                         'Aksi',
                         style: TextStyle(
@@ -2137,16 +2212,27 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         DataCell(
                           Builder(
                             builder: (context) {
-                              final currency = (item['currency'] ?? 'IDR').toString().toUpperCase();
-                              final estimated = (item['estimated_amount'] ?? 0) as num;
-                              final kurs = (item['currency_exchange'] ?? 1.0) as num;
+                              final currency = (item['currency'] ?? 'IDR')
+                                  .toString()
+                                  .toUpperCase();
+                              final estimated =
+                                  (item['estimated_amount'] ?? 0) as num;
+                              final kurs =
+                                  (item['currency_exchange'] ?? 1.0) as num;
                               final idrStr = item['idr_amount'];
-                              final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
+                              final idr = (idrStr is num && idrStr > 0)
+                                  ? idrStr
+                                  : (estimated * kurs);
 
                               if (currency == 'IDR') {
-                                return Text('Rp ${_currencyFormat.format(estimated)}');
+                                return Text(
+                                  'Rp ${_currencyFormat.format(estimated)}',
+                                );
                               }
-                              final foreignFormat = NumberFormat('#,##0.##', 'en_US');
+                              final foreignFormat = NumberFormat(
+                                '#,##0.##',
+                                'en_US',
+                              );
                               return Text(
                                 '$currency ${foreignFormat.format(estimated)}\n(Rp ${_currencyFormat.format(idr)})',
                               );
@@ -2167,7 +2253,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 statusColor = AppTheme.danger;
                               }
 
-                              final hasNotes = (itemStatus == 'REJECTED' ||
+                              final hasNotes =
+                                  (itemStatus == 'REJECTED' ||
                                       itemStatus == 'PENDING') &&
                                   item['notes'] != null &&
                                   (item['notes'] as String).isNotEmpty;
@@ -2191,7 +2278,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                   borderRadius: BorderRadius.circular(6),
                                   border: hasComments
                                       ? Border.all(
-                                          color: statusColor.withValues(alpha: 0.3),
+                                          color: statusColor.withValues(
+                                            alpha: 0.3,
+                                          ),
                                         )
                                       : null,
                                 ),
@@ -2284,7 +2373,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                         tooltip: 'Approve Item',
                                         onPressed: () => _approveItem(itemId),
                                       ),
-                                    if (itemStatus == 'pending' || itemStatus == 'approved')
+                                    if (itemStatus == 'pending' ||
+                                        itemStatus == 'approved')
                                       IconButton(
                                         icon: const Icon(
                                           Icons.close_rounded,
@@ -2295,7 +2385,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                         onPressed: () => _rejectItem(itemId),
                                       ),
                                   ],
-                                )                              : previewBtn,
+                                )
+                              : previewBtn,
                         ),
                       ],
                     );
@@ -2310,15 +2401,19 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
   }
 
   void _showItemPreview(Map<String, dynamic> item) {
+    final adv = context.read<AdvanceProvider>().currentAdvance;
     showItemDetailPreviewDialog(
       context: context,
-      item: item,
+      item: {...item, 'batch_notes': adv?['notes']},
       title: 'Rincian Item Kasbon',
       onViewEvidence: (path, name) => _showEvidence(path, name),
     );
   }
 
-  void _showAllItemsPreview(List<Map<String, dynamic>> items) {
+  void _showAllItemsPreview(
+    List<Map<String, dynamic>> items,
+    Map<String, dynamic> parent,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) {
@@ -2328,17 +2423,28 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
         return AlertDialog(
           backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               const Icon(Icons.list_alt_rounded, color: AppTheme.accent),
               const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Pratinjau Semua Item',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+              Expanded(
+                child: Builder(builder: (context) {
+                  String displayTitle = parent['title'] ?? 'Pratinjau Item';
+                  final type = (parent['settlement_type'] ?? 'batch').toString().toLowerCase();
+
+                  if (type == 'single' && items.isNotEmpty) {
+                    displayTitle = items.first['description'] ?? displayTitle;
+                  }
+
+                  return Text(
+                    displayTitle,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  );
+                }),
               ),
               IconButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -2349,72 +2455,117 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           content: SizedBox(
             width: screenWidth > 800 ? 700 : screenWidth * 0.95,
             height: screenHeight * 0.8,
-            child: AppScrollbar(
-              thumbVisibility: true,
-              interactive: true,
-              child: ListView.separated(
-                primary: true,
-                padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
-                itemCount: items.length,
-                separatorBuilder: (c, i) => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Divider(),
+            child: Column(
+              children: [
+                Expanded(                  child: AppScrollbar(
+                    thumbVisibility: true,
+                    interactive: true,
+                    child: ListView.separated(
+                      primary: true,
+                      padding: const EdgeInsets.fromLTRB(0, 0, 16, 10),
+                      itemCount: items.length,
+                      separatorBuilder: (c, i) => const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Divider(),
+                      ),
+                      itemBuilder: (c, i) {
+                        final item = items[i];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'ITEM #${i + 1}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (item['title'] != null &&
+                                item['title'].toString().isNotEmpty)
+                              _buildPreviewRow('Judul', item['title'], isDark),
+                            _buildPreviewRow(
+                              'Tanggal',
+                              item['date'] ?? '-',
+                              isDark,
+                            ),
+                            _buildPreviewRow(
+                              'Kategori',
+                              item['category_name'] ?? '-',
+                              isDark,
+                            ),
+                            _buildPreviewRow(
+                              'Estimasi',
+                              _formatItemAmount(item),
+                              isDark,
+                              valueColor: AppTheme.primary,
+                            ),
+                            _buildPreviewRow(
+                              'Deskripsi',
+                              item['description'] ?? '-',
+                              isDark,
+                            ),
+                            _buildPreviewRow(
+                              'Status',
+                              (item['status'] ?? 'pending')
+                                  .toString()
+                                  .toUpperCase(),
+                              isDark,
+                              valueColor: _statusColor(
+                                (item['status'] ?? 'pending').toString(),
+                              ),
+                            ),
+                            if (item['notes'] != null &&
+                                item['notes'].toString().isNotEmpty)
+                              _buildPreviewRow(
+                                'Catatan',
+                                item['notes'],
+                                isDark,
+                                isNotes: true,
+                              ),
+                            if (item['evidence_path'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: TextButton.icon(
+                                  onPressed: () => _showEvidence(
+                                    item['evidence_path'],
+                                    item['evidence_filename'],
+                                  ),
+                                  icon: const Icon(
+                                    Icons.image_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Lihat Bukti',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppTheme.primary,
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 30),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
-                itemBuilder: (c, i) {
-                  final item = items[i];
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'ITEM #${i + 1}',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildPreviewRow('Tanggal', item['date'] ?? '-', isDark),
-                      _buildPreviewRow(
-                        'Kategori',
-                        item['category_name'] ?? '-',
-                        isDark,
-                      ),
-                      _buildPreviewRow(
-                        'Estimasi',
-                        _formatItemAmount(item),
-                        isDark,
-                        valueColor: AppTheme.primary,
-                      ),
-                      _buildPreviewRow(
-                        'Deskripsi',
-                        item['description'] ?? '-',
-                        isDark,
-                      ),
-                      _buildPreviewRow(
-                        'Status',
-                        (item['status'] ?? 'pending')
-                            .toString()
-                            .toUpperCase(),
-                        isDark,
-                        valueColor: _statusColor(
-                          (item['status'] ?? 'pending').toString(),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+              ],
             ),
           ),
           actions: [
@@ -2447,7 +2598,86 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     String value,
     bool isDark, {
     Color? valueColor,
+    bool isNotes = false,
   }) {
+    if (isNotes) {
+      final comments = _getCommentsFromNotes(value);
+      if (comments.isEmpty) return const SizedBox.shrink();
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 80,
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isDark
+                      ? AppTheme.textSecondary
+                      : AppTheme.lightTextSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const Text(
+              ' -> ',
+              style: TextStyle(color: AppTheme.primary, fontSize: 12),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: () => _showCommentsDialog(comments, isDark),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.comment_rounded,
+                            size: 18,
+                            color: AppTheme.accent,
+                          ),
+                        ),
+                        if (comments.isNotEmpty)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: AppTheme.danger,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 14,
+                                minHeight: 14,
+                              ),
+                              child: Text(
+                                comments.length.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -2465,20 +2695,141 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               ),
             ),
           ),
-          const Text(' -> ',
-              style: TextStyle(color: AppTheme.primary, fontSize: 12)),
+          const Text(
+            ' -> ',
+            style: TextStyle(color: AppTheme.primary, fontSize: 12),
+          ),
           Expanded(
-            child: SelectableText(
+            child: Text(
               value,
               style: TextStyle(
-                color: valueColor ??
-                    (isDark
-                        ? AppTheme.textPrimary
-                        : AppTheme.lightTextPrimary),
+                color:
+                    valueColor ??
+                    (isDark ? AppTheme.cream : AppTheme.lightTextPrimary),
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<String> _getCommentsFromNotes(String notes) {
+    if (notes.isEmpty) return [];
+
+    final systemPrefixes = [
+      'Disetujui oleh',
+      'Imported from',
+      'Subcategory:',
+      'Approved by',
+      'System:',
+    ];
+
+    try {
+      final decoded = json.decode(notes);
+      if (decoded is List) {
+        final List<String> comments = [];
+        for (var item in decoded) {
+          final text = (item is Map ? item['text'] : item).toString();
+
+          bool isSystem = false;
+          for (var prefix in systemPrefixes) {
+            if (text.trim().startsWith(prefix)) {
+              isSystem = true;
+              break;
+            }
+          }
+
+          if (!isSystem && text.trim().isNotEmpty) {
+            comments.add(text.trim());
+          }
+        }
+        return comments;
+      }
+      return [];
+    } catch (_) {
+      bool isSystem = false;
+      for (var prefix in systemPrefixes) {
+        if (notes.trim().startsWith(prefix)) {
+          isSystem = true;
+          break;
+        }
+      }
+      return isSystem || notes.trim().isEmpty ? [] : [notes.trim()];
+    }
+  }
+
+  void _showCommentsDialog(List<String> comments, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.comment_rounded, color: AppTheme.accent),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Riwayat Komentar',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: comments.length,
+            separatorBuilder: (c, i) => const Divider(),
+            itemBuilder: (c, i) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.accent.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text(
+                      (i + 1).toString(),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.accent,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SelectableText(
+                      comments[i],
+                      style: TextStyle(
+                        color: isDark
+                            ? AppTheme.cream
+                            : AppTheme.lightTextPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Tutup'),
           ),
         ],
       ),
@@ -2577,6 +2928,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           final idx = entry.key;
                           final ctrl = entry.value;
                           return Padding(
+                            key: ValueKey(ctrl),
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
                               children: [
@@ -2615,10 +2967,18 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                       color: AppTheme.danger,
                                       size: 20,
                                     ),
-                                    onPressed: () => setDialogState(() {
-                                      controllers[idx].dispose();
-                                      controllers.removeAt(idx);
-                                    }),
+                                    onPressed: () {
+                                      final removedCtrl = controllers[idx];
+                                      setDialogState(() {
+                                        controllers.removeAt(idx);
+                                      });
+                                      Future.delayed(
+                                        const Duration(milliseconds: 100),
+                                        () {
+                                          removedCtrl.dispose();
+                                        },
+                                      );
+                                    },
                                   ),
                               ],
                             ),
@@ -2647,9 +3007,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             actions: [
               TextButton(
                 onPressed: () {
-                  for (var c in controllers) {
-                    c.dispose();
-                  }
                   Navigator.pop(ctx, false);
                 },
                 child: const Text('Batal'),
@@ -2671,43 +3028,51 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     );
 
     if (result == true) {
-      if (!mounted) return;
+      if (!mounted) {
+        for (var c in controllers) {
+          try {
+            c.dispose();
+          } catch (_) {}
+        }
+        return;
+      }
       final reasons = controllers
           .map((c) => c.text.trim())
           .where((t) => t.isNotEmpty)
           .map((t) => {'text': t, 'checked': false})
           .toList();
 
-      for (var c in controllers) {
-        c.dispose();
-      }
-
-      if (reasons.isEmpty) return;
-
-      final notesJson = jsonEncode(reasons);
-
-      final prov = context.read<AdvanceProvider>();
-      final success = await prov.approveAdvanceItem(
-        itemId,
-        'reject',
-        notes: notesJson,
-      );
-      if (!mounted) return;
-      if (success) {
-        prov.loadAdvance(widget.advanceId);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(prov.error ?? 'Gagal reject item'),
-            backgroundColor: AppTheme.danger,
-          ),
+      if (reasons.isNotEmpty) {
+        final notesJson = jsonEncode(reasons);
+        final prov = context.read<AdvanceProvider>();
+        final success = await prov.approveAdvanceItem(
+          itemId,
+          'reject',
+          notes: notesJson,
         );
-      }
-    } else {
-      for (var c in controllers) {
-        c.dispose();
+        if (mounted) {
+          if (success) {
+            prov.loadAdvance(widget.advanceId);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(prov.error ?? 'Gagal reject item'),
+                backgroundColor: AppTheme.danger,
+              ),
+            );
+          }
+        }
       }
     }
+
+    // Always dispose after everything is done
+    Future.delayed(const Duration(milliseconds: 300), () {
+      for (var c in controllers) {
+        try {
+          c.dispose();
+        } catch (_) {}
+      }
+    });
   }
 
   void _showEvidence(String path, String? filename) {
@@ -2993,6 +3358,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         ],
       ),
     );
+
+    nameCtrl.dispose();
   }
 
   void _showChecklistDialog(
@@ -3038,57 +3405,63 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                        ...localChecklist.asMap().entries.map((entry) {
-                          final item = entry.value;
-                          return _buildChecklistTile(
-                            item,
-                            canEdit,
-                            setModalState,
-                          );
-                        }),
-                        if (canAddComment)
-                          _buildAddCommentButton(localChecklist, setModalState),
-                        if (!canEdit && isSubmitted)
-                          Container(
-                            margin: const EdgeInsets.only(top: 16),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                          ...localChecklist.asMap().entries.map((entry) {
+                            final item = entry.value;
+                            return _buildChecklistTile(
+                              item,
+                              canEdit,
+                              setModalState,
+                            );
+                          }),
+                          if (canAddComment)
+                            _buildAddCommentButton(
+                              localChecklist,
+                              setModalState,
                             ),
-                            decoration: BoxDecoration(
-                              color: AppTheme.warning.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: AppTheme.warning.withValues(alpha: 0.3),
+                          if (!canEdit && isSubmitted)
+                            Container(
+                              margin: const EdgeInsets.only(top: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  Icons.info_outline,
-                                  size: 16,
-                                  color: AppTheme.warning,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Kasbon disubmit, Move to Draft untuk edit',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color:
-                                          AppTheme.warning.withValues(alpha: 0.9),
-                                    ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.warning.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppTheme.warning.withValues(
+                                    alpha: 0.3,
                                   ),
                                 ),
-                              ],
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    size: 16,
+                                    color: AppTheme.warning,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Kasbon disubmit, Move to Draft untuk edit',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.warning.withValues(
+                                          alpha: 0.9,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             ),
             actions: [
               TextButton(
@@ -3128,13 +3501,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             text = e;
           }
 
-          // FILTER: Jangan tampilkan pesan default manager
-          final lowerText = text.toLowerCase();
-          if (lowerText.contains('disetujui') ||
-              lowerText.contains('disetujui oleh manager')) {
-            continue;
-          }
-
           if (text.isNotEmpty) {
             local.add({'text': text, 'checked': checked});
           }
@@ -3143,6 +3509,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     } catch (_) {}
     return local;
   }
+
   Widget _buildChecklistTile(
     Map<String, dynamic> item,
     bool canEdit,

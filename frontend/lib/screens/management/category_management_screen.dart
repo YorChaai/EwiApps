@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/settlement_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_scrollbar.dart';
+import 'category_tabular_screen.dart';
 
 // kelola kategori
 class CategoryManagementView extends StatefulWidget {
@@ -248,13 +249,18 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                           ),
                         ),
                         TextButton.icon(
-                          onPressed: () => _showGroupManagementDialog(context),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CategoryTabularScreen(),
+                            ),
+                          ),
                           icon: Icon(
-                            Icons.swap_horiz_rounded,
+                            Icons.table_chart_rounded,
                             size: useCompact ? 16 : 18,
                           ),
                           label: Text(
-                            'Atur Grup',
+                            'Kategori Tabular',
                             style: TextStyle(fontSize: useCompact ? 11 : 13),
                           ),
                           style: TextButton.styleFrom(
@@ -278,196 +284,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
     );
   }
 
-  void _showGroupManagementDialog(BuildContext context) {
-    final prov = context.read<SettlementProvider>();
-    // Clone categories to avoid direct modification before save
-    List<Map<String, dynamic>> localCats = List<Map<String, dynamic>>.from(
-      prov.categories.map((c) => {...c}),
-    );
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final langsung =
-              localCats
-                  .where((c) => c['main_group'] == 'BEBAN LANGSUNG')
-                  .toList()
-                ..sort(
-                  (a, b) =>
-                      (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0),
-                );
-          final admin =
-              localCats
-                  .where((c) => c['main_group'] != 'BEBAN LANGSUNG')
-                  .toList()
-                ..sort(
-                  (a, b) =>
-                      (a['sort_order'] ?? 0).compareTo(b['sort_order'] ?? 0),
-                );
-
-          return AlertDialog(
-            backgroundColor: _cardColor(context),
-            title: Text(
-              'Atur Grup & Urutan',
-              style: TextStyle(color: _titleColor(context)),
-            ),
-            content: SizedBox(
-              width: 800,
-              height: 500,
-              child: Row(
-                children: [
-                  // Column 1: Beban Langsung
-                  Expanded(
-                    child: _buildGroupColumn(
-                      'BEBAN LANGSUNG',
-                      langsung,
-                      AppTheme.accent,
-                      (cat) {
-                        setDialogState(() {
-                          cat['main_group'] = 'BIAYA ADMINISTRASI DAN UMUM';
-                        });
-                      },
-                      (list) {
-                        setDialogState(() {
-                          // No-op here, reorder is handled by ReorderableListView
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Column 2: Administrasi
-                  Expanded(
-                    child: _buildGroupColumn(
-                      'BIAYA ADMINISTRASI DAN UMUM',
-                      admin,
-                      AppTheme.primary,
-                      (cat) {
-                        setDialogState(() {
-                          cat['main_group'] = 'BEBAN LANGSUNG';
-                        });
-                      },
-                      (list) {
-                        setDialogState(() {
-                          // No-op here
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Batal'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  // Re-calculate sort orders globally before saving
-                  int order = 0;
-                  for (var cat in langsung) {
-                    cat['sort_order'] = order++;
-                  }
-                  for (var cat in admin) {
-                    cat['sort_order'] = order++;
-                  }
-
-                  final success = await prov.reorderCategories(localCats);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  if (success && context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Urutan & grup disimpan âœ“'),
-                        backgroundColor: AppTheme.success,
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Simpan'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildGroupColumn(
-    String title,
-    List<Map<String, dynamic>> items,
-    Color color,
-    Function(Map<String, dynamic>) onMove,
-    Function(List<Map<String, dynamic>>) onReorder,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '${items.length}',
-                style: TextStyle(color: color, fontSize: 12),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: ReorderableListView(
-            onReorder: (oldIndex, newIndex) {
-              if (newIndex > oldIndex) newIndex--;
-              final item = items.removeAt(oldIndex);
-              items.insert(newIndex, item);
-              onReorder(items);
-            },
-            children: items
-                .map(
-                  (cat) => Card(
-                    key: ValueKey(cat['id']),
-                    color: _surfaceColor(context),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: ListTile(
-                      dense: true,
-                      title: Text(
-                        cat['name'],
-                        style: TextStyle(
-                          color: _primaryText(context),
-                          fontSize: 13,
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                        onPressed: () => onMove(cat),
-                        tooltip: 'Pindah ke grup lain',
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _buildCategoryTile(Map<String, dynamic> cat) {
     final children = (cat['children'] as List?) ?? [];
@@ -560,8 +377,7 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                         size: isNarrow ? 14 : 16,
                         color: AppTheme.accent,
                       ),
-                      onPressed: () =>
-                          _showEditCategoryDialog(context, child),
+                      onPressed: () => _showEditCategoryDialog(context, child),
                     ),
                     if (!isNarrow) const SizedBox(width: 4),
                     IconButton(

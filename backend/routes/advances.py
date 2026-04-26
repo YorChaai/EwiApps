@@ -541,6 +541,27 @@ def update_advance_item(item_id):
     if 'status' in data:
         item.status = data['status']
 
+    # Handle evidence file upload (jika ada file baru)
+    if 'evidence' in request.files:
+        file = request.files['evidence']
+        if file and file.filename and allowed_file(file.filename):
+            # Hapus file lama jika ada
+            if item.evidence_path:
+                delete_evidence_file(item.evidence_path)
+            ext = file.filename.rsplit('.', 1)[1].lower()
+            unique_name = f"{uuid.uuid4().hex}.{ext}"
+            now = datetime.now()
+            year_month = f"{now.year}/{now.month:02d}"
+            upload_dir = os.path.join(
+                current_app.config['UPLOAD_FOLDER'],
+                'receipts',
+                year_month,
+            )
+            os.makedirs(upload_dir, exist_ok=True)
+            file.save(os.path.join(upload_dir, unique_name))
+            item.evidence_path = f"receipts/{year_month}/{unique_name}"
+            item.evidence_filename = file.filename
+
     db.session.commit()
 
     # Auto-sync title for single type

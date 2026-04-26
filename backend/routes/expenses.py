@@ -42,13 +42,18 @@ def _parse_checklist_notes(notes_value):
 
 def _parse_category_ids(form_data):
     """Helper untuk mengambil daftar category_id dari form atau json"""
-    category_id = form_data.get('category_id', type=int)
+    raw_id = form_data.get('category_id')
+    try:
+        category_id = int(raw_id) if raw_id is not None else None
+    except (ValueError, TypeError):
+        category_id = None
+
     category_ids_raw = form_data.get('category_ids')
     category_ids = []
     if category_ids_raw:
         try:
             category_ids = json.loads(category_ids_raw)
-        except:
+        except Exception:
             pass
     if not category_ids and category_id:
         category_ids = [category_id]
@@ -180,9 +185,10 @@ def update_expense(expense_id):
         return jsonify({'error': 'settlement tidak dalam status yang dapat diedit'}), 400
 
     data_keys = set(data.keys())
-    only_checklist = data_keys.issubset({'notes', 'status'}) and 'notes' in data_keys
 
-    if any(k in data_keys for k in ['category_id', 'description', 'amount', 'date', 'source', 'currency', 'currency_exchange']):
+    if settlement.status == 'rejected':
+        only_checklist = data_keys.issubset({'notes', 'status'}) and 'notes' in data_keys
+        if not only_checklist and any(k in data_keys for k in ['category_id', 'description', 'amount', 'date', 'source', 'currency', 'currency_exchange']):
             return jsonify({'error': 'saat rejected hanya boleh mengubah checklist, tidak bisa mengubah data utama'}), 400
 
     if 'category_ids' in data or 'category_id' in data:

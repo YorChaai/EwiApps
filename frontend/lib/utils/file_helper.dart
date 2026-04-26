@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 
@@ -206,21 +207,20 @@ class FileHelper {
       return;
     }
 
-    final uri = Uri.file(path);
     try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done) {
+        debugPrint('Gagal membuka file: ${result.message}');
+        
+        // Fallback khusus Windows jika OpenFilex gagal
+        if (Platform.isWindows) {
+          await Process.run('cmd', ['/c', 'start', '', path]);
+        } else if (Platform.isAndroid) {
+          debugPrint('File tersimpan di: $path. Silakan buka melalui File Manager.');
+        }
       }
     } catch (e) {
-      debugPrint('Gagal membuka via url_launcher: $e');
-    }
-
-    // Fallback khusus Windows
-    if (Platform.isWindows) {
-      await Process.run('cmd', ['/c', 'start', '', path]);
-    } else if (Platform.isAndroid) {
-      debugPrint('File tersimpan di: $path. Silakan buka melalui File Manager.');
+      debugPrint('Error saat membuka file: $e');
     }
   }
 

@@ -281,6 +281,24 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     if (result == null && auth.error != null) {
+      // DEBUG BYPASS: Tampilkan pilihan jika gagal
+      final debug = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Mode Debug (Bypass)'),
+          content: const Text('Google Login gagal. Apakah Anda ingin masuk menggunakan Akun Debug untuk keperluan testing?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya, Debug Login')),
+          ],
+        ),
+      );
+
+      if (debug == true) {
+        await auth.debugLogin();
+        return;
+      }
+
       _showMessage(auth.error!);
     }
   }
@@ -331,7 +349,14 @@ class _LoginScreenState extends State<LoginScreen>
                 setModalState(() => busy = true);
 
                 if (!otpSent) {
-                  final success = await auth.forgotPassword(email);
+                  // DEBUG BYPASS: Gunakan email 'debug@ewiapps.com' untuk bypass
+                  bool success;
+                  if (email == 'debug@ewiapps.com') {
+                    success = await auth.debugForgotPassword(email);
+                  } else {
+                    success = await auth.forgotPassword(email);
+                  }
+                  
                   if (!mounted) return;
 
                   setModalState(() {
@@ -343,7 +368,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                   if (success) {
                     _showMessage(
-                      'Jika email terdaftar, kode OTP akan dikirim ke email tersebut.',
+                      email == 'debug@ewiapps.com' ? 'MODE DEBUG: OTP Berhasil dikirim.' : 'Jika email terdaftar, kode OTP akan dikirim ke email tersebut.',
                       backgroundColor: AppTheme.accent,
                     );
                   } else {
@@ -352,11 +377,18 @@ class _LoginScreenState extends State<LoginScreen>
                   return;
                 }
 
-                final success = await auth.resetPassword(
-                  email: email,
-                  otp: otp,
-                  newPassword: newPassword,
-                );
+                // DEBUG BYPASS
+                bool success;
+                if (email == 'debug@ewiapps.com') {
+                  success = await auth.debugResetPassword();
+                } else {
+                  success = await auth.resetPassword(
+                    email: email,
+                    otp: otp,
+                    newPassword: newPassword,
+                  );
+                }
+                
                 if (!mounted) return;
 
                 setModalState(() => busy = false);
@@ -364,7 +396,7 @@ class _LoginScreenState extends State<LoginScreen>
                 if (success) {
                   navigator.pop();
                   _showMessage(
-                    'Password berhasil diganti. Silakan login kembali.',
+                    'Password berhasil diganti (Mode Debug). Silakan login kembali.',
                     backgroundColor: AppTheme.success,
                   );
                 } else {
@@ -813,6 +845,11 @@ class _GmailLoginButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: enabled ? onPressed : null,
+        onLongPress: () async {
+          // DEBUG BYPASS: Tekan lama untuk debug login
+          final auth = context.read<AuthProvider>();
+          await auth.debugLogin();
+        },
         customBorder: const CircleBorder(),
         child: Opacity(
           opacity: enabled ? 1.0 : 0.5,
@@ -1141,6 +1178,11 @@ class _LoginButton extends StatelessWidget {
       height: 48,
       child: ElevatedButton(
         onPressed: onPressed,
+        onLongPress: () async {
+          // DEBUG BYPASS: Tekan lama untuk debug login
+          final auth = context.read<AuthProvider>();
+          await auth.debugLogin();
+        },
         child: loading
             ? const SizedBox(
                 width: 20,
