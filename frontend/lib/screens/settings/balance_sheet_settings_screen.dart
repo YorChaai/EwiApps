@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/dividend_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 
 class BalanceSheetSettingsScreen extends StatefulWidget {
   final int? initialYear;
@@ -118,7 +120,7 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
   String _formatPlain(dynamic value) {
     final amount = _toDouble(value);
     if (amount == 0) return '';
-    return amount.toStringAsFixed(0);
+    return NumberFormat('#,##0', 'id_ID').format(amount);
   }
 
   Future<void> _saveSettings() async {
@@ -167,6 +169,7 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
       child: TextFormField(
         controller: controller,
         keyboardType: TextInputType.number,
+        inputFormatters: [CurrencyInputFormatter()],
         decoration: InputDecoration(labelText: label),
       ),
     );

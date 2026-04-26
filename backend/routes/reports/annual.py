@@ -363,7 +363,7 @@ def _set_dividend_row_border(ws, row, col_b='B', col_c='C', col_d='D', col_e='E'
 
 def _annual_cache_paths(year):
     cache_dir = os.path.abspath(
-        os.path.join(current_app.root_path, '..', 'exports', 'annual_cache')
+        os.path.join(current_app.root_path, '..', 'data', 'exports', 'annual_cache')
     )
     os.makedirs(cache_dir, exist_ok=True)
     return {
@@ -2648,7 +2648,7 @@ def get_annual_report_excel():
             db.session.rollback()
             logger.debug('No imported source name found')
 
-        template_dir = os.path.abspath(os.path.join(current_app.root_path, '..', 'excel'))
+        template_dir = os.path.abspath(os.path.join(current_app.root_path, '..', 'data', 'excel'))
 
         template_candidates = []
         if imported_source_name:

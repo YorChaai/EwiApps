@@ -9,7 +9,11 @@ class AdvanceProvider extends ChangeNotifier {
   bool _loading = false;
   String? _error;
   bool _unsavedDraft = false;
-  int _reportYear = DateTime.now().year;
+  int _reportYear = 2024; // Default to 2024 as requested
+
+  AdvanceProvider() {
+    syncReportYear();
+  }
 
   List<Map<String, dynamic>> get advances => _advances;
   Map<String, dynamic>? get currentAdvance => _currentAdvance;
@@ -78,7 +82,7 @@ class AdvanceProvider extends ChangeNotifier {
   Future<void> syncReportYear() async {
     try {
       final res = await _api.getReportYearSettings();
-      final year = int.tryParse((res['default_report_year'] ?? DateTime.now().year).toString());
+      final year = int.tryParse((res['default_report_year'] ?? 2024).toString());
       if (year != null) {
         _reportYear = year;
         notifyListeners();

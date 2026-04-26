@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/settlement_provider.dart';
+import '../providers/advance_provider.dart';
 import '../theme/app_theme.dart';
 import '../utils/file_helper.dart';
 import '../utils/context_extensions.dart';
@@ -62,11 +63,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Future.microtask(() async {
       if (!mounted) return;
       final settlementProvider = context.read<SettlementProvider>();
+      final advanceProvider = context.read<AdvanceProvider>();
       final notificationProvider = context.read<NotificationProvider>();
-      await settlementProvider.syncReportYear();
+      
+      // Sync report years from settings first
+      await Future.wait([
+        settlementProvider.syncReportYear(),
+        advanceProvider.syncReportYear(),
+      ]);
+
+      if (!mounted) return;
+
       await Future.wait([
         settlementProvider.loadCategories(),
         settlementProvider.loadSettlements(),
+        advanceProvider.loadAdvances(),
         _fetchBadgeCounts(),
       ]);
       if (mounted) {

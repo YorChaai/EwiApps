@@ -196,7 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _importDatabase() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.any, // SQLite .db biasanya dideteksi as any/binary
         allowMultiple: false,
       );
@@ -205,11 +205,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final filePath = result.files.single.path!;
       final fileName = result.files.single.name.toLowerCase();
 
-      if (!fileName.endsWith('.sql')) {
+      if (!fileName.endsWith('.sql') && !fileName.endsWith('.db')) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Hanya file .sql (Postgres) yang diperbolehkan.'),
+              content: Text('Hanya file .sql atau .db yang diperbolehkan.'),
               backgroundColor: AppTheme.danger,
             ),
           );
@@ -349,13 +349,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final res = await _api.confirmImportDatabase();
       if (mounted) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(res['message'] ?? 'Database berhasil dipulihkan.'),
-            backgroundColor: AppTheme.success,
-          ),
-        );
-        // Opsional: Reload data atau minta restart
+
+        // RELOAD ALL DATA PROVIDERS (IMPORTANT BUG FIX)
+        final settlementProv = context.read<SettlementProvider>();
+        final advanceProv = context.read<AdvanceProvider>();
+
+        // 1. Sync report year first (in case it changed in the new DB)
+        await Future.wait([
+          settlementProv.syncReportYear(),
+          advanceProv.syncReportYear(),
+        ]);
+
+        // 2. Reload categories and data
+        await Future.wait([
+          settlementProv.loadCategories(),
+          settlementProv.loadSettlements(),
+          advanceProv.loadAdvances(),
+        ]);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(res['message'] ?? 'Database berhasil dipulihkan.'),
+              backgroundColor: AppTheme.success,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -551,18 +571,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   }
                 } else {
                   // Cek dukungan platform saat diklik
-                  if (!auth.isGoogleSignInSupported) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Fitur Google Sign-In belum tersedia di Windows. Silakan coba di HP Android.',
-                        ),
-                        backgroundColor: AppTheme.danger,
-                      ),
-                    );
-                    return;
-                  }
-
                   final ok = await auth.linkGoogleAccount();
                   if (mounted) {
                     if (ok) {
@@ -1094,7 +1102,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
 
   Future<void> _pickImage() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.image,
         allowMultiple: false,
       );
@@ -1205,7 +1213,7 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                           ? const Icon(Icons.person, size: 48, color: AppTheme.primary)
                           : null,
                     ),
-                    
+
                     // Overlay Hapus (Notifikasi visual saat akan dihapus)
                     if (_removeImage)
                       Positioned.fill(

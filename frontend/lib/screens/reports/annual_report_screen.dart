@@ -1272,11 +1272,14 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
               ),
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
-            onPressed: _isLoading ? null : _exportPdf,
-            tooltip: 'Export PDF',
-          ),
+          /*
+                     IconButton(
+                       icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+                       onPressed: _isLoading ? null : _exportPdf,
+                       tooltip: 'Export PDF',
+                     ),
+          */
+
           IconButton(
             icon: const Icon(Icons.table_view, color: Colors.green),
             onPressed: _isLoading ? null : _exportExcel,

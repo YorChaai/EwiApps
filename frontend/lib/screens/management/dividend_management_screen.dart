@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/dividend_provider.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency_formatter.dart';
 
 class DividendManagementScreen extends StatefulWidget {
   final int? initialYear;
@@ -48,9 +49,9 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
     final settings = Map<String, dynamic>.from(
       (provider.summary['settings'] ?? const <String, dynamic>{}) as Map,
     );
-    _profitRetainedController.text = _formatPlain(
-      settings['profit_retained'] ?? provider.summary['profit_retained'],
-    );
+
+    final initialValue = settings['profit_retained'] ?? provider.summary['profit_retained'] ?? 0.0;
+    _profitRetainedController.text = _fmtMoney(initialValue).replaceAll('Rp ', '');
   }
 
   double _toDouble(dynamic value) {
@@ -379,11 +380,14 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                   child: TextFormField(
                     controller: _profitRetainedController,
                     keyboardType: TextInputType.number,
+                    inputFormatters: [CurrencyInputFormatter()],
                     decoration: const InputDecoration(
                       labelText: 'Profit Ditahan',
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
-                    onChanged: (_) {},
+                    onChanged: (_) {
+                      setState(() {}); // Trigger refresh metrics below
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -397,11 +401,11 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
             // Fix: Row metrics dengan Flexible untuk responsive
             Row(
               children: [
-                Expanded(child: metric('Profit After Tax', _fmtMoney(profitAfterTax))),
+                metric('Profit After Tax', _fmtMoney(profitAfterTax)),
                 const SizedBox(width: 12),
-                Expanded(child: metric('Dividen Dibagi', _fmtMoney(dividendDistributed))),
+                metric('Dividen Dibagi', _fmtMoney(dividendDistributed)),
                 const SizedBox(width: 12),
-                Expanded(child: metric('Dibagi per Orang', _fmtMoney(dividendPerPerson))),
+                metric('Dibagi per Orang', _fmtMoney(dividendPerPerson)),
               ],
             ),
           ],

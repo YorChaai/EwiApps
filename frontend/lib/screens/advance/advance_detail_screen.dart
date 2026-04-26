@@ -19,6 +19,7 @@ import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
 import '../widgets/sidebar.dart';
 import '../widgets/settlement_detail_widgets.dart';
+import '../../widgets/item_detail_preview_dialog.dart';
 import '../../widgets/app_scrollbar.dart';
 
 class AdvanceDetailScreen extends StatefulWidget {
@@ -233,6 +234,19 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     bool canShowDownloadButtons,
   ) {
     final actions = <Widget>[];
+
+    final items = _asMapList(adv['items']);
+    if (items.isNotEmpty) {
+      actions.add(
+        SettlementActionButton(
+          onPressed: () => _showAllItemsPreview(items),
+          icon: Icons.list_alt_rounded,
+          label: 'Pratinjau List',
+          isOutlined: true,
+          color: AppTheme.accent,
+        ),
+      );
+    }
 
     if (canEditHeader) {
       actions.add(
@@ -1083,7 +1097,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
                     OutlinedButton.icon(
                       onPressed: () async {
-                        final result = await FilePicker.platform.pickFiles(
+                        final result = await FilePicker.pickFiles(
                           type: FileType.custom,
                           allowedExtensions: [
                             'jpg',
@@ -2076,6 +2090,16 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       subCat = catName;
                     }
 
+                    final previewBtn = IconButton(
+                      icon: const Icon(
+                        Icons.info_outline_rounded,
+                        color: AppTheme.primary,
+                        size: 18,
+                      ),
+                      tooltip: 'Pratinjau Rincian',
+                      onPressed: () => _showItemPreview(item),
+                    );
+
                     return DataRow(
                       selected: showChecklist
                           ? _checkedItemIds.contains(itemId)
@@ -2225,6 +2249,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    previewBtn,
                                     IconButton(
                                       icon: const Icon(
                                         Icons.edit_rounded,
@@ -2248,6 +2273,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               ? Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    previewBtn,
                                     if (itemStatus == 'pending')
                                       IconButton(
                                         icon: const Icon(
@@ -2269,7 +2295,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                         onPressed: () => _rejectItem(itemId),
                                       ),
                                   ],
-                                )                              : const Text('-'),
+                                )                              : previewBtn,
                         ),
                       ],
                     );
@@ -2279,6 +2305,182 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showItemPreview(Map<String, dynamic> item) {
+    showItemDetailPreviewDialog(
+      context: context,
+      item: item,
+      title: 'Rincian Item Kasbon',
+      onViewEvidence: (path, name) => _showEvidence(path, name),
+    );
+  }
+
+  void _showAllItemsPreview(List<Map<String, dynamic>> items) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final screenWidth = MediaQuery.of(ctx).size.width;
+        final screenHeight = MediaQuery.of(ctx).size.height;
+
+        return AlertDialog(
+          backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.list_alt_rounded, color: AppTheme.accent),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Pratinjau Semua Item',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: screenWidth > 800 ? 700 : screenWidth * 0.95,
+            height: screenHeight * 0.8,
+            child: AppScrollbar(
+              thumbVisibility: true,
+              interactive: true,
+              child: ListView.separated(
+                primary: true,
+                padding: const EdgeInsets.fromLTRB(0, 10, 16, 10),
+                itemCount: items.length,
+                separatorBuilder: (c, i) => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Divider(),
+                ),
+                itemBuilder: (c, i) {
+                  final item = items[i];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'ITEM #${i + 1}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildPreviewRow('Tanggal', item['date'] ?? '-', isDark),
+                      _buildPreviewRow(
+                        'Kategori',
+                        item['category_name'] ?? '-',
+                        isDark,
+                      ),
+                      _buildPreviewRow(
+                        'Estimasi',
+                        _formatItemAmount(item),
+                        isDark,
+                        valueColor: AppTheme.primary,
+                      ),
+                      _buildPreviewRow(
+                        'Deskripsi',
+                        item['description'] ?? '-',
+                        isDark,
+                      ),
+                      _buildPreviewRow(
+                        'Status',
+                        (item['status'] ?? 'pending')
+                            .toString()
+                            .toUpperCase(),
+                        isDark,
+                        valueColor: _statusColor(
+                          (item['status'] ?? 'pending').toString(),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Tutup'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _formatItemAmount(Map<String, dynamic> item) {
+    final currency = (item['currency'] ?? 'IDR').toString().toUpperCase();
+    final estimated = (item['estimated_amount'] ?? 0) as num;
+    final kurs = (item['currency_exchange'] ?? 1.0) as num;
+    final idrStr = item['idr_amount'];
+    final idr = (idrStr is num && idrStr > 0) ? idrStr : (estimated * kurs);
+
+    if (currency == 'IDR') {
+      return 'Rp ${_currencyFormat.format(estimated)}';
+    }
+    final foreignFormat = NumberFormat('#,##0.##', 'en_US');
+    return '$currency ${foreignFormat.format(estimated)} (Rp ${_currencyFormat.format(idr)})';
+  }
+
+  Widget _buildPreviewRow(
+    String label,
+    String value,
+    bool isDark, {
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isDark
+                    ? AppTheme.textSecondary
+                    : AppTheme.lightTextSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const Text(' -> ',
+              style: TextStyle(color: AppTheme.primary, fontSize: 12)),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: TextStyle(
+                color: valueColor ??
+                    (isDark
+                        ? AppTheme.textPrimary
+                        : AppTheme.lightTextPrimary),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2508,7 +2710,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     }
   }
 
-  void _showEvidence(String path, String filename) {
+  void _showEvidence(String path, String? filename) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isPdf = path.toLowerCase().endsWith('.pdf');
     final url = '${ApiService.baseUrl}/uploads/$path';
@@ -2519,7 +2721,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         backgroundColor: _cardColor(ctx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          filename,
+          filename ?? 'Berkas Bukti',
           style: TextStyle(color: _creamColor(ctx), fontSize: 16),
         ),
         content: SizedBox(

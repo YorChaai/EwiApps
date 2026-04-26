@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 import os
 
 # --- KONFIGURASI ---
-SQLITE_PATH = r"D:\2. Organize\1. Projects\MiniProjectKPI_EWI\backend\backup_sqlite\database_lama_sqlite_sebelum_postgres.db"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SQLITE_PATH = os.path.join(BASE_DIR, 'backend', 'backup_sqlite', 'database_lama_sqlite_sebelum_postgres.db')
 POSTGRES_URI = "postgresql://postgres:yorchai12@localhost:5432/miniproject_db"
 YEAR = 2024
 

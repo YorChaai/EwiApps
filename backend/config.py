@@ -22,7 +22,7 @@ class Config:
 
     # Lokasi upload file
     UPLOAD_FOLDER = os.environ.get('UPLOAD_DIR', os.path.join(BASE_DIR, '..', 'data'))
-    EXPORT_FOLDER = os.path.join(BASE_DIR, 'exports')
+    EXPORT_FOLDER = os.path.join(BASE_DIR, '..', 'data', 'exports')
 
     REPORT_DEFAULT_YEAR = int(os.environ.get('REPORT_DEFAULT_YEAR', '2024'))
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16mb max upload

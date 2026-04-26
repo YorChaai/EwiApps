@@ -8,7 +8,7 @@ echo   Starting Frontend (Flutter)...
 echo ========================================
 echo.
 
-cd frontend
+cd ..\frontend
 
 REM Check if Flutter is installed
 where flutter >nul 2>&1

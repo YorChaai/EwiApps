@@ -14,7 +14,7 @@ class SettlementProvider extends ChangeNotifier {
   bool _unsavedDraft = false; // Flag untuk track draft yang belum tersimpan
 
   String? _statusFilter;
-  int _reportYear = DateTime.now().year;
+  int _reportYear = 2024; // Default to 2024 as requested
   String? _startDate;
   String? _endDate;
   String? _searchQuery;
@@ -170,7 +170,7 @@ class SettlementProvider extends ChangeNotifier {
   Future<void> syncReportYear() async {
     try {
       final res = await _api.getReportYearSettings();
-      final year = int.tryParse((res['default_report_year'] ?? DateTime.now().year).toString());
+      final year = int.tryParse((res['default_report_year'] ?? 2024).toString());
       if (year != null) {
         _reportYear = year;
         _initialized = true; // ✅ Mark as initialized
