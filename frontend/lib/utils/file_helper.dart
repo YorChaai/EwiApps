@@ -12,53 +12,55 @@ class FileHelper {
 
   static const String _prefsKey = 'windows_export_path';
 
-  static Future<Directory> _resolveExportDirectory() async {
+  static Future<Directory> _resolveExportDirectory({String? subFolder}) async {
+    String basePath = _defaultWindowsExportPath;
+
     if (Platform.isWindows) {
-      // Try to get custom path from SharedPreferences first
       try {
         final prefs = await SharedPreferences.getInstance();
         final customPath = prefs.getString(_prefsKey);
         if (customPath != null && customPath.isNotEmpty) {
-          return Directory(customPath);
+          basePath = customPath;
         }
-      } catch (_) {
-        // Fallback to default if prefs fail
-      }
-      return Directory(_defaultWindowsExportPath);
-    }
-
-    if (Platform.isAndroid) {
-      // Coba simpan ke folder Downloads publik agar bisa dilihat File Manager & aplikasi lain
+      } catch (_) {}
+    } else if (Platform.isAndroid) {
       try {
         final publicDownloadDir = Directory('/storage/emulated/0/Download');
         if (await publicDownloadDir.exists()) {
-          return publicDownloadDir;
+          basePath = publicDownloadDir.path;
+        } else {
+          final dir = await getExternalStorageDirectory();
+          basePath = dir?.path ?? (await getApplicationDocumentsDirectory()).path;
         }
-      } catch (_) {}
-
-      // Fallback ke storage eksternal aplikasi jika folder publik tidak aksesibel
-      final dir = await getExternalStorageDirectory();
-      return dir ?? await getApplicationDocumentsDirectory();
-    }
-
-    if (Platform.isIOS || Platform.isMacOS) {
+      } catch (_) {
+        basePath = (await getApplicationDocumentsDirectory()).path;
+      }
+    } else {
       final dir = await getDownloadsDirectory();
-      return dir ?? await getApplicationDocumentsDirectory();
+      basePath = dir?.path ?? (await getApplicationDocumentsDirectory()).path;
     }
 
-    return await getApplicationDocumentsDirectory();
+    if (subFolder != null && subFolder.isNotEmpty) {
+      // Ganti / atau \ agar sesuai dengan OS
+      final cleanSub = subFolder.replaceAll('/', Platform.pathSeparator).replaceAll('\\', Platform.pathSeparator);
+      return Directory('$basePath${Platform.pathSeparator}$cleanSub');
+    }
+    
+    return Directory(basePath);
   }
 
   static Future<String?> saveAndOpenFolder({
     required BuildContext context,
     required List<int> bytes,
     required String filename,
+    String? subFolder,
     String? successMessage,
   }) async {
     return saveFile(
       context: context,
       bytes: bytes,
       filename: filename,
+      subFolder: subFolder,
       successMessage: successMessage,
     );
   }
@@ -67,12 +69,14 @@ class FileHelper {
     required BuildContext context,
     required List<int> bytes,
     required String filename,
+    String? subFolder,
     String? successMessage,
   }) async {
     final savedPath = await saveFile(
       context: context,
       bytes: bytes,
       filename: filename,
+      subFolder: subFolder,
       successMessage: successMessage,
     );
     if (savedPath != null) {
@@ -85,10 +89,11 @@ class FileHelper {
     required BuildContext context,
     required List<int> bytes,
     required String filename,
+    String? subFolder,
     String? successMessage,
   }) async {
     try {
-      final dir = await _resolveExportDirectory();
+      final dir = await _resolveExportDirectory(subFolder: subFolder);
       if (!await dir.exists()) {
         await dir.create(recursive: true);
       }

@@ -10,6 +10,7 @@ import '../../providers/advance_provider.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_list_dialog.dart';
+import '../../widgets/image_cropper_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -1099,10 +1100,22 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
       );
 
       if (result != null && result.files.single.path != null) {
-        setState(() {
-          _selectedImagePath = result.files.single.path;
-          _removeImage = false;
-        });
+        final pickedFile = File(result.files.single.path!);
+        if (!mounted) return;
+
+        // Buka dialog "Pencocokan" (Cropper)
+        final croppedPath = await showDialog<String>(
+          context: context,
+          barrierColor: Colors.black54,
+          builder: (ctx) => ImageCropperDialog(imageFile: pickedFile),
+        );
+
+        if (croppedPath != null) {
+          setState(() {
+            _selectedImagePath = croppedPath;
+            _removeImage = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -1157,88 +1170,162 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
     return AlertDialog(
       backgroundColor: isDark ? AppTheme.card : AppTheme.lightCard,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text(
-        'Edit Profil Saya',
-        style: TextStyle(fontWeight: FontWeight.bold),
+      title: const Center(
+        child: Text(
+          'Edit Profil Saya',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Image Picker UI
+            // Image Picker UI - Centered with floating buttons
             Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    backgroundImage: _removeImage
-                        ? null
-                        : (_selectedImagePath != null
-                              ? FileImage(File(_selectedImagePath!))
-                              : (auth.profileImageUrl != null
-                                        ? NetworkImage(auth.profileImageUrl!)
-                                        : null)
-                                    as ImageProvider?),
-                    child:
-                        (_removeImage ||
-                            (_selectedImagePath == null &&
-                                auth.profileImageUrl == null))
-                        ? const Icon(
-                            Icons.person,
-                            size: 40,
-                            color: AppTheme.primary,
-                          )
-                        : null,
-                  ),
-                  Positioned(
-                    right: -4,
-                    bottom: -4,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.card,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.divider, width: 2),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.camera_alt_rounded,
-                              size: 16,
-                              color: AppTheme.primary,
-                            ),
-                            onPressed: _pickImage,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints.tightFor(
-                              width: 32,
-                              height: 32,
+              child: SizedBox(
+                width: 220, // Lebar cukup untuk avatar + tombol di kanan (dan dummy di kiri agar center)
+                height: 100,
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Avatar Utama
+                    CircleAvatar(
+                      radius: 48,
+                      backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                      backgroundImage: _removeImage
+                          ? null
+                          : (_selectedImagePath != null
+                                ? FileImage(File(_selectedImagePath!))
+                                : (auth.profileImageUrl != null
+                                          ? NetworkImage(auth.profileImageUrl!)
+                                          : null)
+                                      as ImageProvider?),
+                      child: (_removeImage || (auth.profileImageUrl == null && _selectedImagePath == null))
+                          ? const Icon(Icons.person, size: 48, color: AppTheme.primary)
+                          : null,
+                    ),
+                    
+                    // Overlay Hapus (Notifikasi visual saat akan dihapus)
+                    if (_removeImage)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.4),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.delete_forever, color: Colors.white, size: 32),
+                                Text(
+                                  'Dihapus',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+                        ),
+                      ),
+
+                    // Tombol Aksi di Samping Kanan
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      bottom: 0,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          // Button Ganti Foto
+                          GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: AppTheme.card, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Button Hapus Foto
                           if (auth.profileImageUrl != null ||
                               _selectedImagePath != null)
-                            IconButton(
-                              icon: const Icon(
-                                Icons.delete_rounded,
-                                size: 16,
-                                color: AppTheme.danger,
-                              ),
-                              onPressed: () => setState(() {
-                                _selectedImagePath = null;
-                                _removeImage = true;
-                              }),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints.tightFor(
-                                width: 32,
-                                height: 32,
+                            GestureDetector(
+                              onTap: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Hapus Foto Profil?'),
+                                    content: const Text(
+                                        'Apakah Anda yakin ingin menghapus foto profil ini?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Batal'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        style: TextButton.styleFrom(
+                                            foregroundColor: AppTheme.danger),
+                                        child: const Text('Hapus'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+
+                                if (confirm == true) {
+                                  setState(() {
+                                    _selectedImagePath = null;
+                                    _removeImage = true;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.danger,
+                                  shape: BoxShape.circle,
+                                  border:
+                                      Border.all(color: AppTheme.card, width: 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.2),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.delete_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
                               ),
                             ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 24),

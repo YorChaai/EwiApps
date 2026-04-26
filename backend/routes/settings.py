@@ -130,9 +130,9 @@ def manage_report_year():
 def export_database():
     try:
         from config import BASE_DIR
-        # Folder utama: data/exportdb
+        # Folder utama: data/Database/Backups
         base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
-        export_base_dir = os.path.join(base_data_dir, 'exportdb')
+        export_base_dir = os.path.join(base_data_dir, 'Database', 'Backups')
 
         # Buat timestamp folder (Contoh: 2026-04-24_14-30-00)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -278,7 +278,7 @@ def import_database_confirm():
     try:
         from config import BASE_DIR
         base_data_dir = current_app.config.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, '..', 'data'))
-        export_base_dir = os.path.join(base_data_dir, 'exportdb')
+        export_base_dir = os.path.join(base_data_dir, 'Database', 'Backups')
 
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI', '')
         is_postgres = db_uri.startswith('postgresql')

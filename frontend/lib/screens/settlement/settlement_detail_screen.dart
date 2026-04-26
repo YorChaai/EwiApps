@@ -2416,6 +2416,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         bytes: bytes,
         filename: filename,
         successMessage: 'PDF Receipt berhasil disimpan.',
+        subFolder: 'Reports/Settlements/Receipt',
       );
     } catch (e) {
       if (mounted) {
@@ -2442,6 +2443,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         bytes: bytes,
         filename: filename,
         successMessage: 'Excel Settlement berhasil disimpan.',
+        subFolder: 'Reports/Settlements/Excel',
       );
     } catch (e) {
       if (mounted) {

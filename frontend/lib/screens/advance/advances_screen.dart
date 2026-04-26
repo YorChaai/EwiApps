@@ -191,7 +191,12 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     try {
       final bytes = await context.read<AdvanceProvider>().exportExcel(startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null, endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null);
       if (!mounted) return;
-      await FileHelper.saveAndOpenFolder(context: context, bytes: bytes, filename: 'Laporan_Kasbon_${FileHelper.formatTimestamp()}.xlsx');
+      await FileHelper.saveAndOpenFolder(
+        context: context,
+        bytes: bytes,
+        filename: 'Laporan_Kasbon_${FileHelper.formatTimestamp()}.xlsx',
+        subFolder: 'Reports/Advances/Excel',
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export Excel: $e'), backgroundColor: AppTheme.danger));
@@ -202,7 +207,12 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     try {
       final bytes = await context.read<AdvanceProvider>().getBulkPdf(startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null, endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null);
       if (!mounted) return;
-      await FileHelper.saveAndOpenFile(context: context, bytes: bytes, filename: 'Laporan_Kasbon_${FileHelper.formatTimestamp()}.pdf');
+      await FileHelper.saveAndOpenFile(
+        context: context,
+        bytes: bytes,
+        filename: 'Laporan_Kasbon_${FileHelper.formatTimestamp()}.pdf',
+        subFolder: 'Reports/Advances/PDF',
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal export PDF: $e'), backgroundColor: AppTheme.danger));

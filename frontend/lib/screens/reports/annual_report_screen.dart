@@ -192,11 +192,34 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         context: context,
         bytes: bytes,
         filename: 'Revenue-Cost_$_selectedYear.xlsx',
+        subFolder: 'Reports/Annual/Excel',
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _exportPdf() async {
+    setState(() => _isLoading = true);
+    try {
+      final api = context.read<AuthProvider>().api;
+      final bytes = await api.getAnnualReportPdf(year: _selectedYear);
+      if (!mounted) return;
+      await FileHelper.saveAndOpenFile(
+        context: context,
+        bytes: bytes,
+        filename: 'Revenue-Cost_$_selectedYear.pdf',
+        subFolder: 'Reports/Annual/PDF',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error PDF: $e'), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -1249,15 +1272,15 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
               ),
             ),
           ),
-          /*
           IconButton(
             icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
             onPressed: _isLoading ? null : _exportPdf,
+            tooltip: 'Export PDF',
           ),
-          */
           IconButton(
             icon: const Icon(Icons.table_view, color: Colors.green),
             onPressed: _isLoading ? null : _exportExcel,
+            tooltip: 'Export Excel',
           ),
         ],
       ),

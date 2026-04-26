@@ -654,6 +654,7 @@ class _ReportScreenState extends State<ReportScreen> {
           bytes: bytes,
           filename: filename,
           successMessage: 'Excel Summary berhasil disimpan.',
+          subFolder: 'Reports/Summary/Excel',
         );
       }
     } catch (e) {
@@ -690,6 +691,7 @@ class _ReportScreenState extends State<ReportScreen> {
           bytes: bytes,
           filename: filename,
           successMessage: 'PDF Summary berhasil disimpan.',
+          subFolder: 'Reports/Summary/PDF',
         );
       }
     } catch (e) {
