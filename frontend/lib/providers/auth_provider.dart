@@ -9,9 +9,7 @@ class AuthProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile'],
-    // TODO: Ganti dengan Web Client ID dari Google Cloud Console (Project Firebase -> Project Settings -> Google Service -> Web Client ID)
-    // agar backend bisa verifikasi token
-    // serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+    serverClientId: '223768746501-hsdbjv9lv7cro5u9arts3dble52i7q27.apps.googleusercontent.com',
   );
   String? _token;
   Map<String, dynamic>? _user;
@@ -80,9 +78,11 @@ class AuthProvider extends ChangeNotifier {
         if (!_disposed) {  // Check again after async
           _user = res['user'];
         }
-      } catch (_) {
+      } catch (e) {
       // token expired atau koneksi gagal
+        debugPrint('Token expired / gagal load me: $e');
         if (!_disposed) {
+          // Token tidak valid, bersihkan semua data agar aman
           await logout();
         }
         return;
@@ -93,7 +93,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> login(String username, String password) async {
+  Future<bool> login(String username, String password, {bool rememberMe = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
@@ -105,7 +105,11 @@ class AuthProvider extends ChangeNotifier {
       _api.setToken(_token);
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', _token!);
+      if (rememberMe) {
+        await prefs.setString('token', _token!);
+      } else {
+        await prefs.remove('token');
+      }
 
       _loading = false;
       notifyListeners();
@@ -118,7 +122,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>?> loginWithGoogle() async {
+  Future<Map<String, dynamic>?> loginWithGoogle({bool rememberMe = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
@@ -131,6 +135,8 @@ class AuthProvider extends ChangeNotifier {
       }
 
       // 1. Sign in with Google
+      // Paksa logout dulu supaya muncul pilihan akun (Account Picker)
+      await _googleSignIn.signOut();
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         _loading = false;
@@ -161,7 +167,14 @@ class AuthProvider extends ChangeNotifier {
       _api.setToken(_token);
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('token', _token!);
+      if (rememberMe) {
+        await prefs.setString('token', _token!);
+        // Save flag as true so next app launch knows remember me was used
+        await prefs.setBool('remember_me', true);
+      } else {
+        await prefs.remove('token');
+        await prefs.remove('remember_me');
+      }
 
       _loading = false;
       notifyListeners();
@@ -422,11 +435,25 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
     await prefs.remove('user_data');
+
+    // Hapus data "Ingat Saya" agar form login kosong setelah logout
+    await prefs.remove('remember_me');
+    await prefs.remove('saved_username');
+    await prefs.remove('saved_password');
+
+    // Pastikan Google Sign In juga terputus sesi-nya, jika didukung oleh platform
+    try {
+      if (isGoogleSignInSupported) {
+        await _googleSignIn.signOut();
+      }
+    } catch (e) {
+      debugPrint('Google SignOut error (bisa diabaikan jika di Windows/Linux): $e');
+    }
+
     notifyListeners();
   }
-
   // --- DEBUG METHODS UNTUK TESTING ---
-  
+
   Future<bool> debugLogin() async {
     _loading = true;
     notifyListeners();

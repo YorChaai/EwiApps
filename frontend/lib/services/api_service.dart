@@ -112,7 +112,12 @@ class ApiService {
     if (_token != null) return; // Already loaded
     try {
       final prefs = await SharedPreferences.getInstance();
-      _token = prefs.getString('token');
+      final savedToken = prefs.getString('token');
+      
+      // ✅ FIX: Hanya set _token dari storage jika belum ada token yang diset secara eksternal 
+      // (misal via updateToken saat login) saat fungsi ini sedang "await".
+      // Ini mencegah token valid ditimpa menjadi null jika login tanpa "Remember Me".
+      _token ??= savedToken;
     } catch (_) {
       // Silent fail if SharedPreferences not available
     }

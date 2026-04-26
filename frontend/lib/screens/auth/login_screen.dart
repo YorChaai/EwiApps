@@ -167,7 +167,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     final auth = context.read<AuthProvider>();
-    final success = await auth.login(username, password);
+    final success = await auth.login(username, password, rememberMe: _rememberMe);
 
     if (success) {
       final prefs = await SharedPreferences.getInstance();
@@ -236,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    final result = await auth.loginWithGoogle();
+    final result = await auth.loginWithGoogle(rememberMe: _rememberMe);
     if (!mounted) return;
 
     if (result != null && result['new_user'] == true) {
@@ -281,24 +281,8 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     if (result == null && auth.error != null) {
-      // DEBUG BYPASS: Tampilkan pilihan jika gagal
-      final debug = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Mode Debug (Bypass)'),
-          content: const Text('Google Login gagal. Apakah Anda ingin masuk menggunakan Akun Debug untuk keperluan testing?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya, Debug Login')),
-          ],
-        ),
-      );
-
-      if (debug == true) {
-        await auth.debugLogin();
-        return;
-      }
-
+      // Tampilkan error aslinya saja (misal: plugin tidak didukung di Windows)
+      // Kita hapus bypass Debug Login karena menyebabkan error 422 di backend (token palsu)
       _showMessage(auth.error!);
     }
   }
@@ -356,7 +340,7 @@ class _LoginScreenState extends State<LoginScreen>
                   } else {
                     success = await auth.forgotPassword(email);
                   }
-                  
+
                   if (!mounted) return;
 
                   setModalState(() {
@@ -388,7 +372,7 @@ class _LoginScreenState extends State<LoginScreen>
                     newPassword: newPassword,
                   );
                 }
-                
+
                 if (!mounted) return;
 
                 setModalState(() => busy = false);

@@ -39,6 +39,12 @@ def forgot_password():
     db.session.commit()
 
     try:
+        from flask import current_app
+        if not current_app.config.get('MAIL_USERNAME'):
+            # Jika belum diatur di .env, bypass email dan print di terminal
+            print(f"\n[DEBUG OTP] Kode OTP untuk {email} adalah: {otp}\n")
+            return jsonify({'message': 'Mode Testing: Cek console backend untuk kode OTP.'}), 200
+
         msg = Message(
             'Kode Reset Password ExspanApp',
             recipients=[email]
@@ -48,7 +54,8 @@ def forgot_password():
         return jsonify({'message': 'Kode OTP telah dikirim ke email Anda.'}), 200
     except Exception as e:
         print(f"Error sending email: {e}")
-        return jsonify({'error': 'Gagal mengirim email OTP. Silakan coba lagi nanti.'}), 500
+        print(f"\n[FALLBACK OTP] Karena email gagal, kode OTP untuk {email} adalah: {otp}\n")
+        return jsonify({'message': 'Email gagal dikirim, tapi OTP dicetak di terminal server.'}), 200
 
 @auth_bp.route('/reset-password', methods=['POST'])
 def reset_password():
