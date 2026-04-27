@@ -256,54 +256,6 @@ def _copy_template_row(ws, source_row, target_row, start_col=2, end_col=17, incl
             pass
 
 
-def _copy_template_row_from_backup(ws_backup, ws_target, source_row, target_row, start_col=2, end_col=17, include_values=True):
-    """Copy a template row from backup sheet to target sheet.
-    Used when revenue data may have overwritten the original template rows (23-41)."""
-    if ws_backup is None:
-        # Fallback to same-sheet copy if no backup exists
-        _copy_template_row(ws_target, source_row, target_row, start_col, end_col, include_values)
-        return
-
-    _clear_merged_ranges_in_region(ws_target, target_row, target_row, start_col, end_col)
-    ws_target.row_dimensions[target_row].height = ws_backup.row_dimensions[source_row].height
-
-    for col in range(start_col, end_col + 1):
-        target_cell = ws_target.cell(row=target_row, column=col)
-        if isinstance(target_cell, MergedCell):
-            continue
-        target_cell.value = None
-
-    for col in range(start_col, end_col + 1):
-        source_cell = ws_backup.cell(row=source_row, column=col)
-        target_cell = ws_target.cell(row=target_row, column=col)
-        if isinstance(source_cell, MergedCell) or isinstance(target_cell, MergedCell):
-            continue
-        target_cell._style = copy(source_cell._style)
-        target_cell.number_format = source_cell.number_format
-        target_cell.font = copy(source_cell.font)
-        target_cell.fill = copy(source_cell.fill)
-        target_cell.border = copy(source_cell.border)
-        target_cell.alignment = copy(source_cell.alignment)
-        target_cell.protection = copy(source_cell.protection)
-        target_cell.value = copy(source_cell.value) if include_values else None
-
-    for merged_range in list(ws_backup.merged_cells.ranges):
-        min_col, min_row, max_col, max_row = merged_range.bounds
-        if min_row != source_row or max_row != source_row:
-            continue
-        if min_col < start_col or max_col > end_col:
-            continue
-        try:
-            ws_target.merge_cells(
-                start_row=target_row,
-                start_column=min_col,
-                end_row=target_row,
-                end_column=max_col,
-            )
-        except Exception:
-            pass
-
-
 def _sum_sheet_column_formula(sheet_ref, column_letter, start_row, end_row):
     return f'=SUM({sheet_ref}!{column_letter}{start_row}:{column_letter}{end_row})'
 
@@ -1349,9 +1301,9 @@ def _render_expense_section_from_data(
             _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
-                cell.fill = copy(white_fill)
-                cell.border = THIN_BORDER
                 if not isinstance(cell, MergedCell):
+                    cell.fill = copy(white_fill)
+                    cell.border = THIN_BORDER
                     cell.font = cell.font.copy(bold=False)
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
@@ -1387,7 +1339,8 @@ def _render_expense_section_from_data(
         _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row_cursor, column=col)
-            cell.border = THIN_BORDER
+            if not isinstance(cell, MergedCell):
+                cell.border = THIN_BORDER
         _safe_set_cell(ws, row_cursor, 4, 'Belum ada data single pengeluaran')
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
@@ -1486,9 +1439,9 @@ def _render_expense_section_from_data(
                     _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                     for col in range(2, last_category_col + 1):
                         cell = ws.cell(row=row_cursor, column=col)
-                        cell.fill = copy(white_fill)
-                        cell.border = THIN_BORDER
                         if not isinstance(cell, MergedCell):
+                            cell.fill = copy(white_fill)
+                            cell.border = THIN_BORDER
                             cell.font = cell.font.copy(bold=False)
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
@@ -1520,13 +1473,13 @@ def _render_expense_section_from_data(
                         cell.border = no_border
                         cell.fill = no_fill
 
-                    # Clear ghost borders for this row
-                    for col in range(last_category_col + 1, actual_last_col + 1):
-                        ws.cell(row=row_cursor, column=col).border = no_border
-                        ws.cell(row=row_cursor, column=col).fill = no_fill
+                # Clear ghost borders
+                for col in range(last_category_col + 1, actual_last_col + 1):
+                    ws.cell(row=row_cursor, column=col).border = no_border
+                    ws.cell(row=row_cursor, column=col).fill = no_fill
 
-                    row_cursor += 1
-                    seq_counter += 1
+                row_cursor += 1
+                seq_counter += 1
 
     # ✅ STEP 5: Render TOTAL row
     total_row = row_cursor
@@ -1555,12 +1508,14 @@ def _render_expense_section_from_data(
 
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=total_row, column=col)
-        cell.border = THIN_BORDER
+        if not isinstance(cell, MergedCell):
+            cell.border = THIN_BORDER
 
     for row in range(start_row, total_row + 1):
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row, column=col)
-            cell.border = THIN_BORDER
+            if not isinstance(cell, MergedCell):
+                cell.border = THIN_BORDER
 
     _set_rows_hidden(ws, start_row, total_row, False)
     max_row = ws.max_row
@@ -2792,39 +2747,6 @@ def get_annual_report_excel():
         # ✅ HILANGKAN GRIDLINES agar tampilan bersih putih polos
         ws.sheet_view.showGridLines = False
 
-        # ✅ CRITICAL: Backup template rows (23-41) to a hidden sheet BEFORE clearing
-        # When revenue data has 300+ rows, it overwrites rows 23-41 which contain
-        # separator, tax title, tax headers, expense title, and expense header templates.
-        # By backing them up, _copy_template_row can always read pristine source data.
-        TEMPLATE_BACKUP_ROWS = list(range(REVENUE_SEPARATOR_TEMPLATE_ROW, EXPENSE_DATA_TEMPLATE_ROW + 1))  # rows 23-41
-        backup_sheet_name = '_template_backup'
-        if backup_sheet_name in wb.sheetnames:
-            del wb[backup_sheet_name]
-        ws_backup = wb.create_sheet(backup_sheet_name)
-        ws_backup.sheet_state = 'hidden'
-        for src_row in TEMPLATE_BACKUP_ROWS:
-            ws_backup.row_dimensions[src_row].height = ws.row_dimensions[src_row].height
-            for col in range(1, 18):  # A-Q
-                src_cell = ws.cell(row=src_row, column=col)
-                dst_cell = ws_backup.cell(row=src_row, column=col)
-                if isinstance(src_cell, MergedCell):
-                    continue
-                dst_cell.value = copy(src_cell.value)
-                dst_cell._style = copy(src_cell._style)
-                dst_cell.number_format = src_cell.number_format
-                dst_cell.font = copy(src_cell.font)
-                dst_cell.fill = copy(src_cell.fill)
-                dst_cell.border = copy(src_cell.border)
-                dst_cell.alignment = copy(src_cell.alignment)
-        # Also backup merged cell ranges in template rows
-        for merged_range in list(ws.merged_cells.ranges):
-            min_col, min_row, max_col, max_row = merged_range.bounds
-            if min_row in TEMPLATE_BACKUP_ROWS and max_row in TEMPLATE_BACKUP_ROWS:
-                try:
-                    ws_backup.merge_cells(str(merged_range))
-                except Exception:
-                    pass
-
         # Update header document
         _safe_set_cell(ws, 2, 4, f'REVENUE vs OPERATION COST Tahun {year}')
         _safe_set_cell(ws, 3, 4, f'Januari - Desember {year}')
@@ -2848,9 +2770,8 @@ def get_annual_report_excel():
             logger.warning(f'Failed to set Q7 example: {e}')
 
         # Clear data area - PRESERVE STYLE (Borders) for Sheet 1
-        # ✅ FIX: Now safe to clear ENTIRE data zone because template rows are backed up
-        template_max_data_row = max(ws.max_row, EXPENSE_TEMPLATE_END)
-        _clear_range_force(ws, REVENUE_START_ROW, template_max_data_row, 2, 17, reset_style=False)
+        _clear_range_force(ws, REVENUE_START_ROW, REVENUE_TEMPLATE_END, 2, 17, reset_style=False)
+        _clear_range_force(ws, REVENUE_TEMPLATE_END + 1, REVENUE_TEMPLATE_END + 1, 2, 17, reset_style=False)
 
         # Render revenue data
         row_cursor = REVENUE_START_ROW
@@ -2951,11 +2872,6 @@ def get_annual_report_excel():
     if total_revenue_row < REVENUE_TEMPLATE_END:
         _set_rows_hidden(ws, total_revenue_row + 1, REVENUE_TEMPLATE_END, True)
 
-    # ✅ FIX: Clear gap zone between revenue total and tax start to prevent ghost data
-    gap_clear_end = max(TAX_TITLE_TEMPLATE_ROW - 1, total_revenue_row + 1)
-    if total_revenue_row + 1 <= gap_clear_end:
-        _clear_range_force(ws, total_revenue_row + 1, gap_clear_end, 2, 17, reset_style=False)
-
     # ✅ TABLE 2: PAJAK PENGELUARAN - ANCHOR TO STATC ROW 24
     # Calculate starting row for Table 2. If Table 1 is huge, we shift down.
     # Otherwise, we stay at TAX_TITLE_TEMPLATE_ROW (24).
@@ -2965,48 +2881,38 @@ def get_annual_report_excel():
     tax_header_row = tax_title_row + 2
     tax_start_row = tax_title_row + 3
 
-    _copy_template_row_from_backup(ws_backup, ws, REVENUE_SEPARATOR_TEMPLATE_ROW, revenue_gap_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, REVENUE_SEPARATOR_TEMPLATE_ROW, revenue_gap_row, start_col=2, end_col=17, include_values=True)
     _clear_range(ws, revenue_gap_row, revenue_gap_row, 2, 17)
     _set_rows_hidden(ws, revenue_gap_row, revenue_gap_row, False)
 
-    _copy_template_row_from_backup(ws_backup, ws, TAX_TITLE_TEMPLATE_ROW, tax_title_row, start_col=2, end_col=17, include_values=True)
-    _copy_template_row_from_backup(ws_backup, ws, TAX_HEADER_TOP_TEMPLATE_ROW, tax_header_top_row, start_col=2, end_col=17, include_values=True)
-    _copy_template_row_from_backup(ws_backup, ws, TAX_HEADER_BOTTOM_TEMPLATE_ROW, tax_header_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, TAX_TITLE_TEMPLATE_ROW, tax_title_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, TAX_HEADER_TOP_TEMPLATE_ROW, tax_header_top_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, TAX_HEADER_BOTTOM_TEMPLATE_ROW, tax_header_row, start_col=2, end_col=17, include_values=True)
 
-    # ✅ FIX: Explicitly merge headers vertically (B, C, D:E, F, G, H)
-    # This ensures headers like "Detail/Description", "Currency", "Currency Exchange" are correctly joined
+    # ✅ FIX: Explicitly merge headers vertically (B, C, D:E)
+    # This ensures headers like "Detail/Description" are correctly joined
     for col_range in [f'B{tax_header_top_row}:B{tax_header_row}',
                       f'C{tax_header_top_row}:C{tax_header_row}',
-                      f'D{tax_header_top_row}:E{tax_header_row}',
-                      f'F{tax_header_top_row}:F{tax_header_row}',
-                      f'G{tax_header_top_row}:G{tax_header_row}',
-                      f'H{tax_header_top_row}:H{tax_header_row}']:
+                      f'D{tax_header_top_row}:E{tax_header_row}']:
         try:
             ws.unmerge_cells(col_range)
         except Exception:
             pass
         ws.merge_cells(col_range)
 
-        # Center align headers while preserving text rotation
+        # Center align headers
         top_cell_ref = col_range.split(':')[0]
-        old_align = ws[top_cell_ref].alignment
-        ws[top_cell_ref].alignment = Alignment(
-            horizontal='center',
-            vertical='center',
-            wrap_text=True,
-            textRotation=old_align.textRotation if old_align else 0
-        )
+        ws[top_cell_ref].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
     _safe_set_cell(ws, tax_title_row, 2, 'PAJAK PENGELUARAN')
     _set_rows_hidden(ws, tax_title_row, tax_header_row, False)
 
     # ✅ Clear data area - UNMERGE D:E FIRST (from template), then clear values
     # This is CRITICAL to remove existing merge from template before rendering
-    # ✅ FIX: Clear ALL tax rows (not just 10) to handle large datasets
-    tax_clear_count = max(10, len(taxes))
-    for idx in range(tax_clear_count):
+    # Always clear 10 rows max (even if no data, to remove template placeholders)
+    for idx in range(10):
         row = tax_start_row + idx
-        _copy_template_row_from_backup(ws_backup, ws, TAX_DATA_TEMPLATE_ROW, row, start_col=2, end_col=17, include_values=False)
+        _copy_template_row(ws, TAX_DATA_TEMPLATE_ROW, row, start_col=2, end_col=17, include_values=False)
         # Unmerge D:E first (from template)
         try:
             ws.unmerge_cells(f'D{row}:E{row}')
@@ -3018,11 +2924,10 @@ def get_annual_report_excel():
             if not isinstance(cell, MergedCell):
                 cell.value = None
 
-    # ✅ FIX: Remove 10-row cap - render ALL tax rows
-    visible_tax_rows = max(1, len(taxes))
+    visible_tax_rows = max(1, min(len(taxes), 10))
 
     # Render tax rows dynamically with merged D:E columns
-    for idx, t in enumerate(taxes):
+    for idx, t in enumerate(taxes[:10]):
         row = tax_start_row + idx
 
         _set_date_with_format(ws, row, 2, t.get('date'))
@@ -3064,7 +2969,7 @@ def get_annual_report_excel():
     # Apply merge cells if any (BEFORE hide)
     _apply_manual_tax_combine_groups(
         ws,
-        taxes[:visible_tax_rows] if taxes else [],
+        taxes[:visible_tax_rows],
         tax_combine_groups,
         start_row=tax_start_row,
     )
@@ -3072,7 +2977,7 @@ def get_annual_report_excel():
     # Handle no tax data
     if not taxes:
         # ✅ FIX: Clone style FIRST, then write
-        _copy_template_row_from_backup(ws_backup, ws, TAX_DATA_TEMPLATE_ROW, tax_start_row, start_col=2, end_col=17, include_values=False)
+        _copy_template_row(ws, TAX_DATA_TEMPLATE_ROW, tax_start_row, start_col=2, end_col=17, include_values=False)
 
         # ✅ MERGE D:E for empty state message using helper
         _merge_description_cell(ws, tax_start_row, 'Belum ada data pajak', col_start=4, col_end=5)
@@ -3085,7 +2990,7 @@ def get_annual_report_excel():
 
     # ✅ FIX #2: TOTAL ROW MUST BE ADJACENT TO DATA (not hardcoded row 37!)
     total_tax_row = tax_start_row + visible_tax_rows
-    _copy_template_row_from_backup(ws_backup, ws, TAX_TOTAL_TEMPLATE_ROW, total_tax_row, start_col=2, end_col=17, include_values=False)
+    _copy_template_row(ws, TAX_TOTAL_TEMPLATE_ROW, total_tax_row, start_col=2, end_col=17, include_values=False)
 
     # ✅ FIX #3: Use EXCEL FORMULAS (not hardcoded values)
     last_tax_data_row = total_tax_row - 1
@@ -3118,12 +3023,6 @@ def get_annual_report_excel():
     if total_tax_row < TAX_TEMPLATE_END:
         _set_rows_hidden(ws, total_tax_row + 1, TAX_TEMPLATE_END, True)
 
-    # ✅ FIX: Clear gap zone between tax total and expense start to prevent ghost data
-    expense_title_row_candidate = max(EXPENSE_TITLE_TEMPLATE_ROW, total_tax_row + 2)
-    gap_tax_expense_end = expense_title_row_candidate - 1
-    if total_tax_row + 1 <= gap_tax_expense_end:
-        _clear_range_force(ws, total_tax_row + 1, gap_tax_expense_end, 2, 17, reset_style=False)
-
     # ✅ TABLE 3: PENGELUARAN - ANCHOR TO STATIC ROW 39
     expense_title_row = max(EXPENSE_TITLE_TEMPLATE_ROW, total_tax_row + 2)
     expense_header_row = expense_title_row + 1
@@ -3131,12 +3030,12 @@ def get_annual_report_excel():
     # Define gap row for Table 3
     expense_gap_row = expense_title_row - 1
 
-    _copy_template_row_from_backup(ws_backup, ws, EXPENSE_GAP_TEMPLATE_ROW, expense_gap_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, EXPENSE_GAP_TEMPLATE_ROW, expense_gap_row, start_col=2, end_col=17, include_values=True)
     _clear_range(ws, expense_gap_row, expense_gap_row, 2, 17)
-    _copy_template_row_from_backup(ws_backup, ws, EXPENSE_TITLE_TEMPLATE_ROW, expense_title_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, EXPENSE_TITLE_TEMPLATE_ROW, expense_title_row, start_col=2, end_col=17, include_values=True)
     _safe_set_cell(ws, expense_title_row, 2, 'PENGELUARAN')
-    _copy_template_row_from_backup(ws_backup, ws, EXPENSE_HEADER_TEMPLATE_ROW, expense_header_row, start_col=2, end_col=17, include_values=True)
-    _copy_template_row_from_backup(ws_backup, ws, EXPENSE_DATA_TEMPLATE_ROW, expense_start_row, start_col=2, end_col=17, include_values=False)
+    _copy_template_row(ws, EXPENSE_HEADER_TEMPLATE_ROW, expense_header_row, start_col=2, end_col=17, include_values=True)
+    _copy_template_row(ws, EXPENSE_DATA_TEMPLATE_ROW, expense_start_row, start_col=2, end_col=17, include_values=False)
     _set_rows_hidden(ws, expense_gap_row, expense_start_row, False)
 
     # Fetch root categories dynamically from DB - ORDER BY sort_order (from Kategori Tabular)
@@ -3203,6 +3102,20 @@ def get_annual_report_excel():
     # Kita ikat di 'P1' agar gambar membentang menutupi P dan berakhir di ujung Q
     _add_image_to_sheet(ws, logo_path, 'O1', width=308, height=78)
 
+    # Signature at the bottom of Table 3
+    sig_name_row = total_row + 4
+    sig_title_row = total_row + 5
+
+    ws.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
+    ws[f'B{sig_name_row}'] = 'Nama Lengkap'
+    ws[f'B{sig_name_row}'].font = Font(bold=True, underline='single')
+    ws[f'B{sig_name_row}'].alignment = Alignment(horizontal='center')
+
+    ws.merge_cells(f'B{sig_title_row}:E{sig_title_row}')
+    ws[f'B{sig_title_row}'] = 'Direktur'
+    ws[f'B{sig_title_row}'].font = Font(bold=True)
+    ws[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
+
     # ✅ FOOTER IMAGE REMOVED (As requested)
 
     # ✅ APPLY AUTOFIT TO SHEET 1
@@ -3246,10 +3159,6 @@ def get_annual_report_excel():
         wb.calculation.forceFullCalc = True
     except Exception as e:
         logger.warning(f'Failed to set calculation mode: {e}')
-
-    # ✅ Cleanup: Remove backup template sheet before saving
-    if backup_sheet_name in wb.sheetnames:
-        del wb[backup_sheet_name]
 
     logger.info('Export completed, sending file')
 

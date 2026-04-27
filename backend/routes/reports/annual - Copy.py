@@ -1349,9 +1349,9 @@ def _render_expense_section_from_data(
             _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
-                cell.fill = copy(white_fill)
-                cell.border = THIN_BORDER
                 if not isinstance(cell, MergedCell):
+                    cell.fill = copy(white_fill)
+                    cell.border = THIN_BORDER
                     cell.font = cell.font.copy(bold=False)
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
@@ -1387,7 +1387,8 @@ def _render_expense_section_from_data(
         _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row_cursor, column=col)
-            cell.border = THIN_BORDER
+            if not isinstance(cell, MergedCell):
+                cell.border = THIN_BORDER
         _safe_set_cell(ws, row_cursor, 4, 'Belum ada data single pengeluaran')
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
@@ -1486,9 +1487,9 @@ def _render_expense_section_from_data(
                     _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                     for col in range(2, last_category_col + 1):
                         cell = ws.cell(row=row_cursor, column=col)
-                        cell.fill = copy(white_fill)
-                        cell.border = THIN_BORDER
                         if not isinstance(cell, MergedCell):
+                            cell.fill = copy(white_fill)
+                            cell.border = THIN_BORDER
                             cell.font = cell.font.copy(bold=False)
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
@@ -1520,13 +1521,13 @@ def _render_expense_section_from_data(
                         cell.border = no_border
                         cell.fill = no_fill
 
-                    # Clear ghost borders for this row
-                    for col in range(last_category_col + 1, actual_last_col + 1):
-                        ws.cell(row=row_cursor, column=col).border = no_border
-                        ws.cell(row=row_cursor, column=col).fill = no_fill
+                # Clear ghost borders
+                for col in range(last_category_col + 1, actual_last_col + 1):
+                    ws.cell(row=row_cursor, column=col).border = no_border
+                    ws.cell(row=row_cursor, column=col).fill = no_fill
 
-                    row_cursor += 1
-                    seq_counter += 1
+                row_cursor += 1
+                seq_counter += 1
 
     # ✅ STEP 5: Render TOTAL row
     total_row = row_cursor
@@ -1555,12 +1556,14 @@ def _render_expense_section_from_data(
 
     for col in range(2, last_category_col + 1):
         cell = ws.cell(row=total_row, column=col)
-        cell.border = THIN_BORDER
+        if not isinstance(cell, MergedCell):
+            cell.border = THIN_BORDER
 
     for row in range(start_row, total_row + 1):
         for col in range(2, last_category_col + 1):
             cell = ws.cell(row=row, column=col)
-            cell.border = THIN_BORDER
+            if not isinstance(cell, MergedCell):
+                cell.border = THIN_BORDER
 
     _set_rows_hidden(ws, start_row, total_row, False)
     max_row = ws.max_row
@@ -3202,6 +3205,20 @@ def get_annual_report_excel():
     # Top Logo - Presisi agar terlihat rata kanan di kolom Q
     # Kita ikat di 'P1' agar gambar membentang menutupi P dan berakhir di ujung Q
     _add_image_to_sheet(ws, logo_path, 'O1', width=308, height=78)
+
+    # Signature at the bottom of Table 3
+    sig_name_row = total_row + 4
+    sig_title_row = total_row + 5
+
+    ws.merge_cells(f'B{sig_name_row}:E{sig_name_row}')
+    ws[f'B{sig_name_row}'] = 'Nama Lengkap'
+    ws[f'B{sig_name_row}'].font = Font(bold=True, underline='single')
+    ws[f'B{sig_name_row}'].alignment = Alignment(horizontal='center')
+
+    ws.merge_cells(f'B{sig_title_row}:E{sig_title_row}')
+    ws[f'B{sig_title_row}'] = 'Direktur'
+    ws[f'B{sig_title_row}'].font = Font(bold=True)
+    ws[f'B{sig_title_row}'].alignment = Alignment(horizontal='center')
 
     # ✅ FOOTER IMAGE REMOVED (As requested)
 
