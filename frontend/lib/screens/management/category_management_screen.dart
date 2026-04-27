@@ -315,39 +315,42 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              constraints: BoxConstraints.tightFor(
-                width: isNarrow ? 28 : 36,
-                height: isNarrow ? 28 : 36,
+        trailing: SizedBox(
+          width: isNarrow ? 64 : 80,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                constraints: BoxConstraints.tightFor(
+                  width: isNarrow ? 28 : 36,
+                  height: isNarrow ? 28 : 36,
+                ),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.edit_rounded,
+                  size: isNarrow ? 16 : 18,
+                  color: AppTheme.accent,
+                ),
+                tooltip: 'Edit',
+                onPressed: () => _showEditCategoryDialog(context, cat),
               ),
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.edit_rounded,
-                size: isNarrow ? 16 : 18,
-                color: AppTheme.accent,
+              if (!isNarrow) const SizedBox(width: 4),
+              IconButton(
+                constraints: BoxConstraints.tightFor(
+                  width: isNarrow ? 28 : 36,
+                  height: isNarrow ? 28 : 36,
+                ),
+                padding: EdgeInsets.zero,
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: isNarrow ? 16 : 18,
+                  color: AppTheme.danger,
+                ),
+                tooltip: 'Hapus',
+                onPressed: () => _deleteCategory(cat['id']),
               ),
-              tooltip: 'Edit',
-              onPressed: () => _showEditCategoryDialog(context, cat),
-            ),
-            if (!isNarrow) const SizedBox(width: 4),
-            IconButton(
-              constraints: BoxConstraints.tightFor(
-                width: isNarrow ? 28 : 36,
-                height: isNarrow ? 28 : 36,
-              ),
-              padding: EdgeInsets.zero,
-              icon: Icon(
-                Icons.delete_outline,
-                size: isNarrow ? 16 : 18,
-                color: AppTheme.danger,
-              ),
-              tooltip: 'Hapus',
-              onPressed: () => _deleteCategory(cat['id']),
-            ),
-          ],
+            ],
+          ),
         ),
         children: children
             .map<Widget>(
@@ -366,37 +369,41 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      constraints: BoxConstraints.tightFor(
-                        width: isNarrow ? 24 : 32,
-                        height: isNarrow ? 24 : 32,
+                trailing: SizedBox(
+                  width: isNarrow ? 56 : 72,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        constraints: BoxConstraints.tightFor(
+                          width: isNarrow ? 24 : 32,
+                          height: isNarrow ? 24 : 32,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          Icons.edit_rounded,
+                          size: isNarrow ? 14 : 16,
+                          color: AppTheme.accent,
+                        ),
+                        onPressed: () =>
+                            _showEditCategoryDialog(context, child),
                       ),
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.edit_rounded,
-                        size: isNarrow ? 14 : 16,
-                        color: AppTheme.accent,
+                      if (!isNarrow) const SizedBox(width: 4),
+                      IconButton(
+                        constraints: BoxConstraints.tightFor(
+                          width: isNarrow ? 24 : 32,
+                          height: isNarrow ? 24 : 32,
+                        ),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: isNarrow ? 14 : 16,
+                          color: AppTheme.danger,
+                        ),
+                        onPressed: () => _deleteCategory(child['id']),
                       ),
-                      onPressed: () => _showEditCategoryDialog(context, child),
-                    ),
-                    if (!isNarrow) const SizedBox(width: 4),
-                    IconButton(
-                      constraints: BoxConstraints.tightFor(
-                        width: isNarrow ? 24 : 32,
-                        height: isNarrow ? 24 : 32,
-                      ),
-                      padding: EdgeInsets.zero,
-                      icon: Icon(
-                        Icons.delete_outline,
-                        size: isNarrow ? 14 : 16,
-                        color: AppTheme.danger,
-                      ),
-                      onPressed: () => _deleteCategory(child['id']),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             )

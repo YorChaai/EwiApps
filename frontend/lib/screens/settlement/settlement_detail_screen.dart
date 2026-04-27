@@ -2541,11 +2541,13 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final prov = context.read<SettlementProvider>();
     final url = prov.getEvidenceUrl(path);
-    final isImage =
-        path.endsWith('.jpg') ||
-        path.endsWith('.jpeg') ||
-        path.endsWith('.png') ||
-        path.endsWith('.webp');
+    final pathLower = path.toLowerCase();
+    final isPdf = pathLower.endsWith('.pdf');
+    final isImage = pathLower.endsWith('.jpg') ||
+        pathLower.endsWith('.jpeg') ||
+        pathLower.endsWith('.png') ||
+        pathLower.endsWith('.webp') ||
+        pathLower.endsWith('.gif');
 
     showDialog(
       context: context,
@@ -2560,7 +2562,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           width: screenWidth > 700 ? 600 : screenWidth * 0.9,
           height: 400,
           child: isImage
-              ? Image.network(
+              ? InteractiveViewer(
+                  child: Image.network(
                   url,
                   headers: {
                     'Authorization':
@@ -2587,22 +2590,25 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       style: TextStyle(color: AppTheme.textSecondary),
                     ),
                   ),
+                ),
                 )
               : Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.picture_as_pdf_rounded,
+                        isPdf
+                            ? Icons.picture_as_pdf_rounded
+                            : Icons.insert_drive_file_rounded,
                         size: 64,
-                        color: AppTheme.danger,
+                        color: isPdf ? AppTheme.danger : AppTheme.primary,
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        filename ?? 'PDF File',
-                        style: TextStyle(color: AppTheme.textPrimary),
+                        isPdf ? 'Berkas (PDF)' : 'Berkas Lampiran',
+                        style: const TextStyle(color: AppTheme.textSecondary),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 24),
                       ElevatedButton.icon(
                         onPressed: () async {
                           final uri = Uri.parse(url);
@@ -2622,7 +2628,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           }
                         },
                         icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                        label: const Text('Buka & Lihat File'),
+                        label: Text(isPdf ? 'Buka PDF' : 'Buka Berkas'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primary,
                           foregroundColor: Colors.white,

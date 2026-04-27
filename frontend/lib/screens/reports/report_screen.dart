@@ -142,63 +142,57 @@ class _ReportScreenState extends State<ReportScreen> {
       );
     }
 
-    return Column(
-      children: [
-        // FIXED HEADER - Simulating an AppBar structure for stability
-        Container(
+    return AppScrollbar(
+      controller: _verticalController,
+      thumbVisibility: true,
+      interactive: true,
+      child: SingleChildScrollView(
+        controller: _verticalController,
+        child: Padding(
           padding: EdgeInsets.fromLTRB(
             useCompact ? 16 : 32,
-            useCompact ? 12 : 20,
             useCompact ? 16 : 32,
-            12,
+            useCompact ? 16 : 32,
+            64,
           ),
-          decoration: BoxDecoration(
-            color: _surfaceColor(context),
-            border: Border(bottom: BorderSide(color: _dividerColor(context))),
-          ),
-          child: isNarrow
-              ? Column(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // RESPONSIVE HEADER
+              if (isNarrow) ...[
+                _buildHeaderInfo(useCompact),
+                const SizedBox(height: 12),
+                _buildCacheInfo(useCompact),
+                const SizedBox(height: 16),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: _buildActions(useCompact),
+                ),
+              ] else ...[
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildHeaderInfo(useCompact),
-                    const SizedBox(height: 12),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: _buildActions(useCompact),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildHeaderInfo(useCompact),
+                          const SizedBox(height: 12),
+                          _buildCacheInfo(useCompact, isCompact: true),
+                        ],
+                      ),
                     ),
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildHeaderInfo(useCompact),
-                    const Spacer(),
+                    const SizedBox(width: 24),
                     _buildActions(useCompact),
                   ],
                 ),
-        ),
-        // SCROLLABLE BODY
-        Expanded(
-          child: AppScrollbar(
-            controller: _verticalController,
-            thumbVisibility: true,
-            interactive: true,
-            child: SingleChildScrollView(
-              controller: _verticalController,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  useCompact ? 12 : 16,
-                  useCompact ? 12 : 16,
-                  useCompact ? 12 : 16,
-                  64,
-                ),
-                child: _buildSummaryTableScrollableBody(useCompact),
-              ),
-            ),
+              ],
+              const SizedBox(height: 24),
+              _buildSummaryTableScrollableBody(useCompact),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
@@ -691,5 +685,45 @@ class _ReportScreenState extends State<ReportScreen> {
         );
       }
     }
+  }
+
+  String _fmtDate(String? dateStr) {
+    if (dateStr == null || dateStr.isEmpty) return '-';
+    try {
+      final dt = DateTime.parse(dateStr);
+      return DateFormat('dd-MMM-yy').format(dt);
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
+  Widget _buildCacheInfo(bool useCompact, {bool isCompact = false}) {
+    final source = (_summary?['cache_source'] ?? '').toString();
+    final generated = (_summary?['generated_at'] ?? '').toString();
+    String label = (source == 'cache')
+        ? 'CACHE (tidak hit DB)'
+        : (source == 'refresh' ? 'REFRESH (DB terbaru)' : 'INIT');
+    return Container(
+      width: isCompact ? null : double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 12 : 16,
+        vertical: isCompact ? 8 : 12,
+      ),
+      decoration: BoxDecoration(
+        color: _surfaceColor(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _dividerColor(context)),
+      ),
+      child: Text(
+        isCompact
+            ? '$label | Generated: ${generated.length > 10 ? generated.substring(11, 16) : ''}'
+            : 'Display Source: $label | Generated: ${_fmtDate(generated)} ${generated.length > 10 ? generated.substring(11, 19).trim() : ''}',
+        style: TextStyle(
+          color: _bodyColor(context),
+          fontSize: useCompact || isCompact ? 11 : 13,
+          height: 1.2,
+        ),
+      ),
+    );
   }
 }

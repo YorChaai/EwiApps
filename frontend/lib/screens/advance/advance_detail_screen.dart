@@ -3123,8 +3123,15 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
 
   void _showEvidence(String path, String? filename) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isPdf = path.toLowerCase().endsWith('.pdf');
-    final url = '${ApiService.baseUrl}/uploads/$path';
+    final prov = context.read<AdvanceProvider>();
+    final url = prov.getEvidenceUrl(path);
+    final pathLower = path.toLowerCase();
+    final isPdf = pathLower.endsWith('.pdf');
+    final isImage = pathLower.endsWith('.jpg') ||
+        pathLower.endsWith('.jpeg') ||
+        pathLower.endsWith('.png') ||
+        pathLower.endsWith('.webp') ||
+        pathLower.endsWith('.gif');
 
     showDialog(
       context: context,
@@ -3138,20 +3145,22 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         content: SizedBox(
           width: screenWidth > 700 ? 600 : screenWidth * 0.9,
           height: 400,
-          child: isPdf
+          child: !isImage
               ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.picture_as_pdf_rounded,
+                      Icon(
+                        isPdf
+                            ? Icons.picture_as_pdf_rounded
+                            : Icons.insert_drive_file_rounded,
                         size: 64,
-                        color: AppTheme.danger,
+                        color: isPdf ? AppTheme.danger : AppTheme.primary,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Berkas (PDF)',
-                        style: TextStyle(color: AppTheme.textSecondary),
+                      Text(
+                        isPdf ? 'Berkas (PDF)' : 'Berkas Lampiran',
+                        style: const TextStyle(color: AppTheme.textSecondary),
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
@@ -3173,7 +3182,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           }
                         },
                         icon: const Icon(Icons.open_in_new_rounded),
-                        label: const Text('Buka PDF'),
+                        label: Text(isPdf ? 'Buka PDF' : 'Buka Berkas'),
                       ),
                     ],
                   ),

@@ -337,7 +337,9 @@ def get_summary_report():
         'year': year,
         'mode': mode,
         'start_date': start_date.isoformat() if start_date else None,
-        'end_date': end_date.isoformat() if end_date else None
+        'end_date': end_date.isoformat() if end_date else None,
+        'cache_source': 'refresh',
+        'generated_at': datetime.now().isoformat()
     }), 200
 
 

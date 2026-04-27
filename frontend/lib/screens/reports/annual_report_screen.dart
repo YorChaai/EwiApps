@@ -739,21 +739,20 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
 
 
 
-  Widget _buildCacheInfo(bool useCompact) {
+  Widget _buildCacheInfo(bool useCompact, {bool isCompact = false}) {
     final source = (_reportData?['cache_source'] ?? '').toString();
-    final generated =
-        (_reportData?['cache_generated_at'] ??
-                _reportData?['generated_at'] ??
-                '')
-            .toString();
+    final generated = (_reportData?['cache_generated_at'] ??
+            _reportData?['generated_at'] ??
+            '')
+        .toString();
     String label = (source == 'cache')
         ? 'CACHE (tidak hit DB)'
         : (source == 'refresh' ? 'REFRESH (DB terbaru)' : 'INIT');
     return Container(
-      width: double.infinity,
+      width: isCompact ? null : double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
+        horizontal: isCompact ? 12 : 16,
+        vertical: isCompact ? 8 : 12,
       ),
       decoration: BoxDecoration(
         color: _surfaceColor(context),
@@ -761,10 +760,12 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         border: Border.all(color: _dividerColor(context)),
       ),
       child: Text(
-        'Display Source: $label | Generated: ${_fmtDate(generated)} ${generated.length > 10 ? generated.substring(11, 19).trim() : ''}',
+        isCompact
+            ? '$label | Generated: ${generated.length > 10 ? generated.substring(11, 16) : ''}'
+            : 'Display Source: $label | Generated: ${_fmtDate(generated)} ${generated.length > 10 ? generated.substring(11, 19).trim() : ''}',
         style: TextStyle(
           color: _bodyColor(context),
-          fontSize: useCompact ? 11 : 13,
+          fontSize: useCompact || isCompact ? 11 : 13,
           height: 1.2,
         ),
       ),

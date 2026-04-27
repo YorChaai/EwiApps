@@ -487,4 +487,8 @@ class AdvanceProvider extends ChangeNotifier {
       return false;
     }
   }
+
+  String getEvidenceUrl(String filename) {
+    return _api.getEvidenceUrl(filename);
+  }
 }

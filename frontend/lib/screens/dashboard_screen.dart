@@ -200,12 +200,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final isAndroid = Theme.of(context).platform == TargetPlatform.android;
-    final isMobile = ResponsiveLayout.isMobile(context) || isAndroid;
-    final isPhoneLandscape = ResponsiveLayout.isPhoneLandscape(context);
-    final isTablet = ResponsiveLayout.isTablet(context);
+    // UI Scaling for mobile-like windows
     final safeWidth = ResponsiveLayout.safeWidth(context);
+    final isMobile = ResponsiveLayout.isMobile(context) || isAndroid || safeWidth < 600;
+    final isPhoneLandscape = ResponsiveLayout.isPhoneLandscape(context);
+    final isTablet = ResponsiveLayout.isTablet(context) && safeWidth >= 800;
+    
     final compactAppBar = safeWidth < 430;
-    final showSidebar = !isMobile && !isAndroid;
+    final showSidebar = !isMobile && !isAndroid && safeWidth >= 600;
     final sidebarWidth = showSidebar
         ? (isTablet || !_sidebarExpanded ? 80.0 : 240.0)
         : 0.0;
