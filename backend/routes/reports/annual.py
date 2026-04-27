@@ -1250,8 +1250,8 @@ def _render_expense_section_from_data(
     """
     logger.debug('Starting data-driven expense rendering')
     last_category_col = 9 + len(cat_names) - 1
-    # Define a safe maximum column to clear template "ghost" data (up to column 30/AD)
-    SAFE_MAX_COL = 30
+    # Define a safe maximum column to clear template "ghost" data (up to column 60/BH)
+    SAFE_MAX_COL = 60
     actual_last_col = max(last_category_col, SAFE_MAX_COL)
 
     from openpyxl.styles import PatternFill, Border, Side
@@ -1392,6 +1392,12 @@ def _render_expense_section_from_data(
         cell = ws.cell(row=row_cursor, column=4)
         cell.font = cell.font.copy(italic=True, color='808080')
         cell.alignment = cell.alignment.copy(horizontal='center')
+
+        # ✅ CRITICAL: Reset borders for ALL ghost columns in this row
+        for col in range(last_category_col + 1, actual_last_col + 1):
+            ws.cell(row=row_cursor, column=col).border = no_border
+            ws.cell(row=row_cursor, column=col).fill = no_fill
+
         row_cursor += 1
 
     # ✅ STEP 3: Render separator (green fill)
@@ -1527,6 +1533,23 @@ def _render_expense_section_from_data(
 
                     row_cursor += 1
                     seq_counter += 1
+    else:
+        _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
+        _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
+        for col in range(2, last_category_col + 1):
+            cell = ws.cell(row=row_cursor, column=col)
+            cell.border = THIN_BORDER
+        _safe_set_cell(ws, row_cursor, 4, 'Belum ada data batch pengeluaran')
+        cell = ws.cell(row=row_cursor, column=4)
+        cell.font = cell.font.copy(italic=True, color='808080')
+        cell.alignment = cell.alignment.copy(horizontal='center')
+
+        # ✅ CRITICAL: Reset borders for ALL ghost columns in this row
+        for col in range(last_category_col + 1, actual_last_col + 1):
+            ws.cell(row=row_cursor, column=col).border = no_border
+            ws.cell(row=row_cursor, column=col).fill = no_fill
+
+        row_cursor += 1
 
     # ✅ STEP 5: Render TOTAL row
     total_row = row_cursor
@@ -3109,7 +3132,6 @@ def get_annual_report_excel():
     ws.cell(row=total_tax_row, column=11).value = 'PPh'
     ws.cell(row=total_tax_row, column=13).value = 'PPh'
     ws.cell(row=total_tax_row, column=15).value = 'PPh'
-    ws.cell(row=total_tax_row, column=17).value = '-'
 
     # Bold total row
     for col in range(2, 18):
