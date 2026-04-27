@@ -420,7 +420,7 @@ def _has_any_report_tags():
 
 
 def _compute_dividend_distribution(revenues, expenses, profit_retained, recipient_count):
-    revenue_total = sum((r.idr_amount_received or 0) for r in revenues)
+    revenue_total = sum((r.idr_invoice_value or 0) for r in revenues)
     pph23_total = sum((r.pph_23 or 0) for r in revenues)
     total_cost = sum((e.idr_amount or 0) for e in expenses)
     profit_before_tax = revenue_total - total_cost
@@ -612,7 +612,7 @@ def _build_annual_payload_from_db(
         ordered_expense_data.extend(group)
     return {
         'year': year,
-        'revenue': {'data': revenue_data, 'total_amount_received': sum(r.idr_amount_received for r in revenues),
+        'revenue': {'data': revenue_data, 'total_invoice_value': sum(r.idr_invoice_value for r in revenues),
                     'total_ppn': sum(r.ppn or 0 for r in revenues), 'total_pph23': sum(r.pph_23 or 0 for r in revenues)},
         'tax': {'data': tax_data, 'total_ppn': sum(t.ppn or 0 for t in taxes), 'total_pph21': sum(t.pph_21 or 0 for t in taxes),
                 'total_pph23': sum(t.pph_23 or 0 for t in taxes), 'total_pph26': sum(t.pph_26 or 0 for t in taxes)},
@@ -1029,7 +1029,7 @@ def _write_secondary_summary_sheets(wb, payload, year, main_sheet_name, expense_
 
     # ✅ FIX: Use dynamic category range instead of hardcoded :Q
     rows = [
-        ('Total Revenue (IDR)', _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)),
+        ('Total Revenue (IDR)', _sum_sheet_column_formula(main_ref, get_column_letter(COL_INVOICE_VALUE), REVENUE_START_ROW, last_revenue_row)),
         ('Total Tax Out (IDR)', _sum_sheet_column_formula(main_ref, get_column_letter(COL_PPH_23), REVENUE_START_ROW, last_revenue_row)),
         ('Total Operation Cost (IDR)', f'=SUM({main_ref}!I{cost_totals_row}:{last_cat_col_letter}{cost_totals_row})'),
         ('Net Profit/Loss (IDR)', '=B4-B5-B6'),
@@ -2028,7 +2028,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         # ✅ REVENUE TOTALS BY TYPE - Hitung dengan SUM langsung ke baris sesuai tipe
         direct_count = sum(1 for r in revenues if (r.get('revenue_type') or 'pendapatan_langsung').strip().lower() != 'pendapatan_lain_lain')
         other_count = len(revenues) - direct_count
-        col_letter = get_column_letter(COL_AMOUNT_RECEIVED)
+        col_letter = get_column_letter(COL_INVOICE_VALUE)
         start_row_ref = REVENUE_START_ROW
 
         # PENDAPATAN SECTION
@@ -2371,7 +2371,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         # Row 7: Item 1 - Revenue
         ws_bs['B7'] = 1; ws_bs['C7'] = 'Revenue'
-        ws_bs['E7'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_AMOUNT_RECEIVED), REVENUE_START_ROW, last_revenue_row)
+        ws_bs['E7'] = _sum_sheet_column_formula(main_ref, get_column_letter(COL_INVOICE_VALUE), REVENUE_START_ROW, last_revenue_row)
         ws_bs['E7'].number_format = '#,##0'
 
         # Row 8: Item 2 - Revenue Diterima (Setelah Pajak)

@@ -528,8 +528,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 side: BorderSide(
                   color: isGoogleLinked ? AppTheme.success : AppTheme.danger,
                 ),
-                foregroundColor:
-                    isGoogleLinked ? AppTheme.success : AppTheme.danger,
+                foregroundColor: isGoogleLinked
+                    ? AppTheme.success
+                    : AppTheme.danger,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
@@ -592,10 +593,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         context: context,
                         builder: (ctx) => AlertDialog(
                           title: const Text('Mode Debug (Bypass)'),
-                          content: const Text('Gagal menghubungkan Google. Apakah Anda ingin mensimulasikan koneksi berhasil untuk keperluan testing?'),
+                          content: const Text(
+                            'Gagal menghubungkan Google. Apakah Anda ingin mensimulasikan koneksi berhasil untuk keperluan testing?',
+                          ),
                           actions: [
-                            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-                            ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Ya, Simulasikan')),
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Batal'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Ya, Simulasikan'),
+                            ),
                           ],
                         ),
                       );
@@ -605,7 +614,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Berhasil menghubungkan Google (MODE DEBUG)'),
+                              content: Text(
+                                'Berhasil menghubungkan Google (MODE DEBUG)',
+                              ),
                               backgroundColor: AppTheme.success,
                             ),
                           );
@@ -724,17 +735,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ButtonSegment<ThemeMode>(
                   value: ThemeMode.light,
                   icon: Icon(Icons.light_mode_rounded, size: 16),
-                  label: Text('Light', overflow: TextOverflow.visible, softWrap: false),
+                  label: Text(
+                    'Light',
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                  ),
                 ),
                 ButtonSegment<ThemeMode>(
                   value: ThemeMode.dark,
                   icon: Icon(Icons.dark_mode_rounded, size: 16),
-                  label: Text('Dark', overflow: TextOverflow.visible, softWrap: false),
+                  label: Text(
+                    'Dark',
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                  ),
                 ),
                 ButtonSegment<ThemeMode>(
                   value: ThemeMode.system,
                   icon: Icon(Icons.settings_suggest_rounded, size: 16),
-                  label: Text('System', overflow: TextOverflow.visible, softWrap: false),
+                  label: Text(
+                    'System',
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                  ),
                 ),
               ],
               selected: {themeProvider.themeMode},
@@ -891,7 +914,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Flexible(
                           child: Text(
                             'Export Data',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -920,7 +946,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Flexible(
                           child: Text(
                             'Import Data',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -1253,7 +1282,8 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
             // Image Picker UI - Centered with floating buttons
             Center(
               child: SizedBox(
-                width: 220, // Lebar cukup untuk avatar + tombol di kanan (dan dummy di kiri agar center)
+                width:
+                    220, // Lebar cukup untuk avatar + tombol di kanan (dan dummy di kiri agar center)
                 height: 100,
                 child: Stack(
                   alignment: Alignment.center,
@@ -1271,8 +1301,15 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                                           ? NetworkImage(auth.profileImageUrl!)
                                           : null)
                                       as ImageProvider?),
-                      child: (_removeImage || (auth.profileImageUrl == null && _selectedImagePath == null))
-                          ? const Icon(Icons.person, size: 48, color: AppTheme.primary)
+                      child:
+                          (_removeImage ||
+                              (auth.profileImageUrl == null &&
+                                  _selectedImagePath == null))
+                          ? const Icon(
+                              Icons.person,
+                              size: 48,
+                              color: AppTheme.primary,
+                            )
                           : null,
                     ),
 
@@ -1288,7 +1325,11 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.delete_forever, color: Colors.white, size: 32),
+                                Icon(
+                                  Icons.delete_forever,
+                                  color: Colors.white,
+                                  size: 32,
+                                ),
                                 Text(
                                   'Dihapus',
                                   style: TextStyle(
@@ -1319,7 +1360,10 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                               decoration: BoxDecoration(
                                 color: AppTheme.primary,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppTheme.card, width: 2),
+                                border: Border.all(
+                                  color: AppTheme.card,
+                                  width: 2,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.2),
@@ -1346,16 +1390,20 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                                   builder: (ctx) => AlertDialog(
                                     title: const Text('Hapus Foto Profil?'),
                                     content: const Text(
-                                        'Apakah Anda yakin ingin menghapus foto profil ini?'),
+                                      'Apakah Anda yakin ingin menghapus foto profil ini?',
+                                    ),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, false),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, false),
                                         child: const Text('Batal'),
                                       ),
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx, true),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx, true),
                                         style: TextButton.styleFrom(
-                                            foregroundColor: AppTheme.danger),
+                                          foregroundColor: AppTheme.danger,
+                                        ),
                                         child: const Text('Hapus'),
                                       ),
                                     ],
@@ -1374,11 +1422,15 @@ class _EditProfileDialogState extends State<EditProfileDialog> {
                                 decoration: BoxDecoration(
                                   color: AppTheme.danger,
                                   shape: BoxShape.circle,
-                                  border:
-                                      Border.all(color: AppTheme.card, width: 2),
+                                  border: Border.all(
+                                    color: AppTheme.card,
+                                    width: 2,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.2),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.2,
+                                      ),
                                       blurRadius: 4,
                                       offset: const Offset(0, 2),
                                     ),

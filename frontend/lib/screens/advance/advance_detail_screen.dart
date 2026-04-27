@@ -15,7 +15,6 @@ import '../../utils/currency_formatter.dart';
 import '../../utils/file_helper.dart';
 import '../../utils/responsive_layout.dart';
 import '../../utils/app_dialogs.dart';
-import '../../services/api_service.dart';
 import '../../widgets/notification_bell_icon.dart';
 import '../widgets/page_selector.dart';
 import '../widgets/sidebar.dart';
@@ -695,7 +694,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               ),
               style: TextStyle(color: _primaryText(ctx)),
             ),
-
           ],
         ),
         actions: [
@@ -840,395 +838,435 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       controller: dialogScrollCtrl,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        height: 10,
-                      ), // Ruang ekstra agar label terbaca
-                      // dropdown kategori utama
-                      DropdownButtonFormField<int>(
-                        decoration: const InputDecoration(
-                          labelText: 'Kategori Utama',
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                        ),
-                        isExpanded: true,
-                        dropdownColor: _cardColor(ctx),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        initialValue: effectiveParentId,
-                        items: categories.map((c) {
-                          final isPending = c['status'] == 'pending';
-                          return DropdownMenuItem<int>(
-                            value: c['id'] as int,
-                            child: Text(
-                              isPending ? '${c['name']} (Pending)' : c['name'],
-                              style: TextStyle(
-                                color: isPending
-                                    ? AppTheme.warning
-                                    : _primaryText(ctx),
+                        children: [
+                          const SizedBox(
+                            height: 10,
+                          ), // Ruang ekstra agar label terbaca
+                          // dropdown kategori utama
+                          DropdownButtonFormField<int>(
+                            decoration: const InputDecoration(
+                              labelText: 'Kategori Utama',
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
                               ),
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (v) => setDialogState(() {
-                          selectedParentId = v;
-                          selectedSubCategoryIds = {}; // reset sub
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Checklist Sub Kategori
-                      if (effectiveParentId != null) ...[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            children.isNotEmpty
-                                ? 'Pilih Sub Kategori:'
-                                : 'Hanya Kategori Utama',
-                            style: TextStyle(
-                              color: _secondaryText(ctx),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            isExpanded: true,
+                            dropdownColor: _cardColor(ctx),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            initialValue: effectiveParentId,
+                            items: categories.map((c) {
+                              final isPending = c['status'] == 'pending';
+                              return DropdownMenuItem<int>(
+                                value: c['id'] as int,
+                                child: Text(
+                                  isPending
+                                      ? '${c['name']} (Pending)'
+                                      : c['name'],
+                                  style: TextStyle(
+                                    color: isPending
+                                        ? AppTheme.warning
+                                        : _primaryText(ctx),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) => setDialogState(() {
+                              selectedParentId = v;
+                              selectedSubCategoryIds = {}; // reset sub
+                            }),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (children.isNotEmpty)
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 200),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _dividerColor(ctx)),
-                            ),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                children: children.map((c) {
-                                  final subId = c['id'] as int;
-                                  final isPending = c['status'] == 'pending';
-                                  final isSelected = selectedSubCategoryIds
-                                      .contains(subId);
+                          const SizedBox(height: 12),
 
-                                  return CheckboxListTile(
-                                    value: isSelected,
-                                    activeColor: AppTheme.primary,
-                                    checkColor: Colors.white,
-                                    dense: true,
-                                    title: Text(
-                                      isPending
-                                          ? '${c['name']} (Pending)'
-                                          : c['name'],
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? AppTheme.primary
-                                            : (isPending
-                                                  ? AppTheme.warning
-                                                  : _primaryText(ctx)),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    onChanged: (val) {
+                          // Checklist Sub Kategori
+                          if (effectiveParentId != null) ...[
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                children.isNotEmpty
+                                    ? 'Pilih Sub Kategori:'
+                                    : 'Hanya Kategori Utama',
+                                style: TextStyle(
+                                  color: _secondaryText(ctx),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (children.isNotEmpty)
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 200,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _dividerColor(ctx)),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: children.map((c) {
+                                      final subId = c['id'] as int;
+                                      final isPending =
+                                          c['status'] == 'pending';
+                                      final isSelected = selectedSubCategoryIds
+                                          .contains(subId);
+
+                                      return CheckboxListTile(
+                                        value: isSelected,
+                                        activeColor: AppTheme.primary,
+                                        checkColor: Colors.white,
+                                        dense: true,
+                                        title: Text(
+                                          isPending
+                                              ? '${c['name']} (Pending)'
+                                              : c['name'],
+                                          style: TextStyle(
+                                            color: isSelected
+                                                ? AppTheme.primary
+                                                : (isPending
+                                                      ? AppTheme.warning
+                                                      : _primaryText(ctx)),
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        onChanged: (val) {
+                                          setDialogState(() {
+                                            if (val == true) {
+                                              selectedSubCategoryIds.add(subId);
+                                            } else {
+                                              selectedSubCategoryIds.remove(
+                                                subId,
+                                              );
+                                            }
+                                          });
+                                        },
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              )
+                            else
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8),
+                                child: Text(
+                                  'Kategori ini tidak memiliki sub-kategori.',
+                                  style: TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                          ],
+
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: TextButton.icon(
+                                  onPressed: () => _showAddCategoryDialog(
+                                    ctx,
+                                    setDialogState,
+                                    (newCat) {
+                                      final parentID = newCat['parent_id'];
+                                      final catID = newCat['id'] as int;
                                       setDialogState(() {
-                                        if (val == true) {
-                                          selectedSubCategoryIds.add(subId);
+                                        if (parentID != null) {
+                                          selectedParentId = parentID;
+                                          selectedSubCategoryIds.add(catID);
                                         } else {
-                                          selectedSubCategoryIds.remove(subId);
+                                          selectedParentId = catID;
+                                          selectedSubCategoryIds = {};
                                         }
                                       });
                                     },
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ),
-                          )
-                        else
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Kategori ini tidak memiliki sub-kategori.',
-                              style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
-
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: TextButton.icon(
-                              onPressed: () => _showAddCategoryDialog(
-                                ctx,
-                                setDialogState,
-                                (newCat) {
-                                  final parentID = newCat['parent_id'];
-                                  final catID = newCat['id'] as int;
-                                  setDialogState(() {
-                                    if (parentID != null) {
-                                      selectedParentId = parentID;
-                                      selectedSubCategoryIds.add(catID);
-                                    } else {
-                                      selectedParentId = catID;
-                                      selectedSubCategoryIds = {};
-                                    }
-                                  });
-                                },
-                                parentId: selectedParentId,
-                              ),
-                              icon: const Icon(
-                                Icons.add_circle_outline,
-                                size: 16,
-                              ),
-                              label: Text(
-                                selectedParentId != null
-                                    ? 'Tambah Sub-Kategori Baru'
-                                    : 'Tambah Kategori Baru',
-                                style: const TextStyle(fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.category_rounded,
-                              color: AppTheme.primary,
-                              size: 20,
-                            ),
-                            tooltip: 'Pratinjau Struktur Kategori',
-                            onPressed: () => showCategoryPreviewDialog(
-                              context,
-                              context.read<SettlementProvider>().categories,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      TextField(
-                        controller: descCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Deskripsi',
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        onChanged: (val) {
-                          final lower = val.toLowerCase();
-                          for (final p in categories) {
-                            final pName = p['name'].toString().toLowerCase();
-                            if (lower.contains(pName)) {
-                              setDialogState(() {
-                                selectedParentId = p['id'];
-                              });
-                            }
-                            final childrenList = _asMapList(
-                              p['children'] as List?,
-                            );
-                            for (final c in childrenList) {
-                              final cName = c['name'].toString().toLowerCase();
-                              if (lower.contains(cName)) {
-                                setDialogState(() {
-                                  selectedParentId = p['id'];
-                                  selectedSubCategoryIds.add(c['id'] as int);
-                                });
-                              }
-                            }
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: dateCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Tanggal',
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.calendar_today, size: 18),
-                            onPressed: () async {
-                              final initialDate =
-                                  DateTime.tryParse(dateCtrl.text) ??
-                                  defaultDate;
-                              final d = await showDatePicker(
-                                context: ctx,
-                                initialDate: initialDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2100),
-                              );
-                              if (d != null) {
-                                dateCtrl.text = DateFormat(
-                                  'yyyy-MM-dd',
-                                ).format(d);
-                              }
-                            },
-                          ),
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        readOnly: true,
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                labelText: 'Mata Uang',
-                              ),
-                              dropdownColor: _cardColor(ctx),
-                              style: TextStyle(
-                                color: _primaryText(ctx),
-                              ),
-                              initialValue: selectedCurrency,
-                              items: [
-                                DropdownMenuItem(
-                                  value: 'IDR',
-                                  child: Text('IDR', style: TextStyle(color: _primaryText(ctx))),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'USD',
-                                  child: Text('USD', style: TextStyle(color: _primaryText(ctx))),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'EUR',
-                                  child: Text('EUR', style: TextStyle(color: _primaryText(ctx))),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'GBP',
-                                  child: Text('GBP', style: TextStyle(color: _primaryText(ctx))),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'JPY',
-                                  child: Text('JPY', style: TextStyle(color: _primaryText(ctx))),
-                                ),
-                              ],
-                              onChanged: (v) => setDialogState(() {
-                                selectedCurrency = v ?? 'IDR';
-                                if (selectedCurrency == 'IDR') {
-                                  exchangeRateCtrl.text = '1';
-                                }
-                              }),
-                            ),
-                          ),
-                          if (selectedCurrency != 'IDR') ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: exchangeRateCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Kurs (ke IDR)',
-                                ),
-                                style: TextStyle(
-                                  color: _primaryText(ctx),
-                                ),
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [CurrencyInputFormatter()],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      TextField(
-                        controller: amountCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Amount ($selectedCurrency)',
-                          hintText: '10.000',
-                          hintStyle: TextStyle(
-                            color: _secondaryText(ctx).withValues(alpha: 0.5),
-                          ),
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [CurrencyInputFormatter()],
-                      ),
-                      const SizedBox(height: 16),
-                      // Tampilkan evidence lama jika ada (mode edit)
-                      if (isEditing &&
-                          item['evidence_filename'] != null &&
-                          selectedFileName == null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.attach_file_rounded,
-                                size: 14,
-                                color: AppTheme.textSecondary,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  'Bukti saat ini: ${item['evidence_filename']}',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppTheme.textSecondary,
+                                    parentId: selectedParentId,
                                   ),
-                                  overflow: TextOverflow.ellipsis,
+                                  icon: const Icon(
+                                    Icons.add_circle_outline,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    selectedParentId != null
+                                        ? 'Tambah Sub-Kategori Baru'
+                                        : 'Tambah Kategori Baru',
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.category_rounded,
+                                  color: AppTheme.primary,
+                                  size: 20,
+                                ),
+                                tooltip: 'Pratinjau Struktur Kategori',
+                                onPressed: () => showCategoryPreviewDialog(
+                                  context,
+                                  context.read<SettlementProvider>().categories,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          try {
-                            final result = await FilePicker.pickFiles(
-                              type: FileType.custom,
-                              allowedExtensions: [
-                                'jpg',
-                                'jpeg',
-                                'png',
-                                'pdf',
-                                'webp',
+                          const SizedBox(height: 12),
+
+                          TextField(
+                            controller: descCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Deskripsi',
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            onChanged: (val) {
+                              final lower = val.toLowerCase();
+                              for (final p in categories) {
+                                final pName = p['name']
+                                    .toString()
+                                    .toLowerCase();
+                                if (lower.contains(pName)) {
+                                  setDialogState(() {
+                                    selectedParentId = p['id'];
+                                  });
+                                }
+                                final childrenList = _asMapList(
+                                  p['children'] as List?,
+                                );
+                                for (final c in childrenList) {
+                                  final cName = c['name']
+                                      .toString()
+                                      .toLowerCase();
+                                  if (lower.contains(cName)) {
+                                    setDialogState(() {
+                                      selectedParentId = p['id'];
+                                      selectedSubCategoryIds.add(
+                                        c['id'] as int,
+                                      );
+                                    });
+                                  }
+                                }
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: dateCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Tanggal',
+                              suffixIcon: IconButton(
+                                icon: const Icon(
+                                  Icons.calendar_today,
+                                  size: 18,
+                                ),
+                                onPressed: () async {
+                                  final initialDate =
+                                      DateTime.tryParse(dateCtrl.text) ??
+                                      defaultDate;
+                                  final d = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: initialDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (d != null) {
+                                    dateCtrl.text = DateFormat(
+                                      'yyyy-MM-dd',
+                                    ).format(d);
+                                  }
+                                },
+                              ),
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            readOnly: true,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<String>(
+                                  decoration: const InputDecoration(
+                                    labelText: 'Mata Uang',
+                                  ),
+                                  dropdownColor: _cardColor(ctx),
+                                  style: TextStyle(color: _primaryText(ctx)),
+                                  initialValue: selectedCurrency,
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: 'IDR',
+                                      child: Text(
+                                        'IDR',
+                                        style: TextStyle(
+                                          color: _primaryText(ctx),
+                                        ),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'USD',
+                                      child: Text(
+                                        'USD',
+                                        style: TextStyle(
+                                          color: _primaryText(ctx),
+                                        ),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'EUR',
+                                      child: Text(
+                                        'EUR',
+                                        style: TextStyle(
+                                          color: _primaryText(ctx),
+                                        ),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'GBP',
+                                      child: Text(
+                                        'GBP',
+                                        style: TextStyle(
+                                          color: _primaryText(ctx),
+                                        ),
+                                      ),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'JPY',
+                                      child: Text(
+                                        'JPY',
+                                        style: TextStyle(
+                                          color: _primaryText(ctx),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (v) => setDialogState(() {
+                                    selectedCurrency = v ?? 'IDR';
+                                    if (selectedCurrency == 'IDR') {
+                                      exchangeRateCtrl.text = '1';
+                                    }
+                                  }),
+                                ),
+                              ),
+                              if (selectedCurrency != 'IDR') ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextField(
+                                    controller: exchangeRateCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Kurs (ke IDR)',
+                                    ),
+                                    style: TextStyle(color: _primaryText(ctx)),
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [CurrencyInputFormatter()],
+                                  ),
+                                ),
                               ],
-                            );
-                            if (result != null &&
-                                result.files.single.path != null) {
-                              setDialogState(() {
-                                selectedFilePath = result.files.single.path;
-                                selectedFileName = result.files.single.name;
-                              });
-                            }
-                          } catch (e) {
-                            debugPrint('FilePicker Error: $e');
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: Text(
-                          selectedFileName ??
-                              (isEditing
-                                  ? 'Ganti / Tambah Bukti (opsional)'
-                                  : 'Upload Bukti (opsional)'),
-                        ),
-                      ),
-                      if (selectedFileName != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '✓ $selectedFileName',
-                            style: const TextStyle(
-                              color: AppTheme.success,
-                              fontSize: 12,
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          TextField(
+                            controller: amountCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Amount ($selectedCurrency)',
+                              hintText: '10.000',
+                              hintStyle: TextStyle(
+                                color: _secondaryText(
+                                  ctx,
+                                ).withValues(alpha: 0.5),
+                              ),
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [CurrencyInputFormatter()],
+                          ),
+                          const SizedBox(height: 16),
+                          // Tampilkan evidence lama jika ada (mode edit)
+                          if (isEditing &&
+                              item['evidence_filename'] != null &&
+                              selectedFileName == null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.attach_file_rounded,
+                                    size: 14,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      'Bukti saat ini: ${item['evidence_filename']}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final result = await FilePicker.pickFiles(
+                                  type: FileType.custom,
+                                  allowedExtensions: [
+                                    'jpg',
+                                    'jpeg',
+                                    'png',
+                                    'pdf',
+                                    'webp',
+                                  ],
+                                );
+                                if (result != null &&
+                                    result.files.single.path != null) {
+                                  setDialogState(() {
+                                    selectedFilePath = result.files.single.path;
+                                    selectedFileName = result.files.single.name;
+                                  });
+                                }
+                              } catch (e) {
+                                debugPrint('FilePicker Error: $e');
+                              }
+                            },
+                            icon: const Icon(Icons.upload_file_rounded),
+                            label: Text(
+                              selectedFileName ??
+                                  (isEditing
+                                      ? 'Ganti / Tambah Bukti (opsional)'
+                                      : 'Upload Bukti (opsional)'),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        actions: [
-          if (isEditing)
+                          if (selectedFileName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '✓ $selectedFileName',
+                                style: const TextStyle(
+                                  color: AppTheme.success,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            actions: [
+              if (isEditing)
                 TextButton(
                   onPressed: () => _deleteItem(item['id']),
                   child: const Text(
@@ -2524,8 +2562,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primary
-                                        .withValues(alpha: 0.1),
+                                    color: AppTheme.primary.withValues(
+                                      alpha: 0.1,
+                                    ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -2541,7 +2580,10 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 if (item['title'] != null &&
                                     item['title'].toString().isNotEmpty)
                                   _buildPreviewRow(
-                                      'Judul', item['title'], isDark),
+                                    'Judul',
+                                    item['title'],
+                                    isDark,
+                                  ),
                                 _buildPreviewRow(
                                   'Tanggal',
                                   item['date'] ?? '-',
@@ -3127,7 +3169,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     final url = prov.getEvidenceUrl(path);
     final pathLower = path.toLowerCase();
     final isPdf = pathLower.endsWith('.pdf');
-    final isImage = pathLower.endsWith('.jpg') ||
+    final isImage =
+        pathLower.endsWith('.jpg') ||
         pathLower.endsWith('.jpeg') ||
         pathLower.endsWith('.png') ||
         pathLower.endsWith('.webp') ||

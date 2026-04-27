@@ -40,9 +40,10 @@ android {
     }
 
     applicationVariants.all {
-        outputs.all {
-            val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
-            output.outputFileName = "ExspanApp.apk"
+        outputs.forEach { output ->
+            if (output is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
+                output.outputFileName = "Exspan App.apk"
+            }
         }
     }
 }

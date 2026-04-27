@@ -255,7 +255,8 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                           onPressed: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => const CategoryTabularScreen(),
+                              builder: (context) =>
+                                  const CategoryTabularScreen(),
                             ),
                           ),
                           icon: Icon(
@@ -286,8 +287,6 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
       ),
     );
   }
-
-
 
   Widget _buildCategoryTile(Map<String, dynamic> cat) {
     final children = (cat['children'] as List?) ?? [];

@@ -190,7 +190,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _confirmLogout() async {
-    final confirmed = await AppDialogs.showExitConfirmation(context, isLogout: true);
+    final confirmed = await AppDialogs.showExitConfirmation(
+      context,
+      isLogout: true,
+    );
     if (confirmed && mounted) {
       context.read<AuthProvider>().logout();
     }
@@ -202,10 +205,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final isAndroid = Theme.of(context).platform == TargetPlatform.android;
     // UI Scaling for mobile-like windows
     final safeWidth = ResponsiveLayout.safeWidth(context);
-    final isMobile = ResponsiveLayout.isMobile(context) || isAndroid || safeWidth < 600;
+    final isMobile =
+        ResponsiveLayout.isMobile(context) || isAndroid || safeWidth < 600;
     final isPhoneLandscape = ResponsiveLayout.isPhoneLandscape(context);
     final isTablet = ResponsiveLayout.isTablet(context) && safeWidth >= 800;
-    
+
     final compactAppBar = safeWidth < 430;
     final showSidebar = !isMobile && !isAndroid && safeWidth >= 600;
     final sidebarWidth = showSidebar
@@ -227,177 +231,182 @@ class _DashboardScreenState extends State<DashboardScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final confirmed = await AppDialogs.showExitConfirmation(context, isLogout: false);
+        final confirmed = await AppDialogs.showExitConfirmation(
+          context,
+          isLogout: false,
+        );
         if (confirmed && mounted) {
           SystemNavigator.pop();
         }
       },
       child: Scaffold(
         body: Row(
-        children: [
-          if (showSidebar)
-            SizedBox(
-              width: sidebarWidth,
-              child: DashboardSidebar(
-                currentIndex: currentIndex,
-                isManager: auth.isManager,
-                fullName: auth.fullName,
-                role: auth.roleDisplayName,
-                profileImageUrl: auth.profileImageUrl,
-                onNotificationTap: _handleNotificationTap,
-                onNavTap: (i) {
-                  // Trigger reload jika klik menu yang sama atau pindah tab
-                  if (i == 0) {
-                    _settlementListKey.currentState?.resetFilters();
-                  } else if (i == 1) {
-                    _advancesListKey.currentState?.resetFilters();
-                  }
-
-                  setState(() {
-                    _navIndex = i;
-                    if (i == 2) _reportPageKey = UniqueKey();
-                    if (i == (auth.isManager ? 4 : 2)) {
-                      _settingsPageKey = UniqueKey();
+          children: [
+            if (showSidebar)
+              SizedBox(
+                width: sidebarWidth,
+                child: DashboardSidebar(
+                  currentIndex: currentIndex,
+                  isManager: auth.isManager,
+                  fullName: auth.fullName,
+                  role: auth.roleDisplayName,
+                  profileImageUrl: auth.profileImageUrl,
+                  onNotificationTap: _handleNotificationTap,
+                  onNavTap: (i) {
+                    // Trigger reload jika klik menu yang sama atau pindah tab
+                    if (i == 0) {
+                      _settlementListKey.currentState?.resetFilters();
+                    } else if (i == 1) {
+                      _advancesListKey.currentState?.resetFilters();
                     }
-                  });
-                },
-                onLogout: _confirmLogout,
-                isMini: isTablet,
-                isExpanded: _sidebarExpanded,
-                onToggleExpand: isTablet
-                    ? null
-                    : () =>
-                          setState(() => _sidebarExpanded = !_sidebarExpanded),
-                pendingSettlements: auth.isManager ? _pendingSettlements : 0,
-                pendingAdvances: auth.isManager ? _pendingAdvances : 0,
+
+                    setState(() {
+                      _navIndex = i;
+                      if (i == 2) _reportPageKey = UniqueKey();
+                      if (i == (auth.isManager ? 4 : 2)) {
+                        _settingsPageKey = UniqueKey();
+                      }
+                    });
+                  },
+                  onLogout: _confirmLogout,
+                  isMini: isTablet,
+                  isExpanded: _sidebarExpanded,
+                  onToggleExpand: isTablet
+                      ? null
+                      : () => setState(
+                          () => _sidebarExpanded = !_sidebarExpanded,
+                        ),
+                  pendingSettlements: auth.isManager ? _pendingSettlements : 0,
+                  pendingAdvances: auth.isManager ? _pendingAdvances : 0,
+                ),
               ),
-            ),
-          if (showSidebar) Container(width: 1, color: _dividerColor(context)),
-          Expanded(
-            child: Scaffold(
-              appBar: (isMobile || isAndroid || safeWidth < 500)
-                  ? AppBar(
-                      toolbarHeight: isPhoneLandscape
-                          ? 50
-                          : (useCompact ? 56 : 64),
-                      elevation: 0,
-                      backgroundColor: _surfaceColor(context),
-                      centerTitle: false,
-                      titleSpacing: compactAppBar ? 8 : 16,
-                      title: Row(
-                        children: [
-                          Container(
-                            width: useCompact ? 32 : 36,
-                            height: useCompact ? 32 : 36,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primary,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.light
-                                    ? Colors.black.withValues(alpha: 0.4)
-                                    : Colors.white.withValues(alpha: 0.2),
-                                width: 1,
+            if (showSidebar) Container(width: 1, color: _dividerColor(context)),
+            Expanded(
+              child: Scaffold(
+                appBar: (isMobile || isAndroid || safeWidth < 500)
+                    ? AppBar(
+                        toolbarHeight: isPhoneLandscape
+                            ? 50
+                            : (useCompact ? 56 : 64),
+                        elevation: 0,
+                        backgroundColor: _surfaceColor(context),
+                        centerTitle: false,
+                        titleSpacing: compactAppBar ? 8 : 16,
+                        title: Row(
+                          children: [
+                            Container(
+                              width: useCompact ? 32 : 36,
+                              height: useCompact ? 32 : 36,
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.light
+                                      ? Colors.black.withValues(alpha: 0.4)
+                                      : Colors.white.withValues(alpha: 0.2),
+                                  width: 1,
+                                ),
+                                image: auth.profileImageUrl != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(
+                                          auth.profileImageUrl!,
+                                        ),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
                               ),
-                              image: auth.profileImageUrl != null
-                                  ? DecorationImage(
-                                      image: NetworkImage(
-                                        auth.profileImageUrl!,
+                              child: auth.profileImageUrl == null
+                                  ? Center(
+                                      child: Text(
+                                        auth.fullName.isNotEmpty
+                                            ? auth.fullName[0].toUpperCase()
+                                            : 'U',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: useCompact ? 11 : 12,
+                                        ),
                                       ),
-                                      fit: BoxFit.cover,
                                     )
                                   : null,
                             ),
-                            child: auth.profileImageUrl == null
-                                ? Center(
-                                    child: Text(
-                                      auth.fullName.isNotEmpty
-                                          ? auth.fullName[0].toUpperCase()
-                                          : 'U',
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    auth.fullName.split(' ').first,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: _titleColor(context),
+                                      fontSize: useCompact
+                                          ? 13
+                                          : (compactAppBar ? 13 : 15),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  if (!compactAppBar && safeWidth > 380)
+                                    Text(
+                                      auth.roleDisplayName,
                                       style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: useCompact ? 11 : 12,
+                                        color: _bodyColor(context),
+                                        fontSize: 9,
                                       ),
                                     ),
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  auth.fullName.split(' ').first,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: _titleColor(context),
-                                    fontSize: useCompact
-                                        ? 13
-                                        : (compactAppBar ? 13 : 15),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (!compactAppBar && safeWidth > 380)
-                                  Text(
-                                    auth.roleDisplayName,
-                                    style: TextStyle(
-                                      color: _bodyColor(context),
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
+                            const SizedBox(width: 8),
+                            PageSelector(
+                              currentIndex: currentIndex,
+                              isManager: auth.isManager,
+                              compact: true,
+                              onChanged: (index) {
+                                if (index == 0) {
+                                  _settlementListKey.currentState
+                                      ?.resetFilters();
+                                } else if (index == 1) {
+                                  _advancesListKey.currentState?.resetFilters();
+                                }
+                                setState(() => _navIndex = index);
+                              },
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          NotificationBellIcon(
+                            onNotificationTap: _handleNotificationTap,
                           ),
-                          const SizedBox(width: 8),
-                          PageSelector(
-                            currentIndex: currentIndex,
-                            isManager: auth.isManager,
-                            compact: true,
-                            onChanged: (index) {
-                              if (index == 0) {
-                                _settlementListKey.currentState?.resetFilters();
-                              } else if (index == 1) {
-                                _advancesListKey.currentState?.resetFilters();
-                              }
-                              setState(() => _navIndex = index);
-                            },
+                          SizedBox(width: compactAppBar ? 2 : 4),
+                          IconButton(
+                            icon: Icon(
+                              Icons.logout_rounded,
+                              size: useCompact ? 18 : 20,
+                            ),
+                            onPressed: _confirmLogout,
+                            color: _bodyColor(context),
+                            tooltip: 'Logout',
                           ),
+                          SizedBox(width: compactAppBar ? 4 : 8),
                         ],
-                      ),
-                      actions: [
-                        NotificationBellIcon(
-                          onNotificationTap: _handleNotificationTap,
-                        ),
-                        SizedBox(width: compactAppBar ? 2 : 4),
-                        IconButton(
-                          icon: Icon(
-                            Icons.logout_rounded,
-                            size: useCompact ? 18 : 20,
-                          ),
-                          onPressed: _confirmLogout,
-                          color: _bodyColor(context),
-                          tooltip: 'Logout',
-                        ),
-                        SizedBox(width: compactAppBar ? 4 : 8),
-                      ],
-                    )
-                  : null,
-              body: SafeArea(
-                top: false,
-                child: IndexedStack(index: currentIndex, children: pages),
+                      )
+                    : null,
+                body: SafeArea(
+                  top: false,
+                  child: IndexedStack(index: currentIndex, children: pages),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _SettlementListView extends StatefulWidget {
@@ -882,10 +891,9 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                           'batch',
                                     )
                                     .toList();
-                                final displayList =
-                                    _selectedType == 'single'
-                                        ? singles
-                                        : batches;
+                                final displayList = _selectedType == 'single'
+                                    ? singles
+                                    : batches;
                                 final items = <dynamic>[...displayList];
 
                                 return CustomScrollView(
@@ -959,7 +967,8 @@ class _SettlementListViewState extends State<_SettlementListView> {
                                             i,
                                           ) {
                                             final s =
-                                                items[i] as Map<String, dynamic>;
+                                                items[i]
+                                                    as Map<String, dynamic>;
                                             return RepaintBoundary(
                                               child: SettlementCard(
                                                 key: ValueKey(
@@ -1132,7 +1141,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
                         color: AppTheme.primary.withValues(alpha: 0.3),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
-                      )
+                      ),
                     ]
                   : null,
             ),
@@ -1146,19 +1155,22 @@ class _SettlementListViewState extends State<_SettlementListView> {
                     color: isActive
                         ? Colors.white
                         : (context.isDark
-                            ? AppTheme.textSecondary
-                            : AppTheme.lightTextSecondary),
+                              ? AppTheme.textSecondary
+                              : AppTheme.lightTextSecondary),
                   ),
                 ),
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: isActive
                         ? Colors.white.withValues(alpha: 0.2)
                         : (context.isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : Colors.black.withValues(alpha: 0.05)),
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.05)),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
@@ -1440,7 +1452,6 @@ class _SettlementListViewState extends State<_SettlementListView> {
 }
 
 class _FilterChipWidget extends StatelessWidget {
-
   final String label;
   final bool selected;
   final bool isMobile;

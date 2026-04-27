@@ -1,6 +1,6 @@
 {
-    "name": "expense_app",
-    "short_name": "expense_app",
+    "name": "Exspan App",
+    "short_name": "Exspan App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

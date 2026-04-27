@@ -298,14 +298,20 @@ class _ReportScreenState extends State<ReportScreen> {
           menuChildren: [
             MenuItemButton(
               onPressed: _exportSummaryPdf,
-              leadingIcon: const Icon(Icons.picture_as_pdf_rounded,
-                  color: AppTheme.danger, size: 20),
+              leadingIcon: const Icon(
+                Icons.picture_as_pdf_rounded,
+                color: AppTheme.danger,
+                size: 20,
+              ),
               child: const Text('Export PDF Summary'),
             ),
             MenuItemButton(
               onPressed: _exportFullExcel,
-              leadingIcon: const Icon(Icons.table_view_rounded,
-                  color: AppTheme.success, size: 20),
+              leadingIcon: const Icon(
+                Icons.table_view_rounded,
+                color: AppTheme.success,
+                size: 20,
+              ),
               child: const Text('Export Excel Summary'),
             ),
           ],
@@ -623,8 +629,12 @@ class _ReportScreenState extends State<ReportScreen> {
     try {
       final prov = context.read<SettlementProvider>();
       final bytes = await prov.exportExcel(
-        startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null,
-        endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null,
+        startDate: _startDate != null
+            ? DateFormat('yyyy-MM-dd').format(_startDate!)
+            : null,
+        endDate: _endDate != null
+            ? DateFormat('yyyy-MM-dd').format(_endDate!)
+            : null,
       );
       final suffix = (_startDate != null && _endDate != null)
           ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}'

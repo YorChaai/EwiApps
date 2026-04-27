@@ -28,7 +28,7 @@ def _compute_profit_after_tax(year: int) -> float:
         db.extract('year', Expense.date) == year,
     ).all()
 
-    revenue_total = sum((r.idr_amount_received or 0) for r in revenues)
+    revenue_total = sum((r.idr_invoice_value or 0) for r in revenues)
     pph23_total = sum((r.pph_23 or 0) for r in revenues)
     total_cost = sum((e.idr_amount or 0) for e in expenses)
     profit_before_tax = revenue_total - total_cost

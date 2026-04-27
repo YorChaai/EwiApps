@@ -321,6 +321,7 @@ class CascadingYearFilter extends StatelessWidget {
             icon: Icons.account_balance_rounded,
             label: 'Laporan',
             isDark: isDark,
+            showArrow: false, // Biar tidak double panah dengan SubmenuButton
           ),
         ),
         SubmenuButton(
@@ -332,6 +333,7 @@ class CascadingYearFilter extends StatelessWidget {
             icon: Icons.calendar_month_rounded,
             label: 'Year',
             isDark: isDark,
+            showArrow: false, // Biar tidak double panah dengan SubmenuButton
           ),
         ),
         MenuItemButton(
@@ -364,24 +366,15 @@ class CascadingYearFilter extends StatelessWidget {
         ),
         child: SizedBox(
           width: 80, // Lebar kotak tahun agar rapi
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                year.toString(),
-                style: TextStyle(
-                  color: isSelected ? AppTheme.primary : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 14,
-                ),
-              ),
-              // Ikon Segitiga Kecil |>
-              Icon(
-                Icons.play_arrow_rounded,
-                size: 12,
-                color: isSelected ? AppTheme.primary : (isDark ? Colors.white24 : Colors.black12),
-              ),
-            ],
+          child: Text(
+            year.toString(),
+            style: TextStyle(
+              color: isSelected
+                  ? AppTheme.primary
+                  : (isDark ? AppTheme.textPrimary : AppTheme.lightTextPrimary),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14,
+            ),
           ),
         ),
       );
