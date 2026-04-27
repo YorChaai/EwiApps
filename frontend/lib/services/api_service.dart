@@ -1409,6 +1409,29 @@ class ApiService {
     return _handleResponse(res);
   }
 
+  Future<Map<String, dynamic>> getDeadlineSettings() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/settings/deadline'),
+      headers: _authHeaders,
+    );
+    return _handleResponse(res);
+  }
+
+  Future<Map<String, dynamic>> updateDeadlineSetting(
+    String ruleKey,
+    List<int> days,
+  ) async {
+    final res = await http.put(
+      Uri.parse('$baseUrl/settings/deadline'),
+      headers: _headers,
+      body: jsonEncode({
+        'rule_key': ruleKey,
+        'days': days,
+      }),
+    );
+    return _handleResponse(res);
+  }
+
   // database management
 
   Future<Map<String, dynamic>> exportDatabase() async {

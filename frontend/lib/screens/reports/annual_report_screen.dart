@@ -1239,20 +1239,10 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          TextButton.icon(
-            style: TextButton.styleFrom(
-              foregroundColor: AppTheme.primary,
-              padding: EdgeInsets.symmetric(horizontal: useCompact ? 2 : 6),
-            ),
+          IconButton(
+            icon: const Icon(Icons.sort, color: AppTheme.primary),
             onPressed: () => _navTo(const CategoryTabularScreen()),
-            icon: const Icon(Icons.sort, size: 18),
-            label: Text(
-              'Kategori Tabular',
-              style: TextStyle(
-                fontSize: useCompact ? 12 : 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            tooltip: 'Kategori Tabular',
           ),
           IconButton(
             icon: const Icon(Icons.table_view, color: Colors.green),

@@ -403,3 +403,97 @@ def import_database_confirm():
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
         return jsonify({'error': f'Gagal import database: {str(e)}'}), 500
+
+
+@settings_bp.route('/deadline', methods=['GET', 'POST', 'PUT'])
+@jwt_required()
+def manage_deadline_settings():
+    from models import DeadlineSetting
+    from datetime import timezone
+    
+    if request.method == 'GET':
+        try:
+            settings = DeadlineSetting.query.all()
+            result = {}
+            for s in settings:
+                result[s.rule_key] = s.to_dict()
+            
+            if not result:
+                result = {
+                    'SETTLEMENT_SUBMISSION': {
+                        'rule_key': 'SETTLEMENT_SUBMISSION',
+                        'days': [2, 10, 20],
+                        'is_active': True
+                    },
+                    'SETTLEMENT_APPROVAL': {
+                        'rule_key': 'SETTLEMENT_APPROVAL',
+                        'days': [2, 5, 10],
+                        'is_active': True
+                    }
+                }
+            
+            return jsonify(result)
+        except Exception as e:
+            return jsonify({'error': f'Gagal mengambil setting deadline: {str(e)}'}), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json(silent=True) or {}
+            rule_key = data.get('rule_key')
+            days = data.get('days', [])
+            is_active = data.get('is_active', True)
+            
+            if not rule_key:
+                return jsonify({'error': 'rule_key tidak boleh kosong'}), 400
+            
+            if not isinstance(days, list) or len(days) == 0:
+                return jsonify({'error': 'days harus berupa array dengan minimal 1 elemen'}), 400
+            
+            existing = DeadlineSetting.query.filter_by(rule_key=rule_key).first()
+            if existing:
+                return jsonify({'error': f'Setting dengan rule_key "{rule_key}" sudah ada'}), 400
+            
+            new_setting = DeadlineSetting(rule_key=rule_key, days=days, is_active=is_active)
+            db.session.add(new_setting)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Setting deadline berhasil ditambahkan.',
+                'data': new_setting.to_dict()
+            }), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Gagal menyimpan setting deadline: {str(e)}'}), 500
+    
+    elif request.method == 'PUT':
+        try:
+            data = request.get_json(silent=True) or {}
+            rule_key = data.get('rule_key')
+            days = data.get('days')
+            is_active = data.get('is_active')
+            
+            if not rule_key:
+                return jsonify({'error': 'rule_key tidak boleh kosong'}), 400
+            
+            setting = DeadlineSetting.query.filter_by(rule_key=rule_key).first()
+            if not setting:
+                return jsonify({'error': f'Setting deadline "{rule_key}" tidak ditemukan'}), 404
+            
+            if days is not None:
+                if not isinstance(days, list) or len(days) == 0:
+                    return jsonify({'error': 'days harus berupa array dengan minimal 1 elemen'}), 400
+                setting.days = days
+            
+            if is_active is not None:
+                setting.is_active = is_active
+            
+            setting.updated_at = datetime.now(timezone.utc)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Setting deadline berhasil diperbarui.',
+                'data': setting.to_dict()
+            })
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': f'Gagal memperbarui setting deadline: {str(e)}'}), 500

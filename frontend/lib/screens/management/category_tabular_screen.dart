@@ -19,12 +19,14 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
   bool _isSaving = false;
   final ScrollController _scrollController = ScrollController();
   final ScrollController _langsungController = ScrollController();
+  final ScrollController _tidakLangsungController = ScrollController();
   final ScrollController _adminController = ScrollController();
 
   @override
   void dispose() {
     _scrollController.dispose();
     _langsungController.dispose();
+    _tidakLangsungController.dispose();
     _adminController.dispose();
     super.dispose();
   }
@@ -332,7 +334,7 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
 
   void _showGroupManagementDialog(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final isMobile = screenWidth < 700;
+    final isMobile = screenWidth < 900; // Increased breakpoint for 3 columns
     // Clone data untuk dialog
     List<Map<String, dynamic>> tempCats = List<Map<String, dynamic>>.from(
       _categories.map((c) => {...c}),
@@ -345,99 +347,128 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
           final langsung = tempCats
               .where((c) => c['main_group'] == 'BEBAN LANGSUNG')
               .toList();
-          final admin = tempCats
-              .where((c) => c['main_group'] != 'BEBAN LANGSUNG')
+          final tidakLangsung = tempCats
+              .where((c) => c['main_group'] == 'BEBAN TIDAK LANGSUNG')
               .toList();
+          final admin = tempCats
+              .where((c) => c['main_group'] != 'BEBAN LANGSUNG' && c['main_group'] != 'BEBAN TIDAK LANGSUNG')
+              .toList();
+
+          void moveItem(Map<String, dynamic> cat, String newGroup) {
+             setDialogState(() {
+                 cat['main_group'] = newGroup;
+             });
+          }
+
+          Widget buildColumns() {
+             return Row(
+                children: [
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'BEBAN LANGSUNG',
+                      langsung,
+                      AppTheme.accent,
+                      _langsungController,
+                      (cat) => moveItem(cat, 'BEBAN TIDAK LANGSUNG'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        langsung.insert(newIdx, langsung.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'BEBAN TIDAK LANGSUNG',
+                      tidakLangsung,
+                      AppTheme.primary, // Using primary color for now, or maybe same accent
+                      _tidakLangsungController,
+                      (cat) => moveItem(cat, 'BIAYA ADMINISTRASI DAN UMUM'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        tidakLangsung.insert(newIdx, tidakLangsung.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'ADMINISTRASI DAN UMUM',
+                      admin,
+                      AppTheme.primary,
+                      _adminController,
+                      (cat) => moveItem(cat, 'BEBAN LANGSUNG'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        admin.insert(newIdx, admin.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                ],
+             );
+          }
+
+          Widget buildRows() {
+             return Column(
+                children: [
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'BEBAN LANGSUNG',
+                      langsung,
+                      AppTheme.accent,
+                      _langsungController,
+                      (cat) => moveItem(cat, 'BEBAN TIDAK LANGSUNG'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        langsung.insert(newIdx, langsung.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'BEBAN TIDAK LANGSUNG',
+                      tidakLangsung,
+                      AppTheme.primary,
+                      _tidakLangsungController,
+                      (cat) => moveItem(cat, 'BIAYA ADMINISTRASI DAN UMUM'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        tidakLangsung.insert(newIdx, tidakLangsung.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: _buildKanbanColumn(
+                      'ADMINISTRASI DAN UMUM',
+                      admin,
+                      AppTheme.primary,
+                      _adminController,
+                      (cat) => moveItem(cat, 'BEBAN LANGSUNG'),
+                      (oldIdx, newIdx) => setDialogState(() {
+                        if (newIdx > oldIdx) newIdx--;
+                        admin.insert(newIdx, admin.removeAt(oldIdx));
+                        _syncTempCatsOrder(tempCats, langsung, tidakLangsung, admin);
+                      }),
+                    ),
+                  ),
+                ],
+             );
+          }
 
           return AlertDialog(
             backgroundColor: _cardColor(context),
             title: const Text('Atur Grup & Urutan'),
             content: SizedBox(
               width: screenWidth * 0.95,
-              height: isMobile ? 600 : 500,
-              child: isMobile
-                  ? Column(
-                      children: [
-                        Expanded(
-                          child: _buildKanbanColumn(
-                            'BEBAN LANGSUNG',
-                            langsung,
-                            AppTheme.accent,
-                            _langsungController,
-                            (cat) => setDialogState(
-                              () => cat['main_group'] =
-                                  'BIAYA ADMINISTRASI DAN UMUM',
-                            ),
-                            (oldIdx, newIdx) => setDialogState(() {
-                              if (newIdx > oldIdx) newIdx--;
-                              langsung.insert(
-                                newIdx,
-                                langsung.removeAt(oldIdx),
-                              );
-                              _syncTempCatsOrder(tempCats, langsung, admin);
-                            }),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Expanded(
-                          child: _buildKanbanColumn(
-                            'ADMINISTRASI',
-                            admin,
-                            AppTheme.primary,
-                            _adminController,
-                            (cat) => setDialogState(
-                              () => cat['main_group'] = 'BEBAN LANGSUNG',
-                            ),
-                            (oldIdx, newIdx) => setDialogState(() {
-                              if (newIdx > oldIdx) newIdx--;
-                              admin.insert(newIdx, admin.removeAt(oldIdx));
-                              _syncTempCatsOrder(tempCats, langsung, admin);
-                            }),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(
-                          child: _buildKanbanColumn(
-                            'BEBAN LANGSUNG',
-                            langsung,
-                            AppTheme.accent,
-                            _langsungController,
-                            (cat) => setDialogState(
-                              () => cat['main_group'] =
-                                  'BIAYA ADMINISTRASI DAN UMUM',
-                            ),
-                            (oldIdx, newIdx) => setDialogState(() {
-                              if (newIdx > oldIdx) newIdx--;
-                              langsung.insert(
-                                newIdx,
-                                langsung.removeAt(oldIdx),
-                              );
-                              _syncTempCatsOrder(tempCats, langsung, admin);
-                            }),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildKanbanColumn(
-                            'ADMINISTRASI DAN UMUM',
-                            admin,
-                            AppTheme.primary,
-                            _adminController,
-                            (cat) => setDialogState(
-                              () => cat['main_group'] = 'BEBAN LANGSUNG',
-                            ),
-                            (oldIdx, newIdx) => setDialogState(() {
-                              if (newIdx > oldIdx) newIdx--;
-                              admin.insert(newIdx, admin.removeAt(oldIdx));
-                              _syncTempCatsOrder(tempCats, langsung, admin);
-                            }),
-                          ),
-                        ),
-                      ],
-                    ),
+              height: isMobile ? 700 : 500,
+              child: isMobile ? buildRows() : buildColumns(),
             ),
             actions: [
               TextButton(
@@ -465,10 +496,12 @@ class _CategoryTabularScreenState extends State<CategoryTabularScreen> {
   void _syncTempCatsOrder(
     List<Map<String, dynamic>> source,
     List<Map<String, dynamic>> langsung,
+    List<Map<String, dynamic>> tidakLangsung,
     List<Map<String, dynamic>> admin,
   ) {
     source.clear();
     source.addAll(langsung);
+    source.addAll(tidakLangsung);
     source.addAll(admin);
     for (int i = 0; i < source.length; i++) {
       source[i]['sort_order'] = i + 1;

@@ -2063,6 +2063,7 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
 
         # ✅ Expense totals: Dynamic Generation based on Category.main_group
         langsung_cats = []
+        tidak_langsung_cats = []
         admin_cats = []
 
         # We need the Category objects to check main_group
@@ -2072,19 +2073,21 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
             col_letter = get_column_letter(9 + idx)
             cat_obj = category_obj_by_name.get(cat_name)
 
-            # If main_group is 'BEBAN LANGSUNG', or if it's not set but matches keywords (fallback)
-            is_direct = False
             if cat_obj and cat_obj.main_group:
-                is_direct = (cat_obj.main_group == 'BEBAN LANGSUNG')
+                if cat_obj.main_group == 'BEBAN LANGSUNG':
+                    langsung_cats.append((cat_name, col_letter))
+                elif cat_obj.main_group == 'BEBAN TIDAK LANGSUNG':
+                    tidak_langsung_cats.append((cat_name, col_letter))
+                else:
+                    admin_cats.append((cat_name, col_letter))
             else:
                 # Fallback to keywords if main_group is missing
                 direct_keywords = ['operasi', 'research', 'r&d', 'r & d', 'sewa peralatan', 'interpretasi', 'log data', 'project']
                 is_direct = any(k in str(cat_name).lower() for k in direct_keywords)
-
-            if is_direct:
-                langsung_cats.append((cat_name, col_letter))
-            else:
-                admin_cats.append((cat_name, col_letter))
+                if is_direct:
+                    langsung_cats.append((cat_name, col_letter))
+                else:
+                    admin_cats.append((cat_name, col_letter))
 
         # Clear old Laba Rugi area (A14 - E max_row) - ensure full cleanup of previous dynamic data
         max_lr_row = max(ws_lr.max_row, 150) # Increased buffer for safety
@@ -2121,12 +2124,24 @@ def _sync_formatted_secondary_sheets(wb, payload, year, main_sheet_name, expense
         _apply_pl_row_style(row, 'header')
         row += 1
         start_btl = row
-        ws_lr[f'D{row}'] = 'Rp'
-        ws_lr[f'E{row}'] = 0
-        _apply_pl_row_style(row, 'data')
-        end_btl = row
 
-        row += 1
+        if tidak_langsung_cats:
+            for name, col_l in tidak_langsung_cats:
+                ws_lr[f'C{row}'] = f'{name.upper()}'
+                ws_lr[f'D{row}'] = 'Rp'
+                ws_lr[f'E{row}'] = f'={main_ref}!{col_l}{cost_totals_row}'
+                _apply_pl_row_style(row, 'data')
+                row += 1
+            end_btl = row - 1
+        else:
+            ws_lr[f'D{row}'] = 'Rp'
+            ws_lr[f'E{row}'] = 0
+            _apply_pl_row_style(row, 'data')
+            end_btl = row
+            row += 1
+
+        if end_btl < start_btl: end_btl = start_btl
+
         ws_lr[f'B{row}'] = 'TOTAL BIAYA TIDAK LANGSUNG'; ws_lr[f'B{row}'].font = Font(bold=True)
         ws_lr[f'D{row}'] = 'Rp'
         ws_lr[f'E{row}'] = f'=SUM(E{start_btl}:E{end_btl})'

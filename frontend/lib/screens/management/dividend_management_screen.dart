@@ -27,6 +27,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
   late String _filterMode;
   final _dateFmt = DateFormat('yyyy-MM-dd');
   final _profitRetainedController = TextEditingController();
+  final _dividendDistributedController = TextEditingController();
 
   // Helper untuk theme-aware colors
   bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
@@ -46,6 +47,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
   @override
   void dispose() {
     _profitRetainedController.dispose();
+    _dividendDistributedController.dispose();
     super.dispose();
   }
 
@@ -57,8 +59,12 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
       (provider.summary['settings'] ?? const <String, dynamic>{}) as Map,
     );
 
-    final initialValue = settings['profit_retained'] ?? provider.summary['profit_retained'] ?? 0.0;
-    _profitRetainedController.text = _fmtMoney(initialValue).replaceAll('Rp ', '');
+    final initialProfitRetained = settings['profit_retained'] ?? provider.summary['profit_retained'] ?? 0.0;
+    final profitAfterTax = _toDouble(provider.summary['profit_after_tax']);
+    final initialDividendDistributed = profitAfterTax - initialProfitRetained;
+
+    _profitRetainedController.text = _formatForInput(initialProfitRetained);
+    _dividendDistributedController.text = _formatForInput(initialDividendDistributed);
   }
 
   double _toDouble(dynamic value) {
@@ -96,10 +102,23 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
     return 'Rp $out';
   }
 
-  String _formatPlain(dynamic value) {
+
+  String _formatForInput(dynamic value) {
     final amount = _toDouble(value);
-    if (amount == 0) return '';
-    return amount.toStringAsFixed(0);
+    final raw = amount.toStringAsFixed(0);
+    final chars = raw.split('');
+    final out = StringBuffer();
+    for (int i = 0; i < chars.length; i++) {
+      final reverseIndex = chars.length - i;
+      out.write(chars[i]);
+      if (reverseIndex > 1 && reverseIndex % 3 == 1) {
+        // Jangan tambah titik setelah tanda minus
+        if (chars[i] != '-') {
+          out.write('.');
+        }
+      }
+    }
+    return out.toString();
   }
 
   Future<void> _showRecipientDialog([Map<String, dynamic>? data]) async {
@@ -176,8 +195,10 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                 }
                 if (!mounted || !ctx.mounted) return;
                 Navigator.pop(ctx);
-                _profitRetainedController.text =
-                    _formatPlain(provider.summary['profit_retained']);
+                final profitAfterTax = _toDouble(provider.summary['profit_after_tax']);
+                final pr = _toDouble(provider.summary['profit_retained']);
+                _profitRetainedController.text = _formatForInput(pr);
+                _dividendDistributedController.text = _formatForInput(profitAfterTax - pr);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -379,7 +400,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            // Fix: Row dengan Expanded untuk form input
+            // Form input untuk Profit Ditahan & Dividen Dibagi
             Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -391,8 +412,31 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Profit Ditahan',
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      hintText: '0',
                     ),
-                    onChanged: (_) {
+                    onChanged: (v) {
+                      final pr = _toDouble(v);
+                      final dd = profitAfterTax - pr;
+                      _dividendDistributedController.text = _formatForInput(dd);
+                      setState(() {}); // Trigger refresh metrics below
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _dividendDistributedController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [CurrencyInputFormatter()],
+                    decoration: const InputDecoration(
+                      labelText: 'Dividen Dibagi',
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      hintText: '0',
+                    ),
+                    onChanged: (v) {
+                      final dd = _toDouble(v);
+                      final pr = profitAfterTax - dd;
+                      _profitRetainedController.text = _formatForInput(pr);
                       setState(() {}); // Trigger refresh metrics below
                     },
                   ),
@@ -400,7 +444,10 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                 const SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: _saveProfitRetained,
-                  child: const Text('Simpan & Hitung'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  ),
+                  child: const Text('Simpan'),
                 ),
               ],
             ),

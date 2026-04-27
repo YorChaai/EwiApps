@@ -747,3 +747,23 @@ class Notification(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'link_path': self.link_path
         }
+
+
+class DeadlineSetting(db.Model):
+    __tablename__ = 'deadline_settings'
+    id = db.Column(db.Integer, primary_key=True)
+    rule_key = db.Column(db.String(50), nullable=False, unique=True)  # SETTLEMENT_SUBMISSION or SETTLEMENT_APPROVAL
+    days = db.Column(db.JSON, nullable=False, default=lambda: [2, 10, 20])  # Array of day thresholds
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'rule_key': self.rule_key,
+            'days': self.days if isinstance(self.days, list) else [],
+            'is_active': self.is_active,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

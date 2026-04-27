@@ -11,6 +11,7 @@ import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/account_list_dialog.dart';
 import '../../widgets/image_cropper_dialog.dart';
+import 'deadline_manager_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -820,12 +821,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: AppTheme.primary,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Manage User (Account List)',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: _titleColor(context),
+                  Expanded(
+                    child: Text(
+                      'Manage User (Account List)',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: _titleColor(context),
+                      ),
                     ),
                   ),
                 ],
@@ -853,10 +856,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
         _buildReportYearSettingsCard(),
         const SizedBox(height: 16),
+        _buildDeadlineSettingsCard(),
+        const SizedBox(height: 16),
         _buildStorageSettingsCard(),
         const SizedBox(height: 16),
         _buildDatabaseSettingsCard(),
       ],
+    );
+  }
+
+  Widget _buildDeadlineSettingsCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _cardColor(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _dividerColor(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded,
+                  color: AppTheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Pengaturan Deadline Notifikasi',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: _titleColor(context),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Atur kapan notifikasi deadline akan muncul untuk Kasbon dan Settlement.',
+            style: TextStyle(fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (ctx) => const DeadlineManagerScreen(),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.schedule_rounded),
+              label: const Text(
+                'Kelola Deadline Notifikasi',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -875,12 +941,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const Icon(Icons.storage_rounded, color: AppTheme.primary),
               const SizedBox(width: 12),
-              Text(
-                'Manajemen Database',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: _titleColor(context),
+              Expanded(
+                child: Text(
+                  'Manajemen Database',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: _titleColor(context),
+                  ),
                 ),
               ),
             ],
@@ -980,12 +1048,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const Icon(Icons.folder_rounded, color: AppTheme.primary),
               const SizedBox(width: 12),
-              Text(
-                'Penyimpanan Data',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: _titleColor(context),
+              Expanded(
+                child: Text(
+                  'Penyimpanan Data',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: _titleColor(context),
+                  ),
                 ),
               ),
             ],
@@ -1034,12 +1104,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               const Icon(Icons.calendar_month_rounded, color: AppTheme.primary),
               const SizedBox(width: 12),
-              Text(
-                'Default Tahun Laporan',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: _titleColor(context),
+              Expanded(
+                child: Text(
+                  'Default Tahun Laporan',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: _titleColor(context),
+                  ),
                 ),
               ),
             ],

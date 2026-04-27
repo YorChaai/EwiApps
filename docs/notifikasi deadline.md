@@ -1,64 +1,105 @@
-# Goal
-Membangun sistem Notifikasi dan Aturan Tenggat Waktu (Deadline Rules Engine) yang dinamis. Admin dapat mengatur berbagai macam aturan waktu (jam, hari) untuk memicu notifikasi spesifik kepada pengguna (misal: "Kasbon belum di-settlement selama X hari", "Settlement belum di-approve selama X hari").
+# Rencana Implementasi: Sistem Notifikasi Deadline Dinamis
 
-Sesuai saran Anda, fitur ini akan dibuatkan **halaman khusus** agar pengaturannya lebih luas dan mudah dikelola, karena nantinya bisa ada 10-20 jenis aturan yang berbeda.
+Sesuai diskusi terbaru, sistem ini akan menghitung tenggat waktu secara otomatis setelah aksi tertentu (Submit/Approve) dilakukan.
 
-> [!IMPORTANT]
-> **User Review Required**
-> Silakan tinjau rencana implementasi di bawah ini. Jika ada logika atau alur yang kurang sesuai dengan visi Anda, beri tahu saya agar bisa disesuaikan sebelum saya mulai membuat kodenya.
+## Logika Bisnis (Aturan Deadline)
 
-## Open Questions
-1. **Metode Pengiriman:** Apakah notifikasi ini cukup muncul di dalam aplikasi saja (berupa ikon Lonceng di sudut kanan atas menu Dashboard), atau Anda butuh dikirim via WhatsApp/Email juga nantinya? *(Untuk tahap awal, saya sarankan in-app notification / Lonceng saja agar cepat diimplementasikan).*
-2. **Pemicu Notifikasi (Trigger):** Apakah pengecekan deadline ini cukup dijalankan satu kali setiap malam (Daily Background Job), atau dievaluasi secara *real-time* setiap kali *user* membuka aplikasi?
-3. **Kondisi Awal:** Selain (1) Kasbon belum di-settlement dan (2) Settlement belum di-approve, apakah ada kondisi spesifik lain yang ingin langsung dimasukkan di awal?
+Terdapat 2 jenis aturan utama yang bisa diatur hari-nya secara dinamis (misal: 2, 10, 20 hari):
 
----
+### 1. Deadline Kasbon -> Settlement (Untuk Staff)
+*   **Pemicu:** Kasbon yang sudah **APPROVED** (disetujui).
+*   **Titik Awal:** Tanggal persetujuan kasbon (`approved_at`).
+*   **Aturan:** Jika sudah lewat X hari tapi user **belum submit** Settlement.
+*   **Berhenti:** Jika status dokumen sudah bukan approved saja (sudah ada settlement terkait).
+*   **Notifikasi:** Muncul di lonceng untuk Staff yang memegang kasbon.
+*   **Pesan:** *"Kasbon [Judul] Anda sudah lewat [X] hari, mohon segera buat settlement!"*
 
-## Proposed Changes
-
-### 1. Backend / Database (Python & PostgreSQL)
-Kita perlu membuat tabel baru untuk menyimpan "Aturan" dan "Isi Notifikasi".
-
-#### [NEW] `backend/models.py` (Tabel Baru)
-- **`notification_rules`**: Menyimpan aturan dinamis.
-  - Kolom: `id`, `rule_code` (misal: `ADVANCE_NOT_SETTLED`), `name`, `description`, `threshold_value` (angka: 20), `threshold_unit` (hari/jam), `is_active`.
-- **`notifications`**: Menyimpan riwayat notifikasi yang dikirim ke user.
-  - Kolom: `id`, `user_id`, `title`, `message`, `is_read`, `created_at`.
-
-#### [NEW] `backend/routes/notifications.py`
-- Endpoint untuk CRUD aturan notifikasi (`GET`, `POST`, `PUT`, `DELETE` ke `/api/notifications/rules`).
-- Endpoint untuk mengambil notifikasi user yang sedang login (`GET /api/notifications/my`).
-- Endpoint untuk menandai notifikasi sudah dibaca (`PUT /api/notifications/read/{id}`).
-
-#### [MODIFY] `backend/main.py`
-- Menambahkan sistem *scheduler* atau *background task* sederhana yang secara otomatis mengecek database secara berkala (misal: setiap jam 12 malam) untuk mencari Kasbon/Settlement yang melanggar aturan (`threshold_value`), lalu mengirimkan notifikasi ke tabel `notifications`.
+### 2. Deadline Settlement -> Approval (Untuk Manajer)
+*   **Pemicu:** Settlement yang sudah **SUBMITTED** (dikirim).
+*   **Titik Awal:** Tanggal pengiriman dokumen.
+*   **Aturan:** Jika sudah lewat X hari tapi manajer **belum approve/reject**.
+*   **Berhenti:** Jika status sudah menjadi **APPROVED** atau **REJECTED**.
+*   **Notifikasi:** Muncul di lonceng untuk Manajer/Admin.
+*   **Pesan:** *"Settlement [Judul] dari [Nama] sudah menunggu selama [X] hari, mohon segera ditinjau!"*
 
 ---
 
-### 2. Frontend (Flutter)
-Membuat halaman khusus untuk mengatur aturan-aturan ini, dan menambahkan fitur Lonceng Notifikasi di aplikasi.
+## Fitur di Panel Manajer (Settings)
 
-#### [NEW] `frontend/lib/screens/settings/notification_rules_screen.dart`
-- **Halaman Baru:** Halaman khusus (tabel/list) untuk melihat, menambah, mengubah, dan mematikan aturan notifikasi.
-- Dilengkapi dengan *Dialog* untuk mengatur `threshold_value` (angka) dan `threshold_unit` (jam/hari).
-
-#### [MODIFY] `frontend/lib/screens/dashboard/dashboard_screen.dart`
-- Menambahkan ikon Lonceng (🔔) dengan *badge* angka merah di AppBar atas.
-- Jika ikon ditekan, akan muncul *Dropdown/Drawer* berisi daftar notifikasi (misal: *"Kasbon Anda (PDP-123) sudah lewat 3 hari, harap buat settlement!"*).
-
-#### [NEW] `frontend/lib/providers/notification_provider.dart`
-- Provider baru untuk menangani logika pemanggilan API notifikasi (mengambil aturan, mengambil jumlah notifikasi belum dibaca, dsb).
-
-#### [MODIFY] `frontend/lib/widgets/app_sidebar.dart`
-- Menambahkan menu baru di bawah **Settings / User Management** yang bernama **"Notification Rules"** untuk membuka halaman baru tersebut.
+Akan ada halaman khusus untuk mengatur kapan notifikasi ini muncul:
+*   **Input Dinamis:** Tersedia 3-5 kotak input hari (misal: kotak 1 = 2 hari, kotak 2 = 10 hari, kotak 3 = 20 hari).
+*   **Fleksibilitas:** Manajer bisa mengubah angka-angka ini kapan saja.
+*   **Waktu Muncul:** Notifikasi akan muncul setiap **Jam 12 Malam** (perubahan tanggal) untuk efisiensi sistem.
 
 ---
 
-## Verification Plan
+## Detail Teknis
 
-### Automated / Backend Tests
-- Mengeksekusi *script* pengecekan deadline secara manual untuk memastikan Notifikasi masuk ke database jika ada Kasbon yang berumur lebih dari target hari.
+1.  **Backend:** Membuat tabel `deadline_settings` untuk simpan angka hari.
+2.  **Worker:** Script harian yang mengecek database: `Tanggal_Sekarang - Tanggal_Awal = X hari`.
+3.  **Frontend:** 
+    *   Halaman baru di Manager Panel untuk setting.
+    *   Integrasi ke ikon Lonceng yang sudah ada di Dashboard (sesuai gambar yang Anda berikan).
 
-### Manual Verification
-- Login sebagai Superadmin -> Buka halaman Notification Rules -> Ubah batas hari "Kasbon belum settlement" menjadi 1 hari.
-- Login sebagai user biasa -> Cek apakah lonceng notifikasi di pojok kanan atas memunculkan peringatan.
+---
+
+## Verifikasi
+*   Mengubah tanggal data di database secara manual untuk testing.
+*   Memastikan notifikasi hilang otomatis saat dokumen disetujui (Approved).
+
+
+dan ringkasannya
+
+Rencana Implementasi: Sistem Notifikasi Deadline Dinamis
+Sistem ini dirancang untuk memberikan peringatan otomatis jika Kasbon belum dibuatkan Settlement atau jika Settlement belum disetujui dalam jangka waktu tertentu.
+
+Logika Bisnis (Aturan Deadline)
+Terdapat dua jenis utama aturan deadline yang dapat diatur melalui Panel Manajer:
+
+1. Deadline Pembuatan Settlement (Untuk Staff)
+Pemicu: Kasbon yang statusnya sudah APPROVED namun belum ada Settlement yang dibuat/dikirim.
+Titik Awal Waktu: approved_at dari Kasbon tersebut (saat dana cair/disetujui).
+Ambang Batas (Threshold): Dinamis (bisa diatur hingga 5 angka, misal: hari ke-2, ke-10, ke-20).
+Berhenti Jika: Dokumen Settlement sudah dikirim (SUBMITTED).
+Penerima: Staff yang mengajukan kasbon.
+Pesan: "Kasbon [Judul] Anda sudah disetujui selama [X] hari, harap segera selesaikan settlement."
+2. Deadline Persetujuan Settlement (Untuk Manajer/Admin)
+Pemicu: Settlement yang statusnya SUBMITTED namun belum di-APPROVED atau REJECTED.
+Titik Awal Waktu: Tanggal pengiriman (updated_at saat status berubah menjadi submitted).
+Ambang Batas (Threshold): Dinamis (misal: hari ke-2, ke-5, ke-10).
+Berhenti Jika: Status berubah menjadi APPROVED atau REJECTED.
+Penerima: Manajer yang bertanggung jawab atau Admin.
+Pesan: "Settlement [Judul] dari [Nama Staff] sudah menunggu persetujuan selama [X] hari."
+Proposed Changes
+1. Database (Python - models.py)
+[NEW] Tabel deadline_settings:
+id: Primary Key.
+rule_key: Identitas aturan (SETTLEMENT_SUBMISSION atau SETTLEMENT_APPROVAL).
+days: Angka hari (threshold).
+is_active: Untuk mengaktifkan/mematikan peringatan tertentu.
+2. Backend Logic (Background Job)
+[NEW] backend/utils/deadline_worker.py:
+Script yang dijalankan setiap jam 00:00 (Tengah Malam).
+Mengecek database menggunakan datetime.now().date() - trigger_date.
+Jika selisih hari tepat sama dengan angka di deadline_settings, buat entri di tabel notifications.
+Menggunakan Notification model yang sudah ada agar otomatis muncul di aplikasi.
+3. Frontend UI (Flutter)
+[NEW] frontend/lib/screens/settings/deadline_manager_screen.dart:
+Halaman di dalam Manager Panel untuk mengatur hari-hari deadline.
+Input field (3-5 kotak) untuk masing-masing jenis aturan.
+[MODIFY] frontend/lib/widgets/notification_bell_icon.dart:
+Menambahkan ikon khusus (misal: jam pasir atau tanda seru) untuk notifikasi jenis deadline.
+Rencana Verifikasi
+Manual Verification
+Buka Manager Panel, atur deadline Kasbon ke "1 hari".
+Buka Database, ubah approved_at sebuah Kasbon menjadi 1 hari yang lalu.
+Jalankan fungsi pengecekan deadline.
+Pastikan ikon Lonceng di Dashboard memunculkan notifikasi merah dan pesan yang sesuai.
+
+
+Cara Kerjanya Nanti:
+Setiap jam 12 malam, sistem akan otomatis mengecek data.
+Jika ada yang lewat deadline (misal: sudah 10 hari belum submit settlement), sistem akan mengirimkan notifikasi.
+Lonceng merah tersebut akan bertambah angkanya (misal dari 75 jadi 76).
+Saat Bapak klik loncengnya, akan muncul pesan baru di sana, contohnya:
+"Kasbon 'Perjalanan Dinas' Anda sudah lewat 10 hari, mohon segera buat settlement."
