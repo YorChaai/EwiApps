@@ -73,8 +73,16 @@ def get_taxes():
 
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
+    year = request.args.get('year', type=int)
+    mode = request.args.get('mode', 'report') # 'report' or 'actual'
 
     query = Tax.query
+
+    if year:
+        if mode == 'report':
+            query = query.filter(Tax.report_year == year)
+        else:
+            query = query.filter(db.extract('year', Tax.date) == year)
 
     if start_date_str:
         start_date = _parse_date(start_date_str)
@@ -123,7 +131,8 @@ def create_tax():
             ppn=float(data['ppn']) if data.get('ppn') is not None else None,
             pph_21=float(data['pph_21']) if data.get('pph_21') is not None else None,
             pph_23=float(data['pph_23']) if data.get('pph_23') is not None else None,
-            pph_26=float(data['pph_26']) if data.get('pph_26') is not None else None
+            pph_26=float(data['pph_26']) if data.get('pph_26') is not None else None,
+            report_year=int(data.get('report_year', date.year))
         )
         db.session.add(tax)
         db.session.commit()
@@ -160,6 +169,8 @@ def update_tax(tax_id):
         tax.pph_23 = float(data['pph_23']) if data['pph_23'] is not None else None
     if 'pph_26' in data:
         tax.pph_26 = float(data['pph_26']) if data['pph_26'] is not None else None
+    if 'report_year' in data:
+        tax.report_year = int(data['report_year'])
 
     try:
         db.session.commit()

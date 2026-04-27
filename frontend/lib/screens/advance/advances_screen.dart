@@ -34,6 +34,7 @@ class AdvancesScreenState extends State<AdvancesScreen> {
   bool _selectionMode = false;
   final Set<int> _selectedAdvanceIds = {};
   String _selectedType = 'single';
+  String _filterMode = 'report'; // Initial placeholder
 
   Color _cardColor(BuildContext context) => context.isDark ? AppTheme.card : AppTheme.lightCard;
   Color _titleColor(BuildContext context) => context.isDark ? AppTheme.cream : AppTheme.lightTextPrimary;
@@ -170,22 +171,42 @@ class AdvancesScreenState extends State<AdvancesScreen> {
   void _reloadAdvances() {
     _searchDebounce?.cancel(); _searchDebounce = null;
     final prov = context.read<AdvanceProvider>();
+
+    // Kirim tanggal HANYA JIKA mode adalah 'range'
+    final effectiveStartDate = _filterMode == 'range' && _startDate != null
+        ? DateFormat('yyyy-MM-dd').format(_startDate!)
+        : null;
+    final effectiveEndDate = _filterMode == 'range' && _endDate != null
+        ? DateFormat('yyyy-MM-dd').format(_endDate!)
+        : null;
+
     prov.loadAdvances(
       status: _statusFilter,
-      startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null,
-      endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null,
-      reportYear: prov.reportYear == 0 ? null : prov.reportYear,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate,
+      reportYear: prov.reportYear,
+      mode: _filterMode,
       search: _searchQuery.isEmpty ? null : _searchQuery,
     );
     _loadAnnualAdvanceSummary();
   }
 
   Future<void> _pickDateRange(BuildContext context) async {
-    final picked = await showDateRangePicker(context: context, firstDate: DateTime(2022), lastDate: DateTime(2030), initialDateRange: _startDate != null && _endDate != null ? DateTimeRange(start: _startDate!, end: _endDate!) : null);
-    if (picked != null) { setState(() { _startDate = picked.start; _endDate = picked.end; }); _reloadAdvances(); }
+    final DateTimeRange? picked = await AppDateRangePicker.show(
+      context,
+      initialRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+        _filterMode = 'range'; // Aktifkan mode range
+      });
+      _reloadAdvances();
+    }
   }
-
-  void _clearDateRange() { setState(() { _startDate = null; _endDate = null; }); _reloadAdvances(); }
 
   Future<void> _exportExcel() async {
     try {
@@ -345,6 +366,7 @@ class AdvancesScreenState extends State<AdvancesScreen> {
   void initState() {
     super.initState();
     _listScrollController.addListener(_handleListScroll);
+    _filterMode = context.read<AdvanceProvider>().filterMode; // ✅ Sync mode
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await context.read<AdvanceProvider>().syncReportYear();
       if (!mounted) return;
@@ -669,50 +691,61 @@ class AdvancesScreenState extends State<AdvancesScreen> {
             onChanged: (v) { setState(() => _searchQuery = v); _scheduleAdvanceReload(); }
           ),
           SizedBox(height: useCompact ? 12 : 16),
-          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: [
-            Container(
-              height: useCompact ? 32 : 40,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: _cardColor(context),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.isDark ? AppTheme.divider : AppTheme.lightDivider),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: prov.reportYear,
-                  dropdownColor: _cardColor(context),
-                  style: TextStyle(color: _primaryText(context), fontSize: useCompact ? 11 : 13, fontWeight: FontWeight.w500),
-                  items: [
-                    const DropdownMenuItem(value: 0, child: Text('Semua Tahun')),
-                    ...List.generate(21, (index) => 2020 + index).map((y) => DropdownMenuItem(value: y, child: Text('Laporan $y'))),
+          Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // SATU TOMBOL UNTUK SEMUA: Periode Data
+                  CascadingYearFilter(
+                    label: 'Periode Data',
+                    selectedYear: prov.reportYear,
+                    currentMode: _filterMode,
+                    useCompact: useCompact,
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    onSelected: (year, mode) {
+                      prov.setReportYear(year, reload: false);
+                      setState(() {
+                        _filterMode = mode;
+                        // Data range tetap tersimpan di state
+                      });
+                      _reloadAdvances();
+                    },
+                    onRangeTap: () => _pickDateRange(context),
+                  ),
+                  const SizedBox(width: 12),
+                  CascadingStatusFilter(
+                    selectedStatus: _statusFilter,
+                    useCompact: useCompact,
+                    isManager: auth.isManager,
+                    onSelected: (val) {
+                      setState(() => _statusFilter = val);
+                      _reloadAdvances();
+                    },
+                  ),
+                  if (auth.isManager && canShowExport) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _exportExcel,
+                      icon: const Icon(
+                        Icons.table_chart_rounded,
+                        color: AppTheme.success,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _exportPdf,
+                      icon: const Icon(
+                        Icons.picture_as_pdf_rounded,
+                        color: AppTheme.danger,
+                      ),
+                    ),
                   ],
-                  onChanged: (value) {
-                    if (value == null) return;
-                    prov.setReportYear(value, reload: false);
-                    _reloadAdvances();
-                  },
-                ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            StatusFilterChip(label: 'Semua', selected: _statusFilter == null, isMobile: useCompact, onTap: () { setState(() => _statusFilter = null); _reloadAdvances(); }),
-            const SizedBox(width: 8),
-            StatusFilterChip(label: 'Draft', selected: _statusFilter == 'draft', isMobile: useCompact, onTap: () { setState(() => _statusFilter = 'draft'); _reloadAdvances(); }),
-            const SizedBox(width: 8),
-            StatusFilterChip(label: 'Submitted', selected: _statusFilter == 'submitted', isMobile: useCompact, onTap: () { setState(() => _statusFilter = 'submitted'); _reloadAdvances(); }),
-            const SizedBox(width: 8),
-            StatusFilterChip(label: 'Approved', selected: _statusFilter == 'approved', isMobile: useCompact, onTap: () { setState(() => _statusFilter = 'approved'); _reloadAdvances(); }),
-            const SizedBox(width: 8),
-            StatusFilterChip(label: 'Rejected', selected: _statusFilter == 'rejected', isMobile: useCompact, onTap: () { setState(() => _statusFilter = 'rejected'); _reloadAdvances(); }),
-            const SizedBox(width: 8),
-            IconButton(onPressed: () => _pickDateRange(context), icon: Icon(Icons.date_range_rounded, color: _startDate != null ? AppTheme.primary : _bodyColor(context))),
-            if (_startDate != null) IconButton(onPressed: _clearDateRange, icon: const Icon(Icons.close_rounded, size: 18, color: AppTheme.danger)),
-            if (auth.isManager && canShowExport) ...[
-              IconButton(onPressed: _exportExcel, icon: const Icon(Icons.table_chart_rounded, color: AppTheme.success)),
-              IconButton(onPressed: _exportPdf, icon: const Icon(Icons.picture_as_pdf_rounded, color: AppTheme.danger)),
-            ],
-          ])),
+          ),
           const SizedBox(height: 12),
           _buildTypeToggle(useCompact),
         ],
@@ -747,5 +780,4 @@ class AdvancesScreenState extends State<AdvancesScreen> {
     }
     return card;
   }
-
 }

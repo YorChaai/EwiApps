@@ -442,11 +442,21 @@ def _compute_dividend_distribution(revenues, expenses, profit_retained, recipien
         'dividend_per_person': dividend_per_person,
     }
 
-def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
-    """Build annual report payload from database."""
+def _build_annual_payload_from_db(
+    year: int,
+    mode: str = 'report',
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> Dict[str, Any]:
+    """
+    Build annual report payload from database.
+    - mode='report': Filters by report_year (Accrual)
+    - mode='actual': Filters by transaction date (Cash Basis)
+    - mode='range': Filters by specific date range
+    """
     from models import Dividend, DividendSetting, Revenue, Tax
 
-    logger.debug(f'Building payload for year={year}')
+    logger.debug(f'Building payload for year={year} mode={mode}')
     year_start, next_year_start = _year_date_bounds(year)
 
     has_report_tags = _has_any_report_tags()
@@ -460,74 +470,52 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
         weight = 1 if rtype == 'pendapatan_lain_lain' else 0
         return (weight, r.receive_date or r.invoice_date or datetime.min.date(), r.id)
 
-    if has_report_tags:
+    if mode != 'range' and has_report_tags and (tagged_revenue_ids or tagged_tax_ids):
+        # Case with manual tags
         if tagged_revenue_ids:
-            revenues_raw = Revenue.query.filter(
-                Revenue.id.in_(tagged_revenue_ids),
+            revenues = Revenue.query.filter(Revenue.id.in_(tagged_revenue_ids)).all()
+            revenues.sort(key=revenue_sort_key)
+        else:
+            revenues = []
+    else:
+        # Case without tags - use MODE filtering
+        if mode == 'report':
+            revenues = Revenue.query.filter(Revenue.report_year == year).all()
+        elif mode == 'range' and start_date and end_date:
+            revenues = Revenue.query.filter(
+                Revenue.receive_date >= start_date,
+                Revenue.receive_date <= end_date,
+            ).all()
+        else:
+            revenues = Revenue.query.filter(
                 Revenue.invoice_date >= year_start,
                 Revenue.invoice_date < next_year_start,
             ).all()
-            # ✅ Filter tagged revenue by year too - handle None invoice_date
-            logger.debug(f'Filtered {len(revenues_raw)} tagged revenues for year {year}')
-            # ✅ Urutkan berdasarkan tipe (langsung vs lain-lain) dan receive_date
-            revenues = sorted(revenues_raw, key=revenue_sort_key)
-        else:
-            revenues = []
-    elif tagged_revenue_ids:
-        revenues = Revenue.query.filter(
-            Revenue.id.in_(tagged_revenue_ids),
-            Revenue.invoice_date >= year_start,
-            Revenue.invoice_date < next_year_start,
-        ).all()
-        # ✅ Filter tagged revenue by year too - handle None invoice_date
-        logger.debug(f'Filtered {len(revenues)} tagged revenues for year {year}')
-        # ✅ Urutkan berdasarkan tipe dan receive_date
         revenues.sort(key=revenue_sort_key)
+
+    logger.debug(f'Loaded {len(revenues)} revenues')
+
+    if mode != 'range' and has_report_tags and tagged_tax_ids:
+        taxes = Tax.query.filter(Tax.id.in_(tagged_tax_ids)).all()
+        taxes.sort(key=lambda t: t.date or datetime.min.date())
     else:
-        # ✅ FIX: Use Database filter instead of pulling all rows into memory
-        revenues = Revenue.query.filter(
-            Revenue.invoice_date >= year_start,
-            Revenue.invoice_date < next_year_start,
-        ).all()
-        revenues.sort(key=revenue_sort_key)
-
-    logger.debug(f'Loaded {len(revenues)} revenues for year {year}')
-    if revenues:
-        logger.debug(f'Revenue date range: {revenues[0].invoice_date} to {revenues[-1].invoice_date}')
-
-    if has_report_tags:
-        if tagged_tax_ids:
+        # ✅ FILTER LOGIC based on MODE
+        if mode == 'report':
+            taxes = Tax.query.filter(Tax.report_year == year).order_by(Tax.date.asc(), Tax.id.asc()).all()
+        elif mode == 'range' and start_date and end_date:
             taxes = Tax.query.filter(
-                Tax.id.in_(tagged_tax_ids),
+                Tax.date >= start_date,
+                Tax.date <= end_date,
+            ).order_by(Tax.date.asc(), Tax.id.asc()).all()
+        else:
+            taxes = Tax.query.filter(
                 Tax.date >= year_start,
                 Tax.date < next_year_start,
-            ).all()
-            # ✅ Filter tagged tax by year too
-            tax_order = {tid: idx for idx, tid in enumerate(tagged_tax_ids)}
-            taxes.sort(key=lambda t: tax_order.get(t.id, 10**9))
-        else:
-            taxes = []
-    elif tagged_tax_ids:
-        taxes = Tax.query.filter(
-            Tax.id.in_(tagged_tax_ids),
-            Tax.date >= year_start,
-            Tax.date < next_year_start,
-        ).all()
-        # ✅ Filter tagged tax by year too
-        taxes.sort(key=lambda t: t.date)
-    else:
-        # ✅ FIX: Use Database filter instead of pulling all rows into memory
-        taxes = Tax.query.filter(
-            Tax.date >= year_start,
-            Tax.date < next_year_start,
-        ).order_by(Tax.date.asc(), Tax.id.asc()).all()
-        logger.debug(f'Filtered {len(taxes)} taxes for year {year}')
+            ).order_by(Tax.date.asc(), Tax.id.asc()).all()
 
-    logger.debug(f'Loaded {len(taxes)} taxes for year {year}')
-    if taxes:
-        logger.debug(f'Tax date range: {taxes[0].date} to {taxes[-1].date}')
+    logger.debug(f'Loaded {len(taxes)} taxes')
 
-    # ✅ ADDED joinedload to avoid N+1 queries during to_dict() loop
+    # ✅ EXPENSES FILTER based on MODE
     expenses_query = Expense.query.options(
         joinedload(Expense.category),
         joinedload(Expense.subcategories),
@@ -535,23 +523,40 @@ def _build_annual_payload_from_db(year: int) -> Dict[str, Any]:
     ).join(
         Settlement, Expense.settlement_id == Settlement.id
     ).filter(
-        Settlement.status.in_(('approved', 'completed')),
-        Expense.date >= year_start,
-        Expense.date < next_year_start,
+        Settlement.status.in_(('approved', 'completed'))
     )
+
+    if mode == 'report':
+        expenses_query = expenses_query.filter(Settlement.report_year == year)
+    elif mode == 'range' and start_date and end_date:
+        expenses_query = expenses_query.filter(
+            Expense.date >= start_date,
+            Expense.date <= end_date,
+        )
+    else:
+        expenses_query = expenses_query.filter(
+            Expense.date >= year_start,
+            Expense.date < next_year_start,
+        )
+
     expenses = expenses_query.order_by(Expense.date.asc()).all()
 
-    logger.debug(f'Loaded {len(expenses)} expenses for year {year}')
-    if expenses:
-        logger.debug(f'Expense date range: {expenses[0].date} to {expenses[-1].date}')
+    logger.debug(f'Loaded {len(expenses)} expenses')
 
-    dividends = Dividend.query.filter(
-        Dividend.date >= year_start,
-        Dividend.date < next_year_start,
-    ).order_by(Dividend.date.asc(), Dividend.id.asc()).all()
+    # ✅ DIVIDENDS FILTER based on MODE
+    if mode == 'report':
+        dividends = Dividend.query.filter(Dividend.report_year == year).order_by(Dividend.date.asc()).all()
+    elif mode == 'range' and start_date and end_date:
+        dividends = Dividend.query.filter(
+            Dividend.date >= start_date,
+            Dividend.date <= end_date,
+        ).order_by(Dividend.date.asc()).all()
+    else:
+        dividends = Dividend.query.filter(
+            Dividend.date >= year_start,
+            Dividend.date < next_year_start,
+        ).order_by(Dividend.date.asc(), Dividend.id.asc()).all()
     dividend_setting = DividendSetting.query.filter_by(year=year).first()
-
-    logger.debug(f'Loaded {len(dividends)} dividends for year {year}')
 
     revenue_data = [r.to_dict() for r in revenues]
     tax_data = [t.to_dict() for t in taxes]
@@ -2562,11 +2567,35 @@ def _ensure_formatted_secondary_sheets(wb, year, template_dir):
 @jwt_required()
 def get_annual_report():
     user = User.query.get(int(get_jwt_identity()))
+    if user.role != 'manager':
+        return jsonify({'error': 'Akses ditolak'}), 403
+
     year = request.args.get('year', _default_report_year(), type=int)
-    payload = _build_annual_payload_from_db(year)
-    payload['cache_source'] = 'refresh'
-    saved_payload = _save_annual_payload_cache(year, payload)
-    return jsonify(saved_payload), 200
+    mode = request.args.get('mode', 'report') # 'report', 'actual', or 'range'
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    start_date = _parse_iso_date(start_date_str)
+    end_date = _parse_iso_date(end_date_str)
+
+    try:
+        # Panggil payload dengan parameter baru untuk mendukung range mode
+        payload = _build_annual_payload_from_db(
+            year=year,
+            mode=mode,
+            start_date=start_date,
+            end_date=end_date
+        )
+        payload['cache_source'] = 'refresh'
+        payload['report_mode'] = mode
+        payload['start_date'] = start_date.isoformat() if start_date else None
+        payload['end_date'] = end_date.isoformat() if end_date else None
+
+        saved_payload = _save_annual_payload_cache(year, payload)
+        return jsonify(saved_payload), 200
+    except Exception as e:
+        logger.error(f'Error generating annual report: {e}', exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 
 @reports_bp.route('/annual/pdf', methods=['GET'])
@@ -2574,8 +2603,9 @@ def get_annual_report():
 def get_annual_report_pdf():
     user = User.query.get(int(get_jwt_identity()))
     year = request.args.get('year', _default_report_year(), type=int)
-    filename = f"Laporan_Tahunan_{year}.pdf"
-    payload = _save_annual_payload_cache(year, _build_annual_payload_from_db(year))
+    mode = request.args.get('mode', 'report')
+    filename = f"Laporan_Tahunan_{year}_{mode}.pdf"
+    payload = _save_annual_payload_cache(year, _build_annual_payload_from_db(year, mode=mode))
     pdf_path = _save_annual_pdf_cache(year, _build_annual_pdf_bytes(payload))
     return send_file(pdf_path, as_attachment=True, download_name=filename, mimetype='application/pdf')
 
@@ -2589,29 +2619,35 @@ def get_annual_report_excel():
     # Get and validate year parameter
     try:
         year = request.args.get('year', _default_report_year(), type=int)
+        mode = request.args.get('mode', 'report')
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+
+        start_date = _parse_iso_date(start_date_str)
+        end_date = _parse_iso_date(end_date_str)
+
         current_year = datetime.now().year
         # Allow year range from 2020 to 10 years in future (for planning/projection)
         if not (2020 <= year <= current_year + 10):
-            error_msg = f'Year must be between 2020 and {current_year + 10}'
-            logger.error(f'Invalid year parameter: {year}')
-            return jsonify({'error': error_msg}), 400
+            # If mode is range, year can be 0 or null, so we only validate if mode is not range
+            if mode != 'range':
+                error_msg = f'Year must be between 2020 and {current_year + 10}'
+                logger.error(f'Invalid year parameter: {year}')
+                return jsonify({'error': error_msg}), 400
     except (TypeError, ValueError) as e:
         logger.error(f'Invalid year parameter: {e}')
         return jsonify({'error': 'Invalid year parameter'}), 400
 
-    logger.info(f'Starting Excel export for year={year}')
+    logger.info(f'Starting Excel export for mode={mode}')
 
     # ✅ STEP 1: Check cache first
     cache_paths = _annual_cache_paths(year)
     excel_cache_path = cache_paths['excel']
-    json_cache_path = cache_paths['json']
     force_refresh = request.args.get('refresh', '0') == '1'
 
-    # Auto-refresh if JSON cache is newer than Excel cache
-    if os.path.exists(excel_cache_path) and os.path.exists(json_cache_path):
-        if os.path.getmtime(json_cache_path) > os.path.getmtime(excel_cache_path):
-            logger.info(f'JSON cache is newer than Excel cache for year {year}, forcing refresh')
-            force_refresh = True
+    # Always refresh if mode is actual or range (to avoid showing cached report data)
+    if mode in ('actual', 'range'):
+        force_refresh = True
 
     if not force_refresh and os.path.exists(excel_cache_path):
         logger.info(f'Serving Excel from cache for year {year}')
@@ -2624,7 +2660,12 @@ def get_annual_report_excel():
 
     try:
         # Load data
-        payload = _build_annual_payload_from_db(year)
+        payload = _build_annual_payload_from_db(
+            year=year,
+            mode=mode,
+            start_date=start_date,
+            end_date=end_date
+        )
         _save_annual_payload_cache(year, payload)
         revenues = payload.get('revenue', {}).get('data', [])
         taxes = payload.get('tax', {}).get('data', [])

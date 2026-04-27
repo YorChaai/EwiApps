@@ -107,12 +107,15 @@ class _CategoryManagementViewState extends State<CategoryManagementView> {
                   return Row(
                     children: [
                       Expanded(child: headerInfo),
+                      const SizedBox(width: 16),
                       action,
                     ],
                   );
                 },
               ),
+
               SizedBox(height: useCompact ? 16 : 24),
+
               // kategori pending
               if (prov.pendingCategories.isNotEmpty) ...[
                 Container(

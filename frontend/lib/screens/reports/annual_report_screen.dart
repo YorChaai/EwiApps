@@ -12,6 +12,7 @@ import '../management/category_tabular_screen.dart';
 import '../management/dividend_management_screen.dart';
 import '../management/revenue_management_screen.dart';
 import '../management/tax_management_screen.dart';
+import '../widgets/common_widgets.dart';
 import '../../widgets/app_scrollbar.dart';
 
 class AnnualReportScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class AnnualReportScreen extends StatefulWidget {
 
 class _AnnualReportScreenState extends State<AnnualReportScreen> {
   int _selectedYear = 2024;
+  String _filterMode = 'report'; // 'report' or 'actual'
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isLoading = false;
@@ -134,7 +136,23 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     });
     try {
       final api = context.read<AuthProvider>().api;
-      final data = await api.getAnnualReport(year: _selectedYear);
+
+      // Persiapkan parameter tanggal untuk mode range
+      final effectiveStartDate = _filterMode == 'range' && _startDate != null
+          ? DateFormat('yyyy-MM-dd').format(_startDate!)
+          : null;
+      final effectiveEndDate = _filterMode == 'range' && _endDate != null
+          ? DateFormat('yyyy-MM-dd').format(_endDate!)
+          : null;
+
+      // Note: Backend getAnnualReport might need updates if it doesn't support startDate/endDate yet
+      // For now we keep existing signature but add support if needed
+      final data = await api.getAnnualReport(
+        year: _filterMode == 'range' ? null : _selectedYear,
+        mode: _filterMode,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+      );
       if (mounted) {
         setState(() {
           _reportData = data;
@@ -157,11 +175,9 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-      initialDateRange: (_startDate != null && _endDate != null)
+    final range = await AppDateRangePicker.show(
+      context,
+      initialRange: (_startDate != null && _endDate != null)
           ? DateTimeRange(start: _startDate!, end: _endDate!)
           : null,
     );
@@ -169,29 +185,38 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       setState(() {
         _startDate = range.start;
         _endDate = range.end;
+        _filterMode = 'range';
       });
       _fetchReport();
     }
-  }
-
-  void _clearDateRange() {
-    setState(() {
-      _startDate = null;
-      _endDate = null;
-    });
-    _fetchReport();
   }
 
   Future<void> _exportExcel() async {
     setState(() => _isLoading = true);
     try {
       final api = context.read<AuthProvider>().api;
-      final bytes = await api.getAnnualReportExcel(year: _selectedYear);
+
+      final effectiveStartDate = _filterMode == 'range' && _startDate != null
+          ? DateFormat('yyyy-MM-dd').format(_startDate!)
+          : null;
+      final effectiveEndDate = _filterMode == 'range' && _endDate != null
+          ? DateFormat('yyyy-MM-dd').format(_endDate!)
+          : null;
+
+      final bytes = await api.getAnnualReportExcel(
+        year: _filterMode == 'range' ? null : _selectedYear,
+        mode: _filterMode,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+      );
       if (!mounted) return;
+      final suffix = _filterMode == 'range'
+          ? '${DateFormat('yyyyMMdd').format(_startDate!)}-${DateFormat('yyyyMMdd').format(_endDate!)}'
+          : '$_selectedYear';
       await FileHelper.saveAndOpenFile(
         context: context,
         bytes: bytes,
-        filename: 'Revenue-Cost_$_selectedYear.xlsx',
+        filename: 'Revenue-Cost_$suffix.xlsx',
         subFolder: 'Reports/Annual/Excel',
       );
     } catch (e) {
@@ -725,9 +750,10 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         ? 'CACHE (tidak hit DB)'
         : (source == 'refresh' ? 'REFRESH (DB terbaru)' : 'INIT');
     return Container(
+      width: double.infinity,
       padding: EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: useCompact ? 8 : 10,
+        horizontal: 16,
+        vertical: 12,
       ),
       decoration: BoxDecoration(
         color: _surfaceColor(context),
@@ -735,10 +761,11 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         border: Border.all(color: _dividerColor(context)),
       ),
       child: Text(
-        'Display Source: $label | Generated: ${_fmtDate(generated)} ${generated.length > 10 ? generated.substring(11, 19) : ''}',
+        'Display Source: $label | Generated: ${_fmtDate(generated)} ${generated.length > 10 ? generated.substring(11, 19).trim() : ''}',
         style: TextStyle(
           color: _bodyColor(context),
-          fontSize: useCompact ? 10 : 12,
+          fontSize: useCompact ? 11 : 13,
+          height: 1.2,
         ),
       ),
     );
@@ -1177,65 +1204,40 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
     return Scaffold(
       backgroundColor: _surfaceColor(context),
       appBar: AppBar(
-        title: Text(
-          useCompact ? 'Lap. Tahunan' : 'Laporan Tahunan',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: useCompact ? 17 : 18,
-          ),
-        ),
+        title: useCompact
+            ? const SizedBox.shrink() // Sembunyikan judul di layar sempit
+            : const Text(
+                'Laporan Tahunan',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
         backgroundColor: _cardColor(context),
+        titleSpacing: useCompact ? 0 : NavigationToolbar.kMiddleSpacing,
         actions: [
-          DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: _selectedYear,
-              dropdownColor: _cardColor(context),
-              style: TextStyle(
-                color: _titleColor(context),
-                fontSize: useCompact ? 12 : 13,
-                fontWeight: FontWeight.bold,
-              ),
-              items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
-                  .where((y) => y != 0)
-                  .toSet()
-                  .map(
-                    (y) => DropdownMenuItem(
-                      value: y,
-                      child: Text('Laporan $y'),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) {
-                  setState(() => _selectedYear = v);
-                  _fetchReport();
-                }
+          // Filter Periode Cascading (Laporan, Year, Range)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: CascadingYearFilter(
+              selectedYear: _selectedYear,
+              currentMode: _filterMode,
+              useCompact: useCompact,
+              startDate: _startDate,
+              endDate: _endDate,
+              onSelected: (year, mode) {
+                setState(() {
+                  _selectedYear = year;
+                  _filterMode = mode;
+                });
+                _fetchReport();
               },
+              onRangeTap: _pickDateRange,
             ),
           ),
-          TextButton.icon(
-            onPressed: _pickDateRange,
-            icon: Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
-            label: Text(
-              'Range',
-              style: TextStyle(
-                color: AppTheme.primary,
-                fontSize: useCompact ? 12 : 13,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            style: TextButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: useCompact ? 2 : 6),
-            ),
-          ),
-          if (_startDate != null)
-            IconButton(
-              onPressed: _clearDateRange,
-              tooltip: 'Clear Range',
-              icon: Icon(Icons.close_rounded, color: Colors.red, size: 18),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
+          const SizedBox(width: 8),
           TextButton.icon(
             style: TextButton.styleFrom(
               foregroundColor: AppTheme.primary,
@@ -1251,14 +1253,6 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
               ),
             ),
           ),
-          /*
-                     IconButton(
-                       icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                       onPressed: _isLoading ? null : _exportPdf,
-                       tooltip: 'Export PDF',
-                     ),
-          */
-
           IconButton(
             icon: const Icon(Icons.table_view, color: Colors.green),
             onPressed: _isLoading ? null : _exportExcel,
@@ -1291,6 +1285,17 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (useCompact) ...[
+                      Text(
+                        'Laporan Tahunan',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: _titleColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     _buildSummaryCards(useCompact),
                     const SizedBox(height: 16),
                     _buildCacheInfo(useCompact),
@@ -1410,28 +1415,44 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         ElevatedButton.icon(
           style: style,
           onPressed: () =>
-              _navTo(RevenueManagementScreen(initialYear: _selectedYear)),
+              _navTo(RevenueManagementScreen(
+                initialYear: _selectedYear,
+                initialFilterMode: _filterMode,
+                initialStartDate: _startDate,
+                initialEndDate: _endDate,
+              )),
           icon: const Icon(Icons.receipt, size: 16),
           label: const Text('Revenue'),
         ),
         ElevatedButton.icon(
           style: style,
           onPressed: () =>
-              _navTo(TaxManagementScreen(initialYear: _selectedYear)),
+              _navTo(TaxManagementScreen(
+                initialYear: _selectedYear,
+                initialFilterMode: _filterMode,
+                initialStartDate: _startDate,
+                initialEndDate: _endDate,
+              )),
           icon: const Icon(Icons.account_balance, size: 16),
           label: const Text('Pajak'),
         ),
         ElevatedButton.icon(
           style: style,
           onPressed: () =>
-              _navTo(DividendManagementScreen(initialYear: _selectedYear)),
+              _navTo(DividendManagementScreen(
+                initialYear: _selectedYear,
+                initialFilterMode: _filterMode,
+              )),
           icon: const Icon(Icons.wallet, size: 16),
           label: const Text('Dividen'),
         ),
         ElevatedButton.icon(
           style: style,
           onPressed: () =>
-              _navTo(BalanceSheetSettingsScreen(initialYear: _selectedYear)),
+              _navTo(BalanceSheetSettingsScreen(
+                initialYear: _selectedYear,
+                initialFilterMode: _filterMode,
+              )),
           icon: const Icon(Icons.assessment, size: 16),
           label: const Text('Neraca'),
         ),

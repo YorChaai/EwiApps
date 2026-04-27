@@ -5,11 +5,17 @@ import 'package:provider/provider.dart';
 import '../../providers/dividend_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
+import '../widgets/common_widgets.dart';
 
 class BalanceSheetSettingsScreen extends StatefulWidget {
   final int? initialYear;
+  final String? initialFilterMode;
 
-  const BalanceSheetSettingsScreen({super.key, this.initialYear});
+  const BalanceSheetSettingsScreen({
+    super.key,
+    this.initialYear,
+    this.initialFilterMode,
+  });
 
   @override
   State<BalanceSheetSettingsScreen> createState() =>
@@ -18,6 +24,7 @@ class BalanceSheetSettingsScreen extends StatefulWidget {
 
 class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen> {
   late int _selectedYear;
+  late String _filterMode;
   final _openingCashController = TextEditingController();
   final _accountsReceivableController = TextEditingController();
   final _prepaidTaxController = TextEditingController();
@@ -42,6 +49,7 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
   void initState() {
     super.initState();
     _selectedYear = widget.initialYear ?? DateTime.now().year;
+    _filterMode = widget.initialFilterMode ?? 'report';
     Future.microtask(_loadData);
   }
 
@@ -179,28 +187,34 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
   Widget build(BuildContext context) {
     final prov = context.watch<DividendProvider>();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 550;
+
     return Scaffold(
       backgroundColor: _surfaceColor(context),
       appBar: AppBar(
-        title: const Text('Manajemen Neraca'),
+        title: useCompact
+            ? const SizedBox.shrink()
+            : const Text('Manajemen Neraca'),
         backgroundColor: _cardColor(context),
+        titleSpacing: useCompact ? 0 : NavigationToolbar.kMiddleSpacing,
         actions: [
-          DropdownButton<int>(
-            value: _selectedYear,
-            dropdownColor: _cardColor(context),
-            style: TextStyle(color: _textColor(context)),
-            items: {
-              ...List.generate(31, (index) => 2020 + index),
-              _selectedYear
-            }.where((y) => y != 0).map((y) => DropdownMenuItem(
-                      value: y,
-                      child: Text('Tahun $y'),
-                    )).toList(),
-            onChanged: (value) async {
-              if (value == null) return;
-              setState(() => _selectedYear = value);
-              await _loadData();
-            },
+          // Filter Periode Cascading
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: CascadingYearFilter(
+              selectedYear: _selectedYear,
+              currentMode: _filterMode,
+              useCompact: false,
+              onSelected: (year, mode) async {
+                setState(() {
+                  _selectedYear = year;
+                  _filterMode = mode;
+                });
+                await _loadData();
+              },
+              onRangeTap: () {}, // Neraca management tidak mendukung range
+            ),
           ),
           const SizedBox(width: 12),
         ],
@@ -210,6 +224,17 @@ class _BalanceSheetSettingsScreenState extends State<BalanceSheetSettingsScreen>
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (useCompact) ...[
+                  Text(
+                    'Manajemen Neraca',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: _textColor(context),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 Card(
                   color: _cardColor(context),
                   child: Padding(

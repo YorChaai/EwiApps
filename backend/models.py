@@ -523,6 +523,7 @@ class Revenue(db.Model):
     transfer_fee = db.Column(db.Float, nullable=True)
     remark = db.Column(db.Text, nullable=True)
     revenue_type = db.Column(db.String(32), nullable=False, default='pendapatan_langsung', index=True)
+    report_year = db.Column(db.Integer, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     REVENUE_DIRECT = 'pendapatan_langsung'
@@ -571,6 +572,7 @@ class Revenue(db.Model):
             'transfer_fee': self.transfer_fee,
             'remark': self.remark,
             'revenue_type': self.revenue_type,
+            'report_year': self.report_year,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -589,6 +591,7 @@ class Tax(db.Model):
     pph_21 = db.Column(db.Float, nullable=True)
     pph_23 = db.Column(db.Float, nullable=True)
     pph_26 = db.Column(db.Float, nullable=True)
+    report_year = db.Column(db.Integer, nullable=True, index=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -610,6 +613,7 @@ class Tax(db.Model):
             'pph_21': self.pph_21,
             'pph_23': self.pph_23,
             'pph_26': self.pph_26,
+            'report_year': self.report_year,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
@@ -652,6 +656,7 @@ class Dividend(db.Model):
     amount = db.Column(db.Float, nullable=False, default=0.0)
     recipient_count = db.Column(db.Integer, nullable=False, default=1)
     tax_percentage = db.Column(db.Float, nullable=False, default=0.0)
+    report_year = db.Column(db.Integer, nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
@@ -662,6 +667,7 @@ class Dividend(db.Model):
             'amount': self.amount,
             'recipient_count': self.recipient_count or 1,
             'tax_percentage': self.tax_percentage or 0.0,
+            'report_year': self.report_year,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 

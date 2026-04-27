@@ -60,9 +60,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
   Color _creamColor(BuildContext context) =>
       _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
   Color _primaryText(BuildContext context) =>
-      _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+      _isDark(context) ? AppTheme.textPrimary : Colors.black87;
   Color _secondaryText(BuildContext context) =>
-      _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+      _isDark(context) ? AppTheme.textSecondary : Colors.black54;
   Color _bodyColor(BuildContext context) =>
       _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _titleColor(BuildContext context) =>
@@ -693,8 +693,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
               decoration: const InputDecoration(
                 labelText: 'Judul Pengajuan / Nama Trip',
               ),
-              style: TextStyle(color: AppTheme.textPrimary),
+              style: TextStyle(color: _primaryText(ctx)),
             ),
+
           ],
         ),
         actions: [
@@ -828,12 +829,17 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             ),
             content: SizedBox(
               width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-              child: AppScrollbar(
-                thumbVisibility: true,
-                interactive: true,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+              child: Builder(
+                builder: (ctx2) {
+                  final dialogScrollCtrl = ScrollController();
+                  return AppScrollbar(
+                    controller: dialogScrollCtrl,
+                    thumbVisibility: true,
+                    interactive: true,
+                    child: SingleChildScrollView(
+                      controller: dialogScrollCtrl,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                     children: [
                       const SizedBox(
                         height: 10,
@@ -842,7 +848,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(
                           labelText: 'Kategori Utama',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 14,
@@ -1063,7 +1068,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                             },
                           ),
                         ),
-                        style: const TextStyle(color: AppTheme.textPrimary),
+                        style: TextStyle(color: _primaryText(ctx)),
                         readOnly: true,
                       ),
                       const SizedBox(height: 12),
@@ -1075,31 +1080,31 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                               decoration: const InputDecoration(
                                 labelText: 'Mata Uang',
                               ),
-                              dropdownColor: AppTheme.card,
-                              style: const TextStyle(
-                                color: AppTheme.textPrimary,
+                              dropdownColor: _cardColor(ctx),
+                              style: TextStyle(
+                                color: _primaryText(ctx),
                               ),
                               initialValue: selectedCurrency,
-                              items: const [
+                              items: [
                                 DropdownMenuItem(
                                   value: 'IDR',
-                                  child: Text('IDR'),
+                                  child: Text('IDR', style: TextStyle(color: _primaryText(ctx))),
                                 ),
                                 DropdownMenuItem(
                                   value: 'USD',
-                                  child: Text('USD'),
+                                  child: Text('USD', style: TextStyle(color: _primaryText(ctx))),
                                 ),
                                 DropdownMenuItem(
                                   value: 'EUR',
-                                  child: Text('EUR'),
+                                  child: Text('EUR', style: TextStyle(color: _primaryText(ctx))),
                                 ),
                                 DropdownMenuItem(
                                   value: 'GBP',
-                                  child: Text('GBP'),
+                                  child: Text('GBP', style: TextStyle(color: _primaryText(ctx))),
                                 ),
                                 DropdownMenuItem(
                                   value: 'JPY',
-                                  child: Text('JPY'),
+                                  child: Text('JPY', style: TextStyle(color: _primaryText(ctx))),
                                 ),
                               ],
                               onChanged: (v) => setDialogState(() {
@@ -1119,8 +1124,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                                 decoration: const InputDecoration(
                                   labelText: 'Kurs (ke IDR)',
                                 ),
-                                style: const TextStyle(
-                                  color: AppTheme.textPrimary,
+                                style: TextStyle(
+                                  color: _primaryText(ctx),
                                 ),
                                 keyboardType: TextInputType.number,
                                 inputFormatters: [CurrencyInputFormatter()],
@@ -1135,7 +1140,6 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         controller: amountCtrl,
                         decoration: InputDecoration(
                           labelText: 'Amount ($selectedCurrency)',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
                           hintText: '10.000',
                           hintStyle: TextStyle(
                             color: _secondaryText(ctx).withValues(alpha: 0.5),
@@ -1147,17 +1151,26 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                       // Tampilkan evidence lama jika ada (mode edit)
-                      if (isEditing && item['evidence_filename'] != null && selectedFileName == null)
+                      if (isEditing &&
+                          item['evidence_filename'] != null &&
+                          selectedFileName == null)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Row(
                             children: [
-                              const Icon(Icons.attach_file_rounded, size: 14, color: AppTheme.textSecondary),
+                              const Icon(
+                                Icons.attach_file_rounded,
+                                size: 14,
+                                color: AppTheme.textSecondary,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   'Bukti saat ini: ${item['evidence_filename']}',
-                                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -1169,9 +1182,16 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           try {
                             final result = await FilePicker.pickFiles(
                               type: FileType.custom,
-                              allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'webp'],
+                              allowedExtensions: [
+                                'jpg',
+                                'jpeg',
+                                'png',
+                                'pdf',
+                                'webp',
+                              ],
                             );
-                            if (result != null && result.files.single.path != null) {
+                            if (result != null &&
+                                result.files.single.path != null) {
                               setDialogState(() {
                                 selectedFilePath = result.files.single.path;
                                 selectedFileName = result.files.single.name;
@@ -1184,7 +1204,9 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                         icon: const Icon(Icons.upload_file_rounded),
                         label: Text(
                           selectedFileName ??
-                              (isEditing ? 'Ganti / Tambah Bukti (opsional)' : 'Upload Bukti (opsional)'),
+                              (isEditing
+                                  ? 'Ganti / Tambah Bukti (opsional)'
+                                  : 'Upload Bukti (opsional)'),
                         ),
                       ),
                       if (selectedFileName != null)
@@ -1201,10 +1223,12 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                     ],
                   ),
                 ),
-              ),
-            ),
-            actions: [
-              if (isEditing)
+              );
+            },
+          ),
+        ),
+        actions: [
+          if (isEditing)
                 TextButton(
                   onPressed: () => _deleteItem(item['id']),
                   child: const Text(
@@ -2131,7 +2155,8 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                           color: _creamColor(context),
                         ),
                       ),
-                    ),                    DataColumn(
+                    ),
+                    DataColumn(
                       label: Text(
                         'Aksi',
                         style: TextStyle(
@@ -2426,29 +2451,44 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 8, 10),
           title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.list_alt_rounded, color: AppTheme.accent),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(Icons.list_alt_rounded, color: AppTheme.accent),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Builder(builder: (context) {
-                  String displayTitle = parent['title'] ?? 'Pratinjau Item';
-                  final type = (parent['settlement_type'] ?? 'batch').toString().toLowerCase();
+                child: Builder(
+                  builder: (context) {
+                    String displayTitle = parent['title'] ?? 'Pratinjau Item';
+                    final type = (parent['settlement_type'] ?? 'batch')
+                        .toString()
+                        .toLowerCase();
 
-                  if (type == 'single' && items.isNotEmpty) {
-                    displayTitle = items.first['description'] ?? displayTitle;
-                  }
+                    if (type == 'single' && items.isNotEmpty) {
+                      displayTitle = items.first['description'] ?? displayTitle;
+                    }
 
-                  return Text(
-                    displayTitle,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  );
-                }),
+                    return Text(
+                      displayTitle,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        height: 1.3,
+                        color: _titleColor(ctx),
+                      ),
+                    );
+                  },
+                ),
               ),
               IconButton(
                 onPressed: () => Navigator.pop(ctx),
                 icon: const Icon(Icons.close_rounded),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
@@ -2457,112 +2497,121 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             height: screenHeight * 0.8,
             child: Column(
               children: [
-                Expanded(                  child: AppScrollbar(
-                    thumbVisibility: true,
-                    interactive: true,
-                    child: ListView.separated(
-                      primary: true,
-                      padding: const EdgeInsets.fromLTRB(0, 0, 16, 10),
-                      itemCount: items.length,
-                      separatorBuilder: (c, i) => const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Divider(),
-                      ),
-                      itemBuilder: (c, i) {
-                        final item = items[i];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'ITEM #${i + 1}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (item['title'] != null &&
-                                item['title'].toString().isNotEmpty)
-                              _buildPreviewRow('Judul', item['title'], isDark),
-                            _buildPreviewRow(
-                              'Tanggal',
-                              item['date'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Kategori',
-                              item['category_name'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Estimasi',
-                              _formatItemAmount(item),
-                              isDark,
-                              valueColor: AppTheme.primary,
-                            ),
-                            _buildPreviewRow(
-                              'Deskripsi',
-                              item['description'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Status',
-                              (item['status'] ?? 'pending')
-                                  .toString()
-                                  .toUpperCase(),
-                              isDark,
-                              valueColor: _statusColor(
-                                (item['status'] ?? 'pending').toString(),
-                              ),
-                            ),
-                            if (item['notes'] != null &&
-                                item['notes'].toString().isNotEmpty)
-                              _buildPreviewRow(
-                                'Catatan',
-                                item['notes'],
-                                isDark,
-                                isNotes: true,
-                              ),
-                            if (item['evidence_path'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: TextButton.icon(
-                                  onPressed: () => _showEvidence(
-                                    item['evidence_path'],
-                                    item['evidence_filename'],
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final lvCtrl = ScrollController();
+                      return AppScrollbar(
+                        controller: lvCtrl,
+                        thumbVisibility: true,
+                        interactive: true,
+                        child: ListView.separated(
+                          controller: lvCtrl,
+                          padding: const EdgeInsets.fromLTRB(0, 0, 16, 10),
+                          itemCount: items.length,
+                          separatorBuilder: (c, i) => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Divider(),
+                          ),
+                          itemBuilder: (c, i) {
+                            final item = items[i];
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                  icon: const Icon(
-                                    Icons.image_rounded,
-                                    size: 16,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary
+                                        .withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  label: const Text(
-                                    'Lihat Bukti',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppTheme.primary,
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: const Size(0, 30),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                                  child: Text(
+                                    'ITEM #${i + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+                                const SizedBox(height: 12),
+                                if (item['title'] != null &&
+                                    item['title'].toString().isNotEmpty)
+                                  _buildPreviewRow(
+                                      'Judul', item['title'], isDark),
+                                _buildPreviewRow(
+                                  'Tanggal',
+                                  item['date'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Kategori',
+                                  item['category_name'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Estimasi',
+                                  _formatItemAmount(item),
+                                  isDark,
+                                  valueColor: AppTheme.primary,
+                                ),
+                                _buildPreviewRow(
+                                  'Deskripsi',
+                                  item['description'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Status',
+                                  (item['status'] ?? 'pending')
+                                      .toString()
+                                      .toUpperCase(),
+                                  isDark,
+                                  valueColor: _statusColor(
+                                    (item['status'] ?? 'pending').toString(),
+                                  ),
+                                ),
+                                if (item['notes'] != null &&
+                                    item['notes'].toString().isNotEmpty)
+                                  _buildPreviewRow(
+                                    'Catatan',
+                                    item['notes'],
+                                    isDark,
+                                    isNotes: true,
+                                  ),
+                                if (item['evidence_path'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: TextButton.icon(
+                                      onPressed: () => _showEvidence(
+                                        item['evidence_path'],
+                                        item['evidence_filename'],
+                                      ),
+                                      icon: const Icon(
+                                        Icons.image_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text(
+                                        'Lihat Bukti',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppTheme.primary,
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 30),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -2772,10 +2821,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
             const Icon(Icons.comment_rounded, color: AppTheme.accent),
             const SizedBox(width: 10),
             const Expanded(
-              child: Text(
-                'Riwayat Komentar',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Riwayat Komentar', overflow: TextOverflow.ellipsis),
             ),
             IconButton(
               onPressed: () => Navigator.pop(ctx),
@@ -3300,7 +3346,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
                   ? 'Nama Sub Kategori'
                   : 'Nama Kategori',
             ),
-            style: const TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: _primaryText(ctx)),
             autofocus: true,
           ),
         ),

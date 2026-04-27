@@ -139,6 +139,7 @@ def list_advances():
     user = User.query.get(int(get_jwt_identity()))
     status_filter = request.args.get('status')
     report_year = request.args.get('report_year', type=int)
+    mode = request.args.get('mode', 'report') # 'report' or 'actual'
     type_filter = request.args.get('type')
 
     query = Advance.query.options(joinedload(Advance.items), joinedload(Advance.requester))
@@ -173,24 +174,29 @@ def list_advances():
             pass
 
     if report_year is not None and report_year != 0:
-        item_match = db.exists().where(
-            db.and_(
-                AdvanceItem.advance_id == Advance.id,
-                db.extract('year', AdvanceItem.date) == report_year,
+        if mode == 'report':
+            # MURNI berdasarkan report_year
+            query = query.filter(Advance.report_year == report_year)
+        else:
+            # MURNI berdasarkan tahun aktual di item
+            item_match = db.exists().where(
+                db.and_(
+                    AdvanceItem.advance_id == Advance.id,
+                    db.extract('year', AdvanceItem.date) == report_year,
+                )
             )
-        )
-        advance_no_items = db.not_(
-            db.exists().where(AdvanceItem.advance_id == Advance.id)
-        )
-        advance_created_year_match = db.extract('year', Advance.created_at) == report_year
+            # Fallback jika tidak ada item
+            advance_no_items = db.not_(
+                db.exists().where(AdvanceItem.advance_id == Advance.id)
+            )
+            advance_created_year_match = db.extract('year', Advance.created_at) == report_year
 
-        query = query.filter(
-            db.or_(
-                Advance.report_year == report_year,
-                item_match,
-                db.and_(advance_no_items, advance_created_year_match),
-            )
-        ).distinct()
+            query = query.filter(
+                db.or_(
+                    item_match,
+                    db.and_(advance_no_items, advance_created_year_match),
+                )
+            ).distinct()
 
     search_query = request.args.get('search', '').strip()
     if search_query:

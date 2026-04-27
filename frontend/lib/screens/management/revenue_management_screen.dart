@@ -3,11 +3,21 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/revenue_provider.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/common_widgets.dart';
 
 class RevenueManagementScreen extends StatefulWidget {
   final int? initialYear;
+  final String? initialFilterMode;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
 
-  const RevenueManagementScreen({super.key, this.initialYear});
+  const RevenueManagementScreen({
+    super.key,
+    this.initialYear,
+    this.initialFilterMode,
+    this.initialStartDate,
+    this.initialEndDate,
+  });
 
   @override
   State<RevenueManagementScreen> createState() =>
@@ -16,6 +26,9 @@ class RevenueManagementScreen extends StatefulWidget {
 
 class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
   late int _selectedYear;
+  late String _filterMode;
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
   final _dateFmt = DateFormat('yyyy-MM-dd');
   final _displayFmt = DateFormat('dd-MMM-yy');
   final _numberFmt = NumberFormat('#,##0', 'id_ID');
@@ -45,19 +58,31 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
   void initState() {
     super.initState();
     _selectedYear = widget.initialYear ?? DateTime.now().year;
+    _filterMode = widget.initialFilterMode ?? 'report';
+    _customStartDate = widget.initialStartDate;
+    _customEndDate = widget.initialEndDate;
     Future.microtask(_loadData);
   }
 
-  String get _startDate => '$_selectedYear-01-01';
-  String get _endDate => '$_selectedYear-12-31';
+  String get _startDate => _filterMode == 'range' && _customStartDate != null
+      ? _dateFmt.format(_customStartDate!)
+      : '$_selectedYear-01-01';
+  String get _endDate => _filterMode == 'range' && _customEndDate != null
+      ? _dateFmt.format(_customEndDate!)
+      : '$_selectedYear-12-31';
 
   Future<void> _loadData() async {
     final provider = context.read<RevenueProvider>();
-    await provider.fetchRevenues(
+    await provider.loadRevenues(
+      year: _filterMode == 'range' ? null : _selectedYear,
+      mode: _filterMode,
       startDate: _startDate,
       endDate: _endDate,
     );
-    await provider.fetchRevenueCombineGroups(year: _selectedYear);
+    // Combine groups biasanya per tahun laporan saja
+    if (_selectedYear != 0) {
+      await provider.fetchRevenueCombineGroups(year: _selectedYear);
+    }
   }
 
   Future<void> _saveRevenue({
@@ -149,6 +174,7 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
     );
     final remark = TextEditingController(text: data?['remark'] ?? '');
     String revenueType = data?['revenue_type'] ?? 'pendapatan_langsung';
+    int reportYear = data?['report_year'] ?? (_selectedYear == 0 ? now.year : _selectedYear);
 
     Future<void> pickDate(TextEditingController ctrl) async {
       final init =
@@ -177,10 +203,18 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 8),
               child: Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
+                  _dropdownField(
+                    reportYear,
+                    'Tahun Laporan',
+                    List.generate(21, (i) => 2020 + i).map((y) => {'label': 'Laporan $y', 'value': y}).toList(),
+                    (v) => setState(() => reportYear = v as int),
+                    width: 720,
+                  ),
                   _dateField(invoiceDate, 'Invoice Date', pickDate),
                   _textField(
                     description,
@@ -246,6 +280,7 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
                 'transfer_fee': _toDouble(transferFee.text),
                 'remark': remark.text.trim(),
                 'revenue_type': revenueType,
+                'report_year': reportYear,
               };
               try {
                 await _saveRevenue(payload: payload, id: data?['id'] as int?);
@@ -452,7 +487,6 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hintText,
-          floatingLabelBehavior: FloatingLabelBehavior.always,
           hintStyle: TextStyle(
             color: _textColor(context).withValues(alpha: 0.4),
             fontSize: 13,
@@ -513,11 +547,11 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
     );
   }
 
-  Widget _dropdownField(
-    String value,
+  Widget _dropdownField<T>(
+    T value,
     String label,
-    List<Map<String, String>> options,
-    ValueChanged<String?> onChanged, {
+    List<Map<String, dynamic>> options,
+    ValueChanged<T?> onChanged, {
     double width = 230,
   }) {
     return SizedBox(
@@ -525,20 +559,23 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          floatingLabelBehavior: FloatingLabelBehavior.always,
         ),
         child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: options.any((o) => o['value'] == value) ? value : options.first['value'],
+          child: DropdownButton<T>(
+            value: options.any((o) => o['value'] == value) ? value : options.first['value'] as T,
             isExpanded: true,
             style: TextStyle(color: _textColor(context), fontSize: 16),
             items: options.map((option) {
-              return DropdownMenuItem<String>(
-                value: option['value'],
-                child: Text(option['label']!),
+              return DropdownMenuItem<T>(
+                value: option['value'] as T,
+                child: Text(
+                  option['label']!,
+                  style: TextStyle(color: _textColor(context)),
+                ),
               );
             }).toList(),
             onChanged: onChanged,
+            dropdownColor: _cardColor(context),
           ),
         ),
       ),
@@ -551,30 +588,53 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
     final items = prov.revenues;
     final groupByRowId = _groupByRowId(prov.combineGroups);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 550;
+
     return Scaffold(
       backgroundColor: _surfaceColor(context),
       appBar: AppBar(
-        title: Text('Input Revenue'),
+        title: useCompact
+            ? const SizedBox.shrink()
+            : const Text('Input Revenue'),
         backgroundColor: _cardColor(context),
+        titleSpacing: useCompact ? 0 : NavigationToolbar.kMiddleSpacing,
         actions: [
-          DropdownButton<int>(
-            value: _selectedYear,
-            dropdownColor: _cardColor(context),
-            style: TextStyle(color: _textColor(context)),
-            items: {
-              ...List.generate(30, (i) => 2020 + i),
-              _selectedYear
-            }.where((y) => y != 0).map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
-            onChanged: (v) async {
-              if (v == null) return;
-              setState(() {
-                _selectedYear = v;
-                _selectedRevenueIds.clear();
-              });
-              await _loadData();
-            },
+          // Filter Periode Cascading (Laporan, Year, Range)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: CascadingYearFilter(
+              selectedYear: _selectedYear,
+              currentMode: _filterMode,
+              useCompact: false,
+              onSelected: (year, mode) {
+                setState(() {
+                  _selectedYear = year;
+                  _filterMode = mode;
+                  _selectedRevenueIds.clear();
+                });
+                _loadData();
+              },
+              onRangeTap: () async {
+                final range = await AppDateRangePicker.show(context);
+                if (range != null) {
+                  if (!context.mounted) return;
+                  setState(() {
+                    _filterMode = 'range';
+                    _selectedRevenueIds.clear();
+                  });
+                  final provider = context.read<RevenueProvider>();
+                  await provider.loadRevenues(
+                    year: null,
+                    mode: 'range',
+                    startDate: DateFormat('yyyy-MM-dd').format(range.start),
+                    endDate: DateFormat('yyyy-MM-dd').format(range.end),
+                  );
+                }
+              },
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -592,9 +652,21 @@ class _RevenueManagementScreenState extends State<RevenueManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (useCompact) ...[
+                      Text(
+                        'Input Revenue',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: _creamColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: 12,
+
+                      runSpacing: 12,
                       children: [
                         OutlinedButton.icon(
                           onPressed: prov.isLoading ? null : _combineSelectedRevenue,

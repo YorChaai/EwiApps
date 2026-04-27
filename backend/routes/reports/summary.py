@@ -71,30 +71,30 @@ def _display_settlement_status(status: str) -> str:
 
 
 def _get_summary_approved_expenses(
-    year: int,
-    start_date: Optional[Union[str, date, datetime]],
-    end_date: Optional[Union[str, date, datetime]]
+    start_date: Optional[Union[str, date, datetime]] = None,
+    end_date: Optional[Union[str, date, datetime]] = None,
+    year: Optional[int] = None,
+    mode: str = 'report'
 ) -> List[Expense]:
-    """Get approved expenses with optional date range filter."""
+    """Get approved expenses with optional year/mode filtering."""
     query = Expense.query.filter(Expense.status == 'approved')
 
-    # Validate and apply date filters
-    if start_date:
-        validated = _validate_date(start_date)
-        if validated:
-            query = query.filter(Expense.date >= validated.date())
+    # ✅ PRIORITAS: Filter berdasarkan mode report (report_year)
+    if mode == 'report' and year:
+        query = query.join(Settlement).filter(Settlement.report_year == year)
+    else:
+        # Mode 'actual' atau 'range': Filter berdasarkan tanggal transaksi
+        if start_date:
+            validated = _validate_date(start_date)
+            if validated:
+                query = query.filter(Expense.date >= validated.date())
 
-    if end_date:
-        validated = _validate_date(end_date)
-        if validated:
-            query = query.filter(Expense.date <= validated.date())
-
-    if not start_date and not end_date:
-        year_start, next_year_start = _year_date_bounds(year)
-        query = query.filter(
-            Expense.date >= year_start,
-            Expense.date < next_year_start,
-        )
+        if end_date:
+            validated = _validate_date(end_date)
+            if validated:
+                # Jika end_date berasal dari _year_date_bounds, itu adalah Jan 1 tahun depan (exclusive)
+                # Tapi di sini kita asumsikan end_date adalah inclusive batas atas
+                query = query.filter(Expense.date <= validated.date())
 
     return query.all()
 
@@ -238,7 +238,9 @@ def _build_summary_payload(expenses):
                 amount = _expense_amount_for_summary(e)
                 monthly[month_str] += amount
                 yearly_total += amount
-                grand_total += amount
+
+            # Tambahkan ke grand_total hanya di level ini
+            grand_total += yearly_total
 
             children_list.append({
                 'category': f"{child.code} - {child.name}",
@@ -258,10 +260,11 @@ def _build_summary_payload(expenses):
                 amount = _expense_amount_for_summary(e)
                 combine_monthly[month_str] += amount
                 combine_yearly_total += amount
-                grand_total += amount
 
                 lbl = _get_display_subcategory(e)
                 if lbl: labels.add(lbl)
+
+            grand_total += combine_yearly_total
 
             label_str = " - ".join(sorted(list(labels))) if labels else "Uncategorized"
             # Jangan gunakan kode dummy '0', gunakan kode Root saja agar tidak membingungkan
@@ -301,25 +304,41 @@ def _build_summary_payload(expenses):
 @jwt_required()
 def get_summary_report():
     user = User.query.get(int(get_jwt_identity()))
-    print(f'[SUMMARY_API] User={user.username}, role={user.role}')  # ✅ Debug
+    print(f'[SUMMARY_API] User={user.username}, role={user.role}')
 
     if user.role != 'manager':
-        print(f'[SUMMARY_API] Access denied for non-manager')  # ✅ Debug
         return jsonify({'error': 'Akses ditolak'}), 403
 
-    year = request.args.get('year', _default_report_year(), type=int)
-    print(f'[SUMMARY_API] Year filter={year}')  # ✅ Debug
+    year = request.args.get('year', type=int)
+    mode = request.args.get('mode', default='report')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
 
-    start_date = _parse_iso_date(request.args.get('start_date'))
-    end_date = _parse_iso_date(request.args.get('end_date'))
-    expenses = _get_summary_approved_expenses(year, start_date, end_date)
+    # Jika mode bukan range, gunakan bounds tahun
+    if mode != 'range' and year:
+        # ✅ FIX: _year_date_bounds hanya butuh 1 argumen
+        start_date, end_date = _year_date_bounds(year)
+    else:
+        start_date = _parse_iso_date(start_date_str)
+        end_date = _parse_iso_date(end_date_str)
+
+    # ✅ Update call dengan parameter baru
+    expenses = _get_summary_approved_expenses(
+        start_date=start_date,
+        end_date=end_date,
+        year=year,
+        mode=mode
+    )
     summary_data, grand_total = _build_summary_payload(expenses)
 
-    print(f'[SUMMARY_API] grand_total={grand_total}')  # ✅ Debug
-
-    return jsonify({'summary': summary_data, 'grand_total': grand_total, 'year': year,
-                    'start_date': start_date.isoformat() if start_date else None,
-                    'end_date': end_date.isoformat() if end_date else None}), 200
+    return jsonify({
+        'summary': summary_data,
+        'grand_total': grand_total,
+        'year': year,
+        'mode': mode,
+        'start_date': start_date.isoformat() if start_date else None,
+        'end_date': end_date.isoformat() if end_date else None
+    }), 200
 
 
 @reports_bp.route('/summary/pdf', methods=['GET'])
@@ -328,10 +347,26 @@ def export_summary_pdf():
     user = User.query.get(int(get_jwt_identity()))
     if user.role != 'manager':
         return jsonify({'error': 'Akses ditolak'}), 403
-    year = request.args.get('year', _default_report_year(), type=int)
-    start_date = _parse_iso_date(request.args.get('start_date'))
-    end_date = _parse_iso_date(request.args.get('end_date'))
-    expenses = _get_summary_approved_expenses(year, start_date, end_date)
+
+    year = request.args.get('year', type=int)
+    mode = request.args.get('mode', default='report')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    if mode != 'range' and year:
+        # ✅ FIX: _year_date_bounds hanya butuh 1 argumen
+        start_date, end_date = _year_date_bounds(year)
+    else:
+        start_date = _parse_iso_date(start_date_str)
+        end_date = _parse_iso_date(end_date_str)
+
+    # ✅ Update call dengan parameter baru
+    expenses = _get_summary_approved_expenses(
+        start_date=start_date,
+        end_date=end_date,
+        year=year,
+        mode=mode
+    )
     summary_data, grand_total = _build_summary_payload(expenses)
 
     buffer = BytesIO()
@@ -345,7 +380,7 @@ def export_summary_pdf():
     if start_date or end_date:
         period_text = f"Periode: {(start_date.isoformat() if start_date else '-')} s/d {(end_date.isoformat() if end_date else '-')}"
     else:
-        period_text = f"Tahun: {year}"
+        period_text = "Periode: Semua Data"
 
     elements.append(Paragraph(title, styles['Heading1']))
     elements.append(Paragraph(period_text, styles['Normal']))
@@ -424,9 +459,17 @@ def generate_excel_report():
         return jsonify({'error': 'Akses ditolak'}), 403
 
     year = request.args.get('year', _default_report_year(), type=int)
+    mode = request.args.get('mode', default='report')
     start_date = _parse_iso_date(request.args.get('start_date'))
     end_date = _parse_iso_date(request.args.get('end_date'))
-    expenses = _get_summary_approved_expenses(year, start_date, end_date)
+
+    # ✅ Update call dengan parameter baru dan perbaikan jumlah argumen
+    expenses = _get_summary_approved_expenses(
+        start_date=start_date,
+        end_date=end_date,
+        year=year,
+        mode=mode
+    )
     summary_data, grand_total_val = _build_summary_payload(expenses)
 
     wb = Workbook()

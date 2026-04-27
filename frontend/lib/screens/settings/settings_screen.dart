@@ -107,8 +107,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               int.tryParse((res['default_report_year'] ?? year).toString()) ??
               year;
         });
-        context.read<SettlementProvider>().setReportYear(year, reload: true);
-        context.read<AdvanceProvider>().setReportYear(year, reload: true);
+        // ✅ Explicitly set to report mode and update year
+        final sProv = context.read<SettlementProvider>();
+        final aProv = context.read<AdvanceProvider>();
+        sProv.setFilterMode('report', reload: false);
+        sProv.setReportYear(year, reload: true);
+        aProv.setFilterMode('report', reload: false);
+        aProv.setReportYear(year, reload: true);
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Default tahun laporan berhasil disimpan.'),
@@ -704,28 +710,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: 16),
-          SegmentedButton<ThemeMode>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.light,
-                icon: Icon(Icons.light_mode_rounded),
-                label: Text('Light'),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<ThemeMode>(
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                padding: WidgetStateProperty.all(EdgeInsets.zero),
+                textStyle: WidgetStateProperty.all(
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
               ),
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.dark,
-                icon: Icon(Icons.dark_mode_rounded),
-                label: Text('Dark'),
-              ),
-              ButtonSegment<ThemeMode>(
-                value: ThemeMode.system,
-                icon: Icon(Icons.settings_suggest_rounded),
-                label: Text('System'),
-              ),
-            ],
-            selected: {themeProvider.themeMode},
-            onSelectionChanged: (selection) =>
-                themeProvider.setThemeMode(selection.first),
+              segments: const [
+                ButtonSegment<ThemeMode>(
+                  value: ThemeMode.light,
+                  icon: Icon(Icons.light_mode_rounded, size: 16),
+                  label: Text('Light', overflow: TextOverflow.visible, softWrap: false),
+                ),
+                ButtonSegment<ThemeMode>(
+                  value: ThemeMode.dark,
+                  icon: Icon(Icons.dark_mode_rounded, size: 16),
+                  label: Text('Dark', overflow: TextOverflow.visible, softWrap: false),
+                ),
+                ButtonSegment<ThemeMode>(
+                  value: ThemeMode.system,
+                  icon: Icon(Icons.settings_suggest_rounded, size: 16),
+                  label: Text('System', overflow: TextOverflow.visible, softWrap: false),
+                ),
+              ],
+              selected: {themeProvider.themeMode},
+              onSelectionChanged: (selection) =>
+                  themeProvider.setThemeMode(selection.first),
+            ),
           ),
         ],
       ),
@@ -858,36 +873,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Expanded(
                 child: SizedBox(
                   height: 48,
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
                       foregroundColor: AppTheme.primary,
                       elevation: 0,
                       side: const BorderSide(color: AppTheme.primary),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                     ),
                     onPressed: _loading ? null : _exportDatabase,
-                    icon: const Icon(Icons.cloud_upload_rounded),
-                    label: const Text(
-                      'Export Data',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_upload_rounded, size: 18),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Export Data',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Expanded(
                 child: SizedBox(
                   height: 48,
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.accent,
                       foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                     ),
                     onPressed: _loading ? null : _importDatabase,
-                    icon: const Icon(Icons.cloud_download_rounded),
-                    label: const Text(
-                      'Import Data',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.cloud_download_rounded, size: 18),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Import Data',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

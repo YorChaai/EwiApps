@@ -16,16 +16,22 @@ class RevenueProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchRevenues({String? startDate, String? endDate}) async {
+  Future<void> loadRevenues({
+    String? startDate,
+    String? endDate,
+    int? year,
+    String? mode,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      // pakai endpoint get revenues di api service
       final data = await _api.getRevenues(
         startDate: startDate,
         endDate: endDate,
+        year: year,
+        mode: mode,
       );
       _revenues = data;
     } catch (e) {
@@ -51,6 +57,8 @@ class RevenueProvider with ChangeNotifier {
     Map<String, dynamic> data, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -58,7 +66,12 @@ class RevenueProvider with ChangeNotifier {
 
     try {
       await _api.createRevenue(data);
-      await fetchRevenues(startDate: startDate, endDate: endDate);
+      await loadRevenues(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -72,6 +85,8 @@ class RevenueProvider with ChangeNotifier {
     Map<String, dynamic> data, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -79,7 +94,12 @@ class RevenueProvider with ChangeNotifier {
 
     try {
       await _api.updateRevenue(id, data);
-      await fetchRevenues(startDate: startDate, endDate: endDate);
+      await loadRevenues(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -92,6 +112,8 @@ class RevenueProvider with ChangeNotifier {
     int id, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -99,7 +121,12 @@ class RevenueProvider with ChangeNotifier {
 
     try {
       await _api.deleteRevenue(id);
-      await fetchRevenues(startDate: startDate, endDate: endDate);
+      await loadRevenues(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;

@@ -55,13 +55,14 @@ def list_settlements():
 
     status_filter = request.args.get('status')
     report_year = request.args.get('report_year', type=int)
+    mode = request.args.get('mode', 'report') # 'report' or 'actual'
     search_query = request.args.get('search', '').strip()
 
     # Debug logging - DETAIL
     print(f'[SETTLEMENT_API] ===== REQUEST =====')
     print(f'[SETTLEMENT_API] user_id={user_id}, role={user.role}')
     print(f'[SETTLEMENT_API] status_filter={status_filter}')
-    print(f'[SETTLEMENT_API] report_year={report_year}')
+    print(f'[SETTLEMENT_API] report_year={report_year}, mode={mode}')
     print(f'[SETTLEMENT_API] search_query={search_query}')
 
     if user.role == 'manager':
@@ -88,29 +89,29 @@ def list_settlements():
 
     # YEAR FILTER
     if report_year is not None and report_year != 0:
-        print(f'[SETTLEMENT_API] Filtering year={report_year}')
+        print(f'[SETTLEMENT_API] Filtering year={report_year} with mode={mode}')
 
-        # Cek apakah settlement punya report_year yang cocok
-        # ATAU punya expense di tahun tersebut
-        expense_match = db.exists().where(
-            db.and_(
-                Expense.settlement_id == Settlement.id,
-                db.extract('year', Expense.date) == report_year,
+        if mode == 'report':
+            # MURNI berdasarkan report_year
+            query = query.filter(Settlement.report_year == report_year)
+        else:
+            # MURNI berdasarkan tahun aktual di item
+            expense_match = db.exists().where(
+                db.and_(
+                    Expense.settlement_id == Settlement.id,
+                    db.extract('year', Expense.date) == report_year,
+                )
             )
-        )
+            # Jika tidak ada item, fallback ke tahun created_at
+            settlement_no_expenses = db.not_(
+                db.exists().where(Expense.settlement_id == Settlement.id)
+            )
+            settlement_created_year_match = db.extract('year', Settlement.created_at) == report_year
 
-        # Fallback: settlement tanpa expense tapi created_at match tahun
-        settlement_no_expenses = db.not_(
-            db.exists().where(Expense.settlement_id == Settlement.id)
-        )
-        settlement_created_year_match = db.extract('year', Settlement.created_at) == report_year
-
-        # Gabungkan semua kondisi dalam satu OR
-        query = query.filter(db.or_(
-            Settlement.report_year == report_year,
-            expense_match,
-            db.and_(settlement_no_expenses, settlement_created_year_match)
-        )).distinct()
+            query = query.filter(db.or_(
+                expense_match,
+                db.and_(settlement_no_expenses, settlement_created_year_match)
+            )).distinct()
     else:
         print(f'[SETTLEMENT_API] NO year filter (report_year={report_year})')
 

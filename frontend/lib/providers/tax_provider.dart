@@ -16,13 +16,23 @@ class TaxProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> fetchTaxes({String? startDate, String? endDate}) async {
+  Future<void> loadTaxes({
+    String? startDate,
+    String? endDate,
+    int? year,
+    String? mode,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final data = await _api.getTaxes(startDate: startDate, endDate: endDate);
+      final data = await _api.getTaxes(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
       _taxes = data;
     } catch (e) {
       _error = e.toString();
@@ -47,6 +57,8 @@ class TaxProvider with ChangeNotifier {
     Map<String, dynamic> data, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -54,7 +66,12 @@ class TaxProvider with ChangeNotifier {
 
     try {
       await _api.createTax(data);
-      await fetchTaxes(startDate: startDate, endDate: endDate);
+      await loadTaxes(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -68,6 +85,8 @@ class TaxProvider with ChangeNotifier {
     Map<String, dynamic> data, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -75,7 +94,12 @@ class TaxProvider with ChangeNotifier {
 
     try {
       await _api.updateTax(id, data);
-      await fetchTaxes(startDate: startDate, endDate: endDate);
+      await loadTaxes(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
@@ -88,6 +112,8 @@ class TaxProvider with ChangeNotifier {
     int id, {
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     _isLoading = true;
     _error = null;
@@ -95,7 +121,12 @@ class TaxProvider with ChangeNotifier {
 
     try {
       await _api.deleteTax(id);
-      await fetchTaxes(startDate: startDate, endDate: endDate);
+      await loadTaxes(
+        startDate: startDate,
+        endDate: endDate,
+        year: year,
+        mode: mode,
+      );
     } catch (e) {
       _error = e.toString();
       _isLoading = false;

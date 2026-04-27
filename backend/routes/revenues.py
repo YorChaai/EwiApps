@@ -74,8 +74,16 @@ def get_revenues():
     # filter opsional
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
+    year = request.args.get('year', type=int)
+    mode = request.args.get('mode', 'report') # 'report' or 'actual'
 
     query = Revenue.query
+
+    if year:
+        if mode == 'report':
+            query = query.filter(Revenue.report_year == year)
+        else:
+            query = query.filter(db.extract('year', Revenue.invoice_date) == year)
 
     if start_date_str:
         start_date = _parse_date(start_date_str)
@@ -134,7 +142,8 @@ def create_revenue():
             pph_23=float(data['pph_23']) if data.get('pph_23') is not None else None,
             transfer_fee=float(data['transfer_fee']) if data.get('transfer_fee') is not None else None,
             remark=data.get('remark'),
-            revenue_type=revenue_type
+            revenue_type=revenue_type,
+            report_year=int(data.get('report_year', invoice_date.year))
         )
         db.session.add(revenue)
         db.session.commit()
@@ -184,6 +193,8 @@ def update_revenue(revenue_id):
         if revenue_type not in (Revenue.REVENUE_DIRECT, Revenue.REVENUE_OTHER):
             return jsonify({'error': 'Invalid revenue_type. Must be "pendapatan_langsung" or "pendapatan_lain_lain"'}), 400
         revenue.revenue_type = revenue_type
+    if 'report_year' in data:
+        revenue.report_year = int(data['report_year'])
 
     try:
         db.session.commit()

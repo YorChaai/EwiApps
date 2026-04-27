@@ -3,11 +3,21 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/tax_provider.dart';
 import '../../theme/app_theme.dart';
+import '../widgets/common_widgets.dart';
 
 class TaxManagementScreen extends StatefulWidget {
   final int? initialYear;
+  final String? initialFilterMode;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
 
-  const TaxManagementScreen({super.key, this.initialYear});
+  const TaxManagementScreen({
+    super.key,
+    this.initialYear,
+    this.initialFilterMode,
+    this.initialStartDate,
+    this.initialEndDate,
+  });
 
   @override
   State<TaxManagementScreen> createState() => _TaxManagementScreenState();
@@ -15,6 +25,9 @@ class TaxManagementScreen extends StatefulWidget {
 
 class _TaxManagementScreenState extends State<TaxManagementScreen> {
   late int _selectedYear;
+  late String _filterMode;
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
   final _dateFmt = DateFormat('yyyy-MM-dd');
   final _displayFmt = DateFormat('dd-MMM-yy');
   final Set<int> _selectedTaxIds = <int>{};
@@ -43,19 +56,30 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
   void initState() {
     super.initState();
     _selectedYear = widget.initialYear ?? DateTime.now().year;
+    _filterMode = widget.initialFilterMode ?? 'report';
+    _customStartDate = widget.initialStartDate;
+    _customEndDate = widget.initialEndDate;
     Future.microtask(_loadData);
   }
 
-  String get _startDate => '$_selectedYear-01-01';
-  String get _endDate => '$_selectedYear-12-31';
+  String get _startDate => _filterMode == 'range' && _customStartDate != null
+      ? _dateFmt.format(_customStartDate!)
+      : '$_selectedYear-01-01';
+  String get _endDate => _filterMode == 'range' && _customEndDate != null
+      ? _dateFmt.format(_customEndDate!)
+      : '$_selectedYear-12-31';
 
   Future<void> _loadData() async {
     final provider = context.read<TaxProvider>();
-    await provider.fetchTaxes(
+    await provider.loadTaxes(
+      year: _filterMode == 'range' ? null : _selectedYear,
+      mode: _filterMode,
       startDate: _startDate,
       endDate: _endDate,
     );
-    await provider.fetchTaxCombineGroups(year: _selectedYear);
+    if (_selectedYear != 0) {
+      await provider.fetchTaxCombineGroups(year: _selectedYear);
+    }
   }
 
   /// Parse Indonesian numeric format: "1.500.000,50" → 1500000.50
@@ -152,6 +176,7 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
     final pph26 = TextEditingController(
       text: _formatNumericInput(data?['pph_26']),
     );
+    int reportYear = data?['report_year'] ?? (_selectedYear == 0 ? now.year : _selectedYear);
 
     Future<void> pickDate(TextEditingController ctrl) async {
       final init =
@@ -180,10 +205,18 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
           child: Form(
             key: formKey,
             child: SingleChildScrollView(
+              padding: const EdgeInsets.only(top: 8),
               child: Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
+                  _dropdownField(
+                    reportYear,
+                    'Tahun Laporan',
+                    List.generate(21, (i) => 2020 + i).map((y) => {'label': 'Laporan $y', 'value': y}).toList(),
+                    (v) => setState(() => reportYear = v as int),
+                    width: 720,
+                  ),
                   _dateField(date, 'Date', pickDate),
                   _textField(
                     description,
@@ -227,6 +260,7 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
                 'pph_21': _toDouble(pph21.text),
                 'pph_23': _toDouble(pph23.text),
                 'pph_26': _toDouble(pph26.text),
+                'report_year': reportYear,
               };
               try {
                 await _saveTax(payload: payload, id: data?['id'] as int?);
@@ -483,36 +517,94 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
     );
   }
 
+  Widget _dropdownField<T>(
+    T value,
+    String label,
+    List<Map<String, dynamic>> options,
+    ValueChanged<T?> onChanged, {
+    double width = 230,
+  }) {
+    return SizedBox(
+      width: width,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: options.any((o) => o['value'] == value) ? value : options.first['value'] as T,
+            isExpanded: true,
+            style: TextStyle(color: _textColor(context), fontSize: 16),
+            items: options.map((option) {
+              return DropdownMenuItem<T>(
+                value: option['value'] as T,
+                child: Text(
+                  option['label']!,
+                  style: TextStyle(color: _textColor(context)),
+                ),
+              );
+            }).toList(),
+            onChanged: onChanged,
+            dropdownColor: _cardColor(context),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<TaxProvider>();
     final items = prov.taxes;
     final groupByRowId = _groupByRowId(prov.combineGroups);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 550;
+
     return Scaffold(
       backgroundColor: _surfaceColor(context),
       appBar: AppBar(
-        title: Text('Input Pajak Pengeluaran'),
+        title: useCompact
+            ? const SizedBox.shrink()
+            : const Text('Input Pajak Pengeluaran'),
         backgroundColor: _cardColor(context),
+        titleSpacing: useCompact ? 0 : NavigationToolbar.kMiddleSpacing,
         actions: [
-          DropdownButton<int>(
-            value: _selectedYear,
-            dropdownColor: _cardColor(context),
-            style: TextStyle(color: _textColor(context)),
-            items: {
-              ...List.generate(21, (i) => 2020 + i),
-              _selectedYear
-            }.where((y) => y != 0).map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
-            onChanged: (v) async {
-              if (v == null) return;
-              setState(() {
-                _selectedYear = v;
-                _selectedTaxIds.clear();
-              });
-              await _loadData();
-            },
+          // Filter Periode Cascading (Laporan, Year, Range)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: CascadingYearFilter(
+              selectedYear: _selectedYear,
+              currentMode: _filterMode,
+              useCompact: false,
+              onSelected: (year, mode) {
+                setState(() {
+                  _selectedYear = year;
+                  _filterMode = mode;
+                  _selectedTaxIds.clear();
+                });
+                _loadData();
+              },
+              onRangeTap: () async {
+                final range = await AppDateRangePicker.show(context);
+                if (range != null) {
+                  if (!context.mounted) return;
+                  setState(() {
+                    _filterMode = 'range';
+                    _selectedTaxIds.clear();
+                  });
+                  final provider = context.read<TaxProvider>();
+                  await provider.loadTaxes(
+                    year: null,
+                    mode: 'range',
+                    startDate: DateFormat('yyyy-MM-dd').format(range.start),
+                    endDate: DateFormat('yyyy-MM-dd').format(range.end),
+                  );
+                }
+              },
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -530,9 +622,21 @@ class _TaxManagementScreenState extends State<TaxManagementScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (useCompact) ...[
+                      Text(
+                        'Input Pajak Pengeluaran',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: _textColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: 12,
+
+                      runSpacing: 12,
                       children: [
                         OutlinedButton.icon(
                           onPressed: prov.isLoading ? null : _combineSelectedTaxes,

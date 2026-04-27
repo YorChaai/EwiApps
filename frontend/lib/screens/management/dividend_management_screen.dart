@@ -5,11 +5,17 @@ import 'package:provider/provider.dart';
 import '../../providers/dividend_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency_formatter.dart';
+import '../widgets/common_widgets.dart';
 
 class DividendManagementScreen extends StatefulWidget {
   final int? initialYear;
+  final String? initialFilterMode;
 
-  const DividendManagementScreen({super.key, this.initialYear});
+  const DividendManagementScreen({
+    super.key,
+    this.initialYear,
+    this.initialFilterMode,
+  });
 
   @override
   State<DividendManagementScreen> createState() =>
@@ -18,6 +24,7 @@ class DividendManagementScreen extends StatefulWidget {
 
 class _DividendManagementScreenState extends State<DividendManagementScreen> {
   late int _selectedYear;
+  late String _filterMode;
   final _dateFmt = DateFormat('yyyy-MM-dd');
   final _profitRetainedController = TextEditingController();
 
@@ -25,7 +32,6 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
   bool _isDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
   Color _cardColor(BuildContext context) => _isDark(context) ? AppTheme.card : AppTheme.lightCard;
   Color _surfaceColor(BuildContext context) => _isDark(context) ? AppTheme.surface : AppTheme.lightSurface;
-  Color _textColor(BuildContext context) => _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
   Color _secondaryTextColor(BuildContext context) => _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
   Color _creamColor(BuildContext context) => _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
 
@@ -33,6 +39,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
   void initState() {
     super.initState();
     _selectedYear = widget.initialYear ?? DateTime.now().year;
+    _filterMode = widget.initialFilterMode ?? 'report';
     Future.microtask(_loadData);
   }
 
@@ -328,32 +335,32 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    Widget metric(String label, String value) {
-      return Expanded(
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.surface : AppTheme.lightSurface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isDark ? AppTheme.divider : AppTheme.lightDivider),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: TextStyle(color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary)),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: TextStyle(
-                  color: isDark ? Colors.white : AppTheme.lightTextPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                ),
+    Widget metric(String label, String value, {bool expanded = false}) {
+      final child = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.surface : AppTheme.lightSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isDark ? AppTheme.divider : AppTheme.lightDivider),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(color: isDark ? AppTheme.textSecondary : AppTheme.lightTextSecondary)),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: TextStyle(
+                color: isDark ? Colors.white : AppTheme.lightTextPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
+      return expanded ? Expanded(child: child) : child;
     }
 
     return Card(
@@ -398,15 +405,31 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            // Fix: Row metrics dengan Flexible untuk responsive
-            Row(
-              children: [
-                metric('Profit After Tax', _fmtMoney(profitAfterTax)),
-                const SizedBox(width: 12),
-                metric('Dividen Dibagi', _fmtMoney(dividendDistributed)),
-                const SizedBox(width: 12),
-                metric('Dibagi per Orang', _fmtMoney(dividendPerPerson)),
-              ],
+            // Fix: Gunakan LayoutBuilder agar rapi di layar sempit
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isCompact = constraints.maxWidth < 500;
+                if (isCompact) {
+                  return Column(
+                    children: [
+                      metric('Profit After Tax', _fmtMoney(profitAfterTax)),
+                      const SizedBox(height: 12),
+                      metric('Dividen Dibagi', _fmtMoney(dividendDistributed)),
+                      const SizedBox(height: 12),
+                      metric('Dibagi per Orang', _fmtMoney(dividendPerPerson)),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    metric('Profit After Tax', _fmtMoney(profitAfterTax), expanded: true),
+                    const SizedBox(width: 12),
+                    metric('Dividen Dibagi', _fmtMoney(dividendDistributed), expanded: true),
+                    const SizedBox(width: 12),
+                    metric('Dibagi per Orang', _fmtMoney(dividendPerPerson), expanded: true),
+                  ],
+                );
+              },
             ),
           ],
         ),
@@ -420,28 +443,34 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
     final items = prov.dividends;
     final summary = prov.summary;
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final useCompact = screenWidth < 550;
+
     return Scaffold(
       backgroundColor: _surfaceColor(context),
       appBar: AppBar(
-        title: const Text('Manajemen Dividen'),
+        title: useCompact
+            ? const SizedBox.shrink()
+            : const Text('Manajemen Dividen'),
         backgroundColor: _cardColor(context),
+        titleSpacing: useCompact ? 0 : NavigationToolbar.kMiddleSpacing,
         actions: [
-          DropdownButton<int>(
-            value: _selectedYear,
-            dropdownColor: _cardColor(context),
-            style: TextStyle(color: _textColor(context)),
-            items: {
-              ...List.generate(31, (index) => 2020 + index),
-              _selectedYear
-            }.where((y) => y != 0).map((y) => DropdownMenuItem(
-                      value: y,
-                      child: Text('Tahun $y'),
-                    )).toList(),
-            onChanged: (value) async {
-              if (value == null) return;
-              setState(() => _selectedYear = value);
-              await _loadData();
-            },
+          // Filter Periode Cascading
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: CascadingYearFilter(
+              selectedYear: _selectedYear,
+              currentMode: _filterMode,
+              useCompact: false,
+              onSelected: (year, mode) async {
+                setState(() {
+                  _selectedYear = year;
+                  _filterMode = mode;
+                });
+                await _loadData();
+              },
+              onRangeTap: () {}, // Dividen management biasanya tidak mendukung range
+            ),
           ),
           const SizedBox(width: 8),
           IconButton(
@@ -463,6 +492,17 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               children: [
+                if (useCompact) ...[
+                  Text(
+                    'Manajemen Dividen',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: _creamColor(context),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _buildCalculationCard(summary),
                 const SizedBox(height: 16),
                 if (items.isEmpty)
@@ -483,7 +523,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Card(
-                        color: AppTheme.card,
+                        color: _cardColor(context),
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -491,8 +531,8 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                           ),
                           title: Text(
                             (item['name'] ?? '-').toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: _creamColor(context),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -500,7 +540,7 @@ class _DividendManagementScreenState extends State<DividendManagementScreen> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               '${(item['date'] ?? '').toString()} | Bagian/orang: ${_fmtMoney(summary['dividend_per_person'])}',
-                              style: TextStyle(color: AppTheme.textSecondary),
+                              style: TextStyle(color: _secondaryTextColor(context)),
                             ),
                           ),
                           trailing: Wrap(

@@ -10,6 +10,7 @@ class AdvanceProvider extends ChangeNotifier {
   String? _error;
   bool _unsavedDraft = false;
   int _reportYear = 2024; // Default to 2024 as requested
+  String _filterMode = 'report'; // 'report' or 'actual'
 
   AdvanceProvider() {
     syncReportYear();
@@ -27,6 +28,14 @@ class AdvanceProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
   int get reportYear => _reportYear;
+  String get filterMode => _filterMode;
+
+  void setFilterMode(String mode, {bool reload = true}) {
+    if (_filterMode == mode) return;
+    _filterMode = mode;
+    notifyListeners();
+    if (reload) loadAdvances();
+  }
 
   void updateToken(String? token) {
     _api.setToken(token);
@@ -37,10 +46,12 @@ class AdvanceProvider extends ChangeNotifier {
     String? startDate,
     String? endDate,
     int? reportYear,
+    String? mode,
     String? type,
     String? search,
   }) async {
     if (reportYear != null) _reportYear = reportYear;
+    if (mode != null) _filterMode = mode;
     final yearToUse = _reportYear == 0 ? null : _reportYear;
 
     // ✅ Centralized Sanitization
@@ -63,6 +74,7 @@ class AdvanceProvider extends ChangeNotifier {
         startDate: startDate,
         endDate: endDate,
         reportYear: yearToUse,
+        mode: _filterMode,
         type: type,
         search: cleanSearch,
       );
@@ -85,6 +97,7 @@ class AdvanceProvider extends ChangeNotifier {
       final year = int.tryParse((res['default_report_year'] ?? 2024).toString());
       if (year != null) {
         _reportYear = year;
+        _filterMode = 'report'; // ✅ Default to report mode
         notifyListeners();
       }
     } catch (_) {}
@@ -383,12 +396,12 @@ class AdvanceProvider extends ChangeNotifier {
       }
 
       await _api.approveAdvanceItem(itemId, action, notes: finalNotes);
-      
+
       // Reload current advance to sync state
       if (_currentAdvance != null) {
         await loadAdvance(_currentAdvance!['id']);
       }
-      
+
       return true;
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');

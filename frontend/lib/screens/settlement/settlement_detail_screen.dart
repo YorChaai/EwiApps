@@ -56,9 +56,9 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
   Color _creamColor(BuildContext context) =>
       _isDark(context) ? AppTheme.cream : AppTheme.lightTextPrimary;
   Color _primaryText(BuildContext context) =>
-      _isDark(context) ? AppTheme.textPrimary : AppTheme.lightTextPrimary;
+      _isDark(context) ? AppTheme.textPrimary : Colors.black87;
   Color _secondaryText(BuildContext context) =>
-      _isDark(context) ? AppTheme.textSecondary : AppTheme.lightTextSecondary;
+      _isDark(context) ? AppTheme.textSecondary : Colors.black54;
   Color _dividerColor(BuildContext context) =>
       _isDark(context) ? AppTheme.divider : AppTheme.lightDivider;
 
@@ -1312,29 +1312,44 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 8, 10),
           title: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.list_alt_rounded, color: AppTheme.accent),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(Icons.list_alt_rounded, color: AppTheme.accent),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                child: Builder(builder: (context) {
-                  String displayTitle = parent['title'] ?? 'Pratinjau Item';
-                  final type = (parent['settlement_type'] ?? 'batch').toString().toLowerCase();
+                child: Builder(
+                  builder: (context) {
+                    String displayTitle = parent['title'] ?? 'Pratinjau Item';
+                    final type = (parent['settlement_type'] ?? 'batch')
+                        .toString()
+                        .toLowerCase();
 
-                  if (type == 'single' && items.isNotEmpty) {
-                    displayTitle = items.first['description'] ?? displayTitle;
-                  }
+                    if (type == 'single' && items.isNotEmpty) {
+                      displayTitle = items.first['description'] ?? displayTitle;
+                    }
 
-                  return Text(
-                    displayTitle,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
-                  );
-                }),
+                    return Text(
+                      displayTitle,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        height: 1.3,
+                        color: _creamColor(ctx),
+                      ),
+                    );
+                  },
+                ),
               ),
               IconButton(
                 onPressed: () => Navigator.pop(ctx),
                 icon: const Icon(Icons.close_rounded),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
@@ -1343,117 +1358,132 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             height: screenHeight * 0.8,
             child: Column(
               children: [
-                Expanded(                  child: AppScrollbar(
-                    thumbVisibility: true,
-                    interactive: true,
-                    child: ListView.separated(
-                      primary: true,
-                      padding: const EdgeInsets.fromLTRB(0, 0, 16, 10),
-                      itemCount: items.length,
-                      separatorBuilder: (c, i) => const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Divider(),
-                      ),
-                      itemBuilder: (c, i) {
-                        final item = items[i];
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'ITEM #${i + 1}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.primary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (item['title'] != null &&
-                                item['title'].toString().isNotEmpty)
-                              _buildPreviewRow('Judul', item['title'], isDark),
-                            _buildPreviewRow(
-                              'Tanggal',
-                              item['date'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Kategori',
-                              item['category_name'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Amount',
-                              _formatExpenseAmount(item).replaceAll('\n', ' '),
-                              isDark,
-                              valueColor: AppTheme.primary,
-                            ),
-                            _buildPreviewRow(
-                              'Sumber',
-                              item['source'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Deskripsi',
-                              item['description'] ?? '-',
-                              isDark,
-                            ),
-                            _buildPreviewRow(
-                              'Status',
-                              (item['status'] ?? 'pending')
-                                  .toString()
-                                  .toUpperCase(),
-                              isDark,
-                              valueColor: _statusColor(
-                                (item['status'] ?? 'pending').toString(),
-                              ),
-                            ),
-                            if (item['notes'] != null &&
-                                item['notes'].toString().isNotEmpty)
-                              _buildPreviewRow(
-                                'Catatan',
-                                item['notes'],
-                                isDark,
-                                isNotes: true,
-                              ),
-                            if (item['evidence_path'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: TextButton.icon(
-                                  onPressed: () => _showEvidence(
-                                    item['evidence_path'],
-                                    item['evidence_filename'],
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final lvCtrl = ScrollController();
+                      return AppScrollbar(
+                        controller: lvCtrl,
+                        thumbVisibility: true,
+                        interactive: true,
+                        child: ListView.separated(
+                          controller: lvCtrl,
+                          padding: const EdgeInsets.fromLTRB(0, 0, 16, 10),
+                          itemCount: items.length,
+                          separatorBuilder: (c, i) => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Divider(),
+                          ),
+                          itemBuilder: (c, i) {
+                            final item = items[i];
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
                                   ),
-                                  icon: const Icon(
-                                    Icons.image_rounded,
-                                    size: 16,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  label: const Text(
-                                    'Lihat Bukti',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppTheme.primary,
-                                    padding: EdgeInsets.zero,
-                                    minimumSize: const Size(0, 30),
-                                    tapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
+                                  child: Text(
+                                    'ITEM #${i + 1}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primary,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+                                const SizedBox(height: 12),
+                                if (item['title'] != null &&
+                                    item['title'].toString().isNotEmpty)
+                                  _buildPreviewRow(
+                                    'Judul',
+                                    item['title'],
+                                    isDark,
+                                  ),
+                                _buildPreviewRow(
+                                  'Tanggal',
+                                  item['date'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Kategori',
+                                  item['category_name'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Amount',
+                                  _formatExpenseAmount(
+                                    item,
+                                  ).replaceAll('\n', ' '),
+                                  isDark,
+                                  valueColor: AppTheme.primary,
+                                ),
+                                _buildPreviewRow(
+                                  'Sumber',
+                                  item['source'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Deskripsi',
+                                  item['description'] ?? '-',
+                                  isDark,
+                                ),
+                                _buildPreviewRow(
+                                  'Status',
+                                  (item['status'] ?? 'pending')
+                                      .toString()
+                                      .toUpperCase(),
+                                  isDark,
+                                  valueColor: _statusColor(
+                                    (item['status'] ?? 'pending').toString(),
+                                  ),
+                                ),
+                                if (item['notes'] != null &&
+                                    item['notes'].toString().isNotEmpty)
+                                  _buildPreviewRow(
+                                    'Catatan',
+                                    item['notes'],
+                                    isDark,
+                                    isNotes: true,
+                                  ),
+                                if (item['evidence_path'] != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 8),
+                                    child: TextButton.icon(
+                                      onPressed: () => _showEvidence(
+                                        item['evidence_path'],
+                                        item['evidence_filename'],
+                                      ),
+                                      icon: const Icon(
+                                        Icons.image_rounded,
+                                        size: 16,
+                                      ),
+                                      label: const Text(
+                                        'Lihat Bukti',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppTheme.primary,
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(0, 30),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
@@ -1645,10 +1675,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             const Icon(Icons.comment_rounded, color: AppTheme.accent),
             const SizedBox(width: 10),
             const Expanded(
-              child: Text(
-                'Riwayat Komentar',
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text('Riwayat Komentar', overflow: TextOverflow.ellipsis),
             ),
             IconButton(
               onPressed: () => Navigator.pop(ctx),
@@ -1833,432 +1860,475 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
             ),
             content: SizedBox(
               width: screenWidth > 600 ? 500 : screenWidth * 0.9,
-              child: AppScrollbar(
-                thumbVisibility: true,
-                interactive: true,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        height: 10,
-                      ), // Memberi ruang agar label tidak menempel ke judul
-                      // dropdown kategori utama
-                      DropdownButtonFormField<int>(
-                        decoration: const InputDecoration(
-                          labelText: 'Kategori Utama',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                        ),
-                        isExpanded: true,
-                        dropdownColor: AppTheme.card,
-                        style: TextStyle(color: AppTheme.textPrimary),
-                        initialValue: effectiveParentId,
-                        items: allCats.map((c) {
-                          final isPending = c['status'] == 'pending';
-                          return DropdownMenuItem<int>(
-                            value: c['id'] as int,
-                            child: Text(
-                              isPending ? '${c['name']} (Pending)' : c['name'],
-                              style: TextStyle(
-                                color: isPending ? AppTheme.warning : null,
+              child: Builder(
+                builder: (ctx2) {
+                  final dialogScrollCtrl = ScrollController();
+                  return AppScrollbar(
+                    controller: dialogScrollCtrl,
+                    thumbVisibility: true,
+                    interactive: true,
+                    child: SingleChildScrollView(
+                      controller: dialogScrollCtrl,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            height: 10,
+                          ), // Memberi ruang agar label tidak menempel ke judul
+                          // dropdown kategori utama
+                          DropdownButtonFormField<int>(
+                            decoration: const InputDecoration(
+                              labelText: 'Kategori Utama',
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 14,
                               ),
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (v) => setDialogState(() {
-                          selectedParentId = v;
-                          selectedSubCategoryIds = {}; // reset sub kategori
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Checklist Sub Kategori
-                      // Checklist Sub Kategori
-                      if (effectiveParentId != null) ...[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            children.isNotEmpty
-                                ? 'Pilih Sub Kategori:'
-                                : 'Hanya Kategori Utama',
-                            style: const TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            isExpanded: true,
+                            dropdownColor: _cardColor(ctx),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            initialValue: effectiveParentId,
+                            items: allCats.map((c) {
+                              final isPending = c['status'] == 'pending';
+                              return DropdownMenuItem<int>(
+                                value: c['id'] as int,
+                                child: Text(
+                                  isPending
+                                      ? '${c['name']} (Pending)'
+                                      : c['name'],
+                                  style: TextStyle(
+                                    color: isPending ? AppTheme.warning : null,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (v) => setDialogState(() {
+                              selectedParentId = v;
+                              selectedSubCategoryIds = {}; // reset sub kategori
+                            }),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        if (children.isNotEmpty)
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 200),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppTheme.divider),
-                            ),
-                            child: AppScrollbar(
-                              controller: _subCategoryScrollController,
-                              thumbVisibility: true,
-                              interactive: true,
-                              child: SingleChildScrollView(
-                                controller: _subCategoryScrollController,
-                                child: Column(
-                                  children: children.map((c) {
-                                    final subId = c['id'] as int;
-                                    final isPending = c['status'] == 'pending';
-                                    final isSelected = selectedSubCategoryIds
-                                        .contains(subId);
+                          const SizedBox(height: 12),
 
-                                    return CheckboxListTile(
-                                      value: isSelected,
-                                      activeColor: AppTheme.primary,
-                                      checkColor: Colors.white,
-                                      dense: true,
-                                      title: Text(
-                                        isPending
-                                            ? '${c['name']} (Pending)'
-                                            : c['name'],
-                                        style: TextStyle(
-                                          color: isSelected
-                                              ? AppTheme.primary
-                                              : (isPending
-                                                    ? AppTheme.warning
-                                                    : _primaryText(ctx)),
-                                          fontSize: 13,
-                                        ),
-                                      ),
-                                      onChanged: (val) {
-                                        setDialogState(() {
-                                          if (val == true) {
-                                            selectedSubCategoryIds.add(subId);
-                                          } else {
-                                            selectedSubCategoryIds.remove(
+                          // Checklist Sub Kategori
+                          // Checklist Sub Kategori
+                          if (effectiveParentId != null) ...[
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                children.isNotEmpty
+                                    ? 'Pilih Sub Kategori:'
+                                    : 'Hanya Kategori Utama',
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            if (children.isNotEmpty)
+                              Container(
+                                constraints: const BoxConstraints(
+                                  maxHeight: 200,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppTheme.divider),
+                                ),
+                                child: AppScrollbar(
+                                  controller: _subCategoryScrollController,
+                                  thumbVisibility: true,
+                                  interactive: true,
+                                  child: SingleChildScrollView(
+                                    controller: _subCategoryScrollController,
+                                    child: Column(
+                                      children: children.map((c) {
+                                        final subId = c['id'] as int;
+                                        final isPending =
+                                            c['status'] == 'pending';
+                                        final isSelected =
+                                            selectedSubCategoryIds.contains(
                                               subId,
                                             );
-                                          }
-                                        });
-                                      },
-                                      controlAffinity:
-                                          ListTileControlAffinity.leading,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                          ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Kategori ini tidak memiliki sub-kategori.',
-                              style: TextStyle(
-                                color: _secondaryText(ctx),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
 
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: TextButton.icon(
-                              onPressed: () => _showAddCategoryDialog(
-                                ctx,
-                                setDialogState,
-                                (newCat) {
-                                  // coba pilih otomatis kalau bisa
-                                  final parentID = newCat['parent_id'];
-                                  final catID = newCat['id'] as int;
-                                  setDialogState(() {
-                                    if (parentID != null) {
-                                      // ini sub kategori
-                                      selectedParentId = parentID;
-                                      selectedSubCategoryIds.add(catID);
-                                    } else {
-                                      // ini kategori utama
-                                      selectedParentId = catID;
-                                      selectedSubCategoryIds = {}; // No sub yet
-                                    }
-                                  });
-                                },
-                                parentId: selectedParentId,
+                                        return CheckboxListTile(
+                                          value: isSelected,
+                                          activeColor: AppTheme.primary,
+                                          checkColor: Colors.white,
+                                          dense: true,
+                                          title: Text(
+                                            isPending
+                                                ? '${c['name']} (Pending)'
+                                                : c['name'],
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? AppTheme.primary
+                                                  : (isPending
+                                                        ? AppTheme.warning
+                                                        : _primaryText(ctx)),
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          onChanged: (val) {
+                                            setDialogState(() {
+                                              if (val == true) {
+                                                selectedSubCategoryIds.add(
+                                                  subId,
+                                                );
+                                              } else {
+                                                selectedSubCategoryIds.remove(
+                                                  subId,
+                                                );
+                                              }
+                                            });
+                                          },
+                                          controlAffinity:
+                                              ListTileControlAffinity.leading,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                              ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                child: Text(
+                                  'Kategori ini tidak memiliki sub-kategori.',
+                                  style: TextStyle(
+                                    color: _secondaryText(ctx),
+                                    fontSize: 12,
+                                  ),
+                                ),
                               ),
-                              icon: const Icon(
-                                Icons.add_circle_outline,
-                                size: 16,
-                              ),
-                              label: Text(
-                                selectedParentId != null
-                                    ? 'Tambah Sub-Kategori Baru'
-                                    : 'Tambah Kategori Baru',
-                                style: const TextStyle(fontSize: 12),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.category_rounded,
-                              color: AppTheme.primary,
-                              size: 20,
-                            ),
-                            tooltip: 'Pratinjau Struktur Kategori',
-                            onPressed: () => showCategoryPreviewDialog(
-                              context,
-                              context.read<SettlementProvider>().categories,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: descCtrl,
-                        decoration: const InputDecoration(
-                          labelText: 'Deskripsi',
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        onChanged: (val) {
-                          final lower = val.toLowerCase();
-                          for (final p in allCats) {
-                            final pName = p['name'].toString().toLowerCase();
-                            if (lower.contains(pName)) {
-                              setDialogState(() {
-                                // If parent changes, we should ideally clear subcategories
-                                // BUT if we are auto-detecting multiple ones, it's tricky.
-                                // The intersection logic in build() will handle safety.
-                                selectedParentId = p['id'];
-                              });
-                            }
-                            final children = _asMapList(p['children'] as List?);
-                            for (final c in children) {
-                              final cName = c['name'].toString().toLowerCase();
-                              if (lower.contains(cName)) {
-                                setDialogState(() {
-                                  selectedParentId = p['id'];
-                                  selectedSubCategoryIds.add(c['id'] as int);
-                                });
-                              }
-                            }
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      // mata uang
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                labelText: 'Mata Uang',
-                                floatingLabelBehavior:
-                                    FloatingLabelBehavior.always,
-                              ),
-                              dropdownColor: _cardColor(ctx),
-                              style: TextStyle(color: _primaryText(ctx)),
-                              initialValue: selectedCurrency,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'IDR',
-                                  child: Text('IDR'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'USD',
-                                  child: Text('USD'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'EUR',
-                                  child: Text('EUR'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'GBP',
-                                  child: Text('GBP'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'JPY',
-                                  child: Text('JPY'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'CNY',
-                                  child: Text('CNY'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'AUD',
-                                  child: Text('AUD'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'HKD',
-                                  child: Text('HKD'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'SGD',
-                                  child: Text('SGD'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'TWD',
-                                  child: Text('TWD'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'THB',
-                                  child: Text('THB'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'MYR',
-                                  child: Text('MYR'),
-                                ),
-                              ],
-                              onChanged: (v) => setDialogState(() {
-                                selectedCurrency = v ?? 'IDR';
-                                if (selectedCurrency == 'IDR') {
-                                  exchangeRateCtrl.text = '1';
-                                }
-                              }),
-                            ),
-                          ),
-                          if (selectedCurrency != 'IDR') ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: exchangeRateCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Kurs (ke IDR)',
-                                  floatingLabelBehavior:
-                                      FloatingLabelBehavior.always,
-                                ),
-                                style: TextStyle(color: _primaryText(ctx)),
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [CurrencyInputFormatter()],
-                              ),
-                            ),
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: amountCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Amount ($selectedCurrency)',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
-                          hintText: '10.000',
-                          hintStyle: TextStyle(
-                            color: _secondaryText(ctx).withValues(alpha: 0.5),
+
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: TextButton.icon(
+                                  onPressed: () => _showAddCategoryDialog(
+                                    ctx,
+                                    setDialogState,
+                                    (newCat) {
+                                      // coba pilih otomatis kalau bisa
+                                      final parentID = newCat['parent_id'];
+                                      final catID = newCat['id'] as int;
+                                      setDialogState(() {
+                                        if (parentID != null) {
+                                          // ini sub kategori
+                                          selectedParentId = parentID;
+                                          selectedSubCategoryIds.add(catID);
+                                        } else {
+                                          // ini kategori utama
+                                          selectedParentId = catID;
+                                          selectedSubCategoryIds =
+                                              {}; // No sub yet
+                                        }
+                                      });
+                                    },
+                                    parentId: selectedParentId,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.add_circle_outline,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    selectedParentId != null
+                                        ? 'Tambah Sub-Kategori Baru'
+                                        : 'Tambah Kategori Baru',
+                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.category_rounded,
+                                  color: AppTheme.primary,
+                                  size: 20,
+                                ),
+                                tooltip: 'Pratinjau Struktur Kategori',
+                                onPressed: () => showCategoryPreviewDialog(
+                                  context,
+                                  context.read<SettlementProvider>().categories,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [CurrencyInputFormatter()],
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: dateCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'Tanggal',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
-                          suffixIcon: IconButton(
-                            icon: const Icon(Icons.calendar_today, size: 18),
-                            onPressed: () async {
-                              final initialDate =
-                                  DateTime.tryParse(dateCtrl.text) ??
-                                  defaultDate;
-                              final d = await showDatePicker(
-                                context: ctx,
-                                initialDate: initialDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2100),
-                              );
-                              if (d != null) {
-                                dateCtrl.text = DateFormat(
-                                  'yyyy-MM-dd',
-                                ).format(d);
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: descCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Deskripsi',
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            onChanged: (val) {
+                              final lower = val.toLowerCase();
+                              for (final p in allCats) {
+                                final pName = p['name']
+                                    .toString()
+                                    .toLowerCase();
+                                if (lower.contains(pName)) {
+                                  setDialogState(() {
+                                    // If parent changes, we should ideally clear subcategories
+                                    // BUT if we are auto-detecting multiple ones, it's tricky.
+                                    // The intersection logic in build() will handle safety.
+                                    selectedParentId = p['id'];
+                                  });
+                                }
+                                final children = _asMapList(
+                                  p['children'] as List?,
+                                );
+                                for (final c in children) {
+                                  final cName = c['name']
+                                      .toString()
+                                      .toLowerCase();
+                                  if (lower.contains(cName)) {
+                                    setDialogState(() {
+                                      selectedParentId = p['id'];
+                                      selectedSubCategoryIds.add(
+                                        c['id'] as int,
+                                      );
+                                    });
+                                  }
+                                }
                               }
                             },
                           ),
-                        ),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        readOnly: true,
-                      ),
-                      const SizedBox(height: 12),
-                      // dropdown sumber
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          labelText: 'Sumber Pembayaran',
-                          floatingLabelBehavior: FloatingLabelBehavior.always,
-                        ),
-                        dropdownColor: _cardColor(ctx),
-                        style: TextStyle(color: _primaryText(ctx)),
-                        initialValue: selectedSource,
-                        items: const [
-                          DropdownMenuItem(value: 'BCA', child: Text('BCA')),
-                          DropdownMenuItem(value: 'BRI', child: Text('BRI')),
-                          DropdownMenuItem(
-                            value: 'Mandiri',
-                            child: Text('Mandiri'),
+                          const SizedBox(height: 12),
+                          // mata uang
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: DropdownButtonFormField<String>(
+                                  decoration: const InputDecoration(
+                                    labelText: 'Mata Uang',
+                                  ),
+                                  dropdownColor: _cardColor(ctx),
+                                  style: TextStyle(color: _primaryText(ctx)),
+                                  initialValue: selectedCurrency,
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'IDR',
+                                      child: Text('IDR'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'USD',
+                                      child: Text('USD'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'EUR',
+                                      child: Text('EUR'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'GBP',
+                                      child: Text('GBP'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'JPY',
+                                      child: Text('JPY'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'CNY',
+                                      child: Text('CNY'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'AUD',
+                                      child: Text('AUD'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'HKD',
+                                      child: Text('HKD'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'SGD',
+                                      child: Text('SGD'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'TWD',
+                                      child: Text('TWD'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'THB',
+                                      child: Text('THB'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'MYR',
+                                      child: Text('MYR'),
+                                    ),
+                                  ],
+                                  onChanged: (v) => setDialogState(() {
+                                    selectedCurrency = v ?? 'IDR';
+                                    if (selectedCurrency == 'IDR') {
+                                      exchangeRateCtrl.text = '1';
+                                    }
+                                  }),
+                                ),
+                              ),
+                              if (selectedCurrency != 'IDR') ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextField(
+                                    controller: exchangeRateCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Kurs (ke IDR)',
+                                    ),
+                                    style: TextStyle(color: _primaryText(ctx)),
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [CurrencyInputFormatter()],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          DropdownMenuItem(value: 'BNI', child: Text('BNI')),
-                          DropdownMenuItem(value: 'Cash', child: Text('Cash')),
-                          DropdownMenuItem(
-                            value: 'Advance',
-                            child: Text('Advance'),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: amountCtrl,
+                            decoration: InputDecoration(
+                              labelText:
+                                  'Amount ($selectedCurrency)',
+                              hintText: '10.000',
+                              hintStyle: TextStyle(
+                                color: _secondaryText(
+                                  ctx,
+                                ).withValues(alpha: 0.5),
+                              ),
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [CurrencyInputFormatter()],
                           ),
-                          DropdownMenuItem(
-                            value: 'Lainnya',
-                            child: Text('Lainnya'),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: dateCtrl,
+                            decoration: InputDecoration(
+                              labelText: 'Tanggal',
+                              suffixIcon: IconButton(
+                                icon: const Icon(
+                                  Icons.calendar_today,
+                                  size: 18,
+                                ),
+                                onPressed: () async {
+                                  final initialDate =
+                                      DateTime.tryParse(dateCtrl.text) ??
+                                      defaultDate;
+                                  final d = await showDatePicker(
+                                    context: ctx,
+                                    initialDate: initialDate,
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime(2100),
+                                  );
+                                  if (d != null) {
+                                    dateCtrl.text = DateFormat(
+                                      'yyyy-MM-dd',
+                                    ).format(d);
+                                  }
+                                },
+                              ),
+                            ),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            readOnly: true,
                           ),
-                        ],
-                        onChanged: (v) =>
-                            setDialogState(() => selectedSource = v),
-                      ),
-                      const SizedBox(height: 16),
-                      // pilih file
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          try {
-                            final result = await FilePicker.pickFiles(
-                              type: FileType.custom,
-                              allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'webp'],
-                            );
-                            if (result != null) {
-                              setDialogState(() {
-                                selectedFilePath = result.files.single.path;
-                                selectedFileName = result.files.single.name;
-                              });
-                            }
-                          } catch (e) {
-                            debugPrint('FilePicker Error: $e');
-                          }
-                        },
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: Text(
-                          selectedFileName ?? 'Upload Bukti (opsional)',
-                        ),
-                      ),
-                      if (selectedFileName != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '✓ $selectedFileName',
-                            style: TextStyle(
-                              color: AppTheme.success,
-                              fontSize: 12,
+                          const SizedBox(height: 12),
+                          // dropdown sumber
+                          DropdownButtonFormField<String>(
+                            decoration: const InputDecoration(
+                              labelText: 'Sumber Pembayaran',
+                            ),
+                            dropdownColor: _cardColor(ctx),
+                            style: TextStyle(color: _primaryText(ctx)),
+                            initialValue: selectedSource,
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'BCA',
+                                child: Text('BCA'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'BRI',
+                                child: Text('BRI'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Mandiri',
+                                child: Text('Mandiri'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'BNI',
+                                child: Text('BNI'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Cash',
+                                child: Text('Cash'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Advance',
+                                child: Text('Advance'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Lainnya',
+                                child: Text('Lainnya'),
+                              ),
+                            ],
+                            onChanged: (v) =>
+                                setDialogState(() => selectedSource = v),
+                          ),
+                          const SizedBox(height: 16),
+                          // pilih file
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              try {
+                                final result = await FilePicker.pickFiles(
+                                  type: FileType.custom,
+                                  allowedExtensions: [
+                                    'jpg',
+                                    'jpeg',
+                                    'png',
+                                    'pdf',
+                                    'webp',
+                                  ],
+                                );
+                                if (result != null) {
+                                  setDialogState(() {
+                                    selectedFilePath = result.files.single.path;
+                                    selectedFileName = result.files.single.name;
+                                  });
+                                }
+                              } catch (e) {
+                                debugPrint('FilePicker Error: $e');
+                              }
+                            },
+                            icon: const Icon(Icons.upload_file_rounded),
+                            label: Text(
+                              selectedFileName ?? 'Upload Bukti (opsional)',
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
+                          if (selectedFileName != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                '✓ $selectedFileName',
+                                style: TextStyle(
+                                  color: AppTheme.success,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
             actions: [
@@ -2411,7 +2481,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                                   description: descCtrl.text.trim(),
                                   amount: amount,
                                   date: dateCtrl.text,
-                                  source: selectedSource,
+                                  source: selectedSource!,
                                   currency: selectedCurrency,
                                   currencyExchange: rateForValidation,
                                   filePath: selectedFilePath,
@@ -2425,7 +2495,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                               description: descCtrl.text.trim(),
                               amount: amount,
                               date: dateCtrl.text,
-                              source: selectedSource,
+                              source: selectedSource!,
                               currency: selectedCurrency,
                               currencyExchange: rateForValidation,
                               filePath: selectedFilePath,
@@ -3194,7 +3264,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Judul Pengajuan / Nama Trip',
                 ),
-                style: TextStyle(color: AppTheme.textPrimary),
+                style: TextStyle(color: _primaryText(ctx)),
               ),
             ],
           ),
@@ -3318,7 +3388,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     DropdownButtonFormField<int>(
                       decoration: const InputDecoration(
                         labelText: 'Kategori Utama',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
                         contentPadding: EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 14,
@@ -3540,8 +3609,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           child: DropdownButtonFormField<String>(
                             decoration: const InputDecoration(
                               labelText: 'Mata Uang',
-                              floatingLabelBehavior:
-                                  FloatingLabelBehavior.always,
                             ),
                             dropdownColor: _cardColor(ctx),
                             style: TextStyle(color: _primaryText(ctx)),
@@ -3612,8 +3679,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                               controller: exchangeRateCtrl,
                               decoration: const InputDecoration(
                                 labelText: 'Kurs (ke IDR)',
-                                floatingLabelBehavior:
-                                    FloatingLabelBehavior.always,
                               ),
                               style: TextStyle(color: _primaryText(ctx)),
                               keyboardType: TextInputType.number,
@@ -3628,7 +3693,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       controller: amountCtrl,
                       decoration: InputDecoration(
                         labelText: 'Amount ($selectedCurrency)',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
                         hintText: '10.000',
                         hintStyle: TextStyle(
                           color: _secondaryText(ctx).withValues(alpha: 0.5),
@@ -3643,7 +3707,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                       controller: dateCtrl,
                       decoration: InputDecoration(
                         labelText: 'Tanggal',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
                         suffixIcon: IconButton(
                           icon: const Icon(Icons.calendar_today, size: 18),
                           onPressed: () async {
@@ -3671,7 +3734,6 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     DropdownButtonFormField<String>(
                       decoration: const InputDecoration(
                         labelText: 'Sumber Pembayaran',
-                        floatingLabelBehavior: FloatingLabelBehavior.always,
                       ),
                       dropdownColor: _cardColor(ctx),
                       style: TextStyle(color: _primaryText(ctx)),
@@ -3699,17 +3761,25 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     // Tampilkan evidence lama jika ada
-                    if (exp['evidence_filename'] != null && selectedFileName == null)
+                    if (exp['evidence_filename'] != null &&
+                        selectedFileName == null)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Row(
                           children: [
-                            const Icon(Icons.attach_file_rounded, size: 14, color: AppTheme.textSecondary),
+                            const Icon(
+                              Icons.attach_file_rounded,
+                              size: 14,
+                              color: AppTheme.textSecondary,
+                            ),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'Bukti saat ini: ${exp['evidence_filename']}',
-                                style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: AppTheme.textSecondary,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -3721,9 +3791,16 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         try {
                           final result = await FilePicker.pickFiles(
                             type: FileType.custom,
-                            allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'webp'],
+                            allowedExtensions: [
+                              'jpg',
+                              'jpeg',
+                              'png',
+                              'pdf',
+                              'webp',
+                            ],
                           );
-                          if (result != null && result.files.single.path != null) {
+                          if (result != null &&
+                              result.files.single.path != null) {
                             setDialogState(() {
                               selectedFilePath = result.files.single.path;
                               selectedFileName = result.files.single.name;
@@ -3743,7 +3820,10 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           '✓ $selectedFileName',
-                          style: const TextStyle(color: AppTheme.success, fontSize: 11),
+                          style: const TextStyle(
+                            color: AppTheme.success,
+                            fontSize: 11,
+                          ),
                         ),
                       ),
                   ],
@@ -3922,7 +4002,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                   ? 'Nama Sub Kategori'
                   : 'Nama Kategori',
             ),
-            style: TextStyle(color: AppTheme.textPrimary),
+            style: TextStyle(color: _primaryText(ctx)),
             autofocus: true,
           ),
         ),
@@ -4007,69 +4087,78 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
               width: 400,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 420),
-                child: AppScrollbar(
-                  thumbVisibility: true,
-                  interactive: true,
-                  child: SingleChildScrollView(
-                    child: SelectionArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ...localChecklist.asMap().entries.map((entry) {
-                            final item = entry.value;
-                            return _buildChecklistTile(
-                              item,
-                              canEdit,
-                              setModalState,
-                            );
-                          }),
-                          if (canAddComment)
-                            _buildAddCommentButton(
-                              localChecklist,
-                              setModalState,
-                            ),
-                          if (!canEdit &&
-                              (normalizedStatus == 'submitted' ||
-                                  normalizedStatus == 'revision_submitted'))
-                            Container(
-                              margin: const EdgeInsets.only(top: 16),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppTheme.warning.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: AppTheme.warning.withValues(
-                                    alpha: 0.3,
-                                  ),
+                child: Builder(
+                  builder: (ctx2) {
+                    final checklistCtrl = ScrollController();
+                    return AppScrollbar(
+                      controller: checklistCtrl,
+                      thumbVisibility: true,
+                      interactive: true,
+                      child: SingleChildScrollView(
+                        controller: checklistCtrl,
+                        child: SelectionArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ...localChecklist.asMap().entries.map((entry) {
+                                final item = entry.value;
+                                return _buildChecklistTile(
+                                  item,
+                                  canEdit,
+                                  setModalState,
+                                );
+                              }),
+                              if (canAddComment)
+                                _buildAddCommentButton(
+                                  localChecklist,
+                                  setModalState,
                                 ),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.info_outline,
-                                    size: 16,
-                                    color: AppTheme.warning,
+                              if (!canEdit &&
+                                  (normalizedStatus == 'submitted' ||
+                                      normalizedStatus == 'revision_submitted'))
+                                Container(
+                                  margin: const EdgeInsets.only(top: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
                                   ),
-                                  const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Text(
-                                      'Settlement disubmit, Move to Draft untuk edit',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: AppTheme.warning,
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.warning.withValues(
+                                      alpha: 0.1,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: AppTheme.warning.withValues(
+                                        alpha: 0.3,
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                        ],
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.info_outline,
+                                        size: 16,
+                                        color: AppTheme.warning,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Text(
+                                          'Settlement disubmit, Move to Draft untuk edit',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppTheme.warning,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),

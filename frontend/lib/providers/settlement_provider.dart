@@ -15,6 +15,7 @@ class SettlementProvider extends ChangeNotifier {
 
   String? _statusFilter;
   int _reportYear = 2024; // Default to 2024 as requested
+  String _filterMode = 'report'; // 'report' or 'actual'
   String? _startDate;
   String? _endDate;
   String? _searchQuery;
@@ -45,6 +46,7 @@ class SettlementProvider extends ChangeNotifier {
 
   String? get statusFilter => _statusFilter;
   int get reportYear => _reportYear;
+  String get filterMode => _filterMode;
   String? get startDate => _startDate;
   String? get endDate => _endDate;
   String? get searchQuery => _searchQuery;
@@ -84,6 +86,7 @@ class SettlementProvider extends ChangeNotifier {
     String? endDate,
     String? type,
     int? reportYear,
+    String? mode,
     String? search,
     bool notify = true,
   }) async {
@@ -101,6 +104,9 @@ class SettlementProvider extends ChangeNotifier {
     if (reportYear != null) {
       _reportYear = reportYear;
     }
+    if (mode != null) {
+      _filterMode = mode;
+    }
 
     // ✅ Centralized Sanitization
     _searchQuery = search
@@ -117,22 +123,17 @@ class SettlementProvider extends ChangeNotifier {
     _error = null;
 
     try {
-      final params = <String, dynamic>{};
-      if (_statusFilter != null) params['status'] = _statusFilter;
-      if (_startDate != null) params['startDate'] = _startDate;
-      if (_endDate != null) params['endDate'] = _endDate;
-      params['reportYear'] = _reportYear;
-      params['search'] = _searchQuery;
-
-      final res = await _api.getSettlements(
+      final data = await _api.getSettlements(
         status: _statusFilter,
         startDate: _startDate,
         endDate: _endDate,
         type: type,
         reportYear: _reportYear,
+        mode: _filterMode,
         search: _searchQuery,
       );
-      _settlements = List<Map<String, dynamic>>.from(res['settlements']);
+
+      _settlements = List<Map<String, dynamic>>.from(data['settlements']);
     } catch (e) {
       _error = e.toString().replaceAll('Exception: ', '');
     }
@@ -173,7 +174,8 @@ class SettlementProvider extends ChangeNotifier {
       final year = int.tryParse((res['default_report_year'] ?? 2024).toString());
       if (year != null) {
         _reportYear = year;
-        _initialized = true; // ✅ Mark as initialized
+        _filterMode = 'report'; // ✅ Default to report mode from settings
+        _initialized = true;
         notifyListeners();
       }
     } catch (_) {}
@@ -186,6 +188,15 @@ class SettlementProvider extends ChangeNotifier {
       // ✅ Trigger event untuk load annual summary
       notifyListeners();
     }
+  }
+
+  void setFilterMode(String mode, {bool reload = true}) {
+    if (_filterMode == mode) return;
+    _filterMode = mode;
+    if (reload) {
+      loadSettlements();
+    }
+    notifyListeners();
   }
 
   Future<void> loadCategories() async {
@@ -660,6 +671,7 @@ class SettlementProvider extends ChangeNotifier {
   Future<List<int>> exportExcel({
     int? month,
     int? year,
+    String? mode,
     int? categoryId,
     int? settlementId,
     String? startDate,
@@ -669,6 +681,7 @@ class SettlementProvider extends ChangeNotifier {
     return _api.exportExcel(
       month: month,
       year: year,
+      mode: mode,
       categoryId: categoryId,
       settlementId: settlementId,
       startDate: startDate,
@@ -679,19 +692,27 @@ class SettlementProvider extends ChangeNotifier {
 
   Future<Map<String, dynamic>> getSummary({
     int? year,
+    String? mode,
     String? startDate,
     String? endDate,
   }) {
-    return _api.getSummary(year: year, startDate: startDate, endDate: endDate);
+    return _api.getSummary(
+      year: year,
+      mode: mode,
+      startDate: startDate,
+      endDate: endDate,
+    );
   }
 
   Future<List<int>> getSummaryPdf({
     int? year,
+    String? mode,
     String? startDate,
     String? endDate,
   }) {
     return _api.getSummaryPdf(
       year: year,
+      mode: mode,
       startDate: startDate,
       endDate: endDate,
     );

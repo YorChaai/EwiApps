@@ -6,6 +6,7 @@ import '../../providers/settlement_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/file_helper.dart';
 import '../../widgets/app_scrollbar.dart';
+import '../widgets/common_widgets.dart';
 import 'annual_report_screen.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -19,9 +20,10 @@ class _ReportScreenState extends State<ReportScreen> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
   final ScrollController _tableVerticalController = ScrollController();
-  int _selectedYear = 2024;
   DateTime? _startDate;
   DateTime? _endDate;
+  int _selectedYear = 2024;
+  String _filterMode = 'report'; // 'report', 'actual', 'range'
   Map<String, dynamic>? _summary;
   bool _loading = false;
   final _currencyFormat = NumberFormat('#,##0', 'id_ID');
@@ -66,31 +68,30 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   void initState() {
     super.initState();
-    _loadDefaultYearAndSummary();
-  }
-
-  Future<void> _loadDefaultYearAndSummary() async {
-    setState(() => _loading = true);
-    try {
-      final prov = context.read<SettlementProvider>();
-      await prov.syncReportYear();
-      if (mounted) setState(() => _selectedYear = prov.reportYear);
-    } catch (_) {}
-    await _loadSummary();
+    final prov = context.read<SettlementProvider>();
+    _selectedYear = prov.reportYear;
+    _filterMode = 'report';
+    _loadSummary();
   }
 
   Future<void> _loadSummary() async {
     setState(() => _loading = true);
     try {
       final prov = context.read<SettlementProvider>();
+
+      // Kirim tanggal HANYA JIKA mode adalah 'range'
+      final effectiveStartDate = _filterMode == 'range' && _startDate != null
+          ? DateFormat('yyyy-MM-dd').format(_startDate!)
+          : null;
+      final effectiveEndDate = _filterMode == 'range' && _endDate != null
+          ? DateFormat('yyyy-MM-dd').format(_endDate!)
+          : null;
+
       final data = await prov.getSummary(
-        year: _selectedYear,
-        startDate: _startDate != null
-            ? DateFormat('yyyy-MM-dd').format(_startDate!)
-            : null,
-        endDate: _endDate != null
-            ? DateFormat('yyyy-MM-dd').format(_endDate!)
-            : null,
+        year: _filterMode == 'range' ? null : _selectedYear,
+        mode: _filterMode,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
       );
       setState(() => _summary = data);
     } catch (e) {
@@ -107,11 +108,9 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final range = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2035),
-      initialDateRange: (_startDate != null && _endDate != null)
+    final range = await AppDateRangePicker.show(
+      context,
+      initialRange: (_startDate != null && _endDate != null)
           ? DateTimeRange(start: _startDate!, end: _endDate!)
           : null,
     );
@@ -119,17 +118,10 @@ class _ReportScreenState extends State<ReportScreen> {
       setState(() {
         _startDate = range.start;
         _endDate = range.end;
+        _filterMode = 'range';
       });
       _loadSummary();
     }
-  }
-
-  void _clearDateRange() {
-    setState(() {
-      _startDate = null;
-      _endDate = null;
-    });
-    _loadSummary();
   }
 
   @override
@@ -150,53 +142,63 @@ class _ReportScreenState extends State<ReportScreen> {
       );
     }
 
-    return AppScrollbar(
-      controller: _verticalController,
-      thumbVisibility: true,
-      interactive: true,
-      child: SingleChildScrollView(
-        controller: _verticalController,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                useCompact ? 16 : 32,
-                useCompact ? 20 : 28,
-                useCompact ? 16 : 32,
-                20,
-              ),
-              child: isNarrow
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHeaderInfo(useCompact),
-                        SizedBox(height: useCompact ? 12 : 16),
-                        _buildActions(useCompact),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(flex: 1, child: _buildHeaderInfo(useCompact)),
-                        const SizedBox(width: 16),
-                        Expanded(flex: 2, child: _buildActions(useCompact)),
-                      ],
+    return Column(
+      children: [
+        // FIXED HEADER - Simulating an AppBar structure for stability
+        Container(
+          padding: EdgeInsets.fromLTRB(
+            useCompact ? 16 : 32,
+            useCompact ? 12 : 20,
+            useCompact ? 16 : 32,
+            12,
+          ),
+          decoration: BoxDecoration(
+            color: _surfaceColor(context),
+            border: Border(bottom: BorderSide(color: _dividerColor(context))),
+          ),
+          child: isNarrow
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeaderInfo(useCompact),
+                    const SizedBox(height: 12),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: _buildActions(useCompact),
                     ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                useCompact ? 12 : 16,
-                useCompact ? 12 : 16,
-                useCompact ? 12 : 16,
-                64,
-              ),
-              child: _buildSummaryTableScrollableBody(useCompact),
-            ),
-          ],
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _buildHeaderInfo(useCompact),
+                    const Spacer(),
+                    _buildActions(useCompact),
+                  ],
+                ),
         ),
-      ),
+        // SCROLLABLE BODY
+        Expanded(
+          child: AppScrollbar(
+            controller: _verticalController,
+            thumbVisibility: true,
+            interactive: true,
+            child: SingleChildScrollView(
+              controller: _verticalController,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  useCompact ? 12 : 16,
+                  useCompact ? 12 : 16,
+                  useCompact ? 12 : 16,
+                  64,
+                ),
+                child: _buildSummaryTableScrollableBody(useCompact),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -235,100 +237,86 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildActions(bool useCompact) {
-    final buttons = [
-      DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: _selectedYear,
-          dropdownColor: _cardColor(context),
-          style: TextStyle(
-            color: _primaryText(context),
-            fontSize: useCompact ? 12 : 13,
-            fontWeight: FontWeight.bold,
-          ),
-          items: {...List.generate(21, (i) => 2020 + i), _selectedYear}
-              .where((y) => y != 0)
-              .map((y) => DropdownMenuItem(
-                    value: y,
-                    child: Text('Laporan $y'),
-                  ))
-              .toList(),
-          onChanged: (v) {
-            if (v != null) {
-              setState(() => _selectedYear = v);
-              _loadSummary();
-            }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CascadingYearFilter(
+          label: 'Periode Data',
+          selectedYear: _selectedYear,
+          currentMode: _filterMode,
+          useCompact: useCompact,
+          startDate: _startDate,
+          endDate: _endDate,
+          onSelected: (year, mode) {
+            setState(() {
+              _selectedYear = year;
+              _filterMode = mode;
+            });
+            _loadSummary();
           },
+          onRangeTap: _pickDateRange,
         ),
-      ),
-      TextButton.icon(
-        onPressed: _pickDateRange,
-        icon: Icon(Icons.date_range_rounded, size: 18, color: AppTheme.primary),
-        label: Text(
-          'Range',
-          style: TextStyle(
-            color: AppTheme.primary,
-            fontSize: useCompact ? 12 : 13,
-            fontWeight: FontWeight.bold,
+        const SizedBox(width: 8),
+        // Tombol Laporan Tahunan (Hanya Ikon)
+        Container(
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AnnualReportScreen()),
+            ),
+            tooltip: 'Laporan Tahunan',
+            icon: const Icon(
+              Icons.bar_chart_rounded,
+              color: AppTheme.primary,
+              size: 22,
+            ),
           ),
         ),
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: useCompact ? 4 : 8),
-        ),
-      ),
-      if (_startDate != null)
-        IconButton(
-          onPressed: _clearDateRange,
-          tooltip: 'Clear Range',
-          icon: Icon(
-            Icons.close_rounded,
-            color: AppTheme.danger,
-            size: 20,
+        const SizedBox(width: 8),
+        // Menu Export (PDF & Excel)
+        MenuAnchor(
+          alignmentOffset: const Offset(0, 4),
+          style: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll(
+              _isDark(context) ? AppTheme.surface : Colors.white,
+            ),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            elevation: const WidgetStatePropertyAll(8),
           ),
+          builder: (context, controller, child) {
+            return IconButton(
+              onPressed: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              tooltip: 'Export Laporan',
+              icon: const Icon(
+                Icons.file_download_outlined,
+                color: AppTheme.primary,
+                size: 24,
+              ),
+            );
+          },
+          menuChildren: [
+            MenuItemButton(
+              onPressed: _exportSummaryPdf,
+              leadingIcon: const Icon(Icons.picture_as_pdf_rounded,
+                  color: AppTheme.danger, size: 20),
+              child: const Text('Export PDF Summary'),
+            ),
+            MenuItemButton(
+              onPressed: _exportFullExcel,
+              leadingIcon: const Icon(Icons.table_view_rounded,
+                  color: AppTheme.success, size: 20),
+              child: const Text('Export Excel Summary'),
+            ),
+          ],
         ),
-      TextButton.icon(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => AnnualReportScreen()),
-        ),
-        icon: Icon(Icons.assessment_rounded, size: 18, color: AppTheme.primary),
-        label: Text(
-          'Laporan Tahunan',
-          style: TextStyle(
-            color: AppTheme.primary,
-            fontSize: useCompact ? 12 : 13,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        style: TextButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: useCompact ? 4 : 8),
-        ),
-      ),
-      IconButton(
-        onPressed: _exportSummaryPdf,
-        tooltip: 'Export PDF',
-        icon: Icon(
-          Icons.picture_as_pdf_rounded,
-          color: AppTheme.danger,
-          size: 22,
-        ),
-      ),
-      IconButton(
-        onPressed: _exportFullExcel,
-        tooltip: 'Export Excel',
-        icon: Icon(
-          Icons.table_view_rounded,
-          color: AppTheme.success,
-          size: 22,
-        ),
-      ),
-    ];
-
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      alignment: useCompact ? WrapAlignment.start : WrapAlignment.end,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: buttons,
+      ],
     );
   }
 
@@ -640,14 +628,14 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _exportFullExcel() async {
     try {
       final prov = context.read<SettlementProvider>();
-      final start = _startDate ?? DateTime(_selectedYear, 1, 1);
-      final end = _endDate ?? DateTime(_selectedYear, 12, 31);
       final bytes = await prov.exportExcel(
-        startDate: DateFormat('yyyy-MM-dd').format(start),
-        endDate: DateFormat('yyyy-MM-dd').format(end),
+        startDate: _startDate != null ? DateFormat('yyyy-MM-dd').format(_startDate!) : null,
+        endDate: _endDate != null ? DateFormat('yyyy-MM-dd').format(_endDate!) : null,
       );
-      final filename =
-          'summary_${DateFormat('yyyyMMdd').format(start)}_${DateFormat('yyyyMMdd').format(end)}.xlsx';
+      final suffix = (_startDate != null && _endDate != null)
+          ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}'
+          : DateFormat('yyyyMMdd').format(DateTime.now());
+      final filename = 'summary_$suffix.xlsx';
       if (mounted) {
         await FileHelper.saveAndOpenFolder(
           context: context,
@@ -673,7 +661,6 @@ class _ReportScreenState extends State<ReportScreen> {
     try {
       final prov = context.read<SettlementProvider>();
       final bytes = await prov.getSummaryPdf(
-        year: _selectedYear,
         startDate: _startDate != null
             ? DateFormat('yyyy-MM-dd').format(_startDate!)
             : null,
@@ -683,7 +670,7 @@ class _ReportScreenState extends State<ReportScreen> {
       );
       final suffix = (_startDate != null && _endDate != null)
           ? '${DateFormat('yyyyMMdd').format(_startDate!)}_${DateFormat('yyyyMMdd').format(_endDate!)}'
-          : '$_selectedYear';
+          : DateFormat('yyyyMMdd').format(DateTime.now());
       final filename = 'summary_$suffix.pdf';
       if (mounted) {
         await FileHelper.saveAndOpenFile(

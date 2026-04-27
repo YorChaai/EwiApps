@@ -418,6 +418,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
   bool _selectionMode = false;
   final Set<int> _selectedSettlementIds = {};
   String _selectedType = 'single';
+  String _filterMode = 'report'; // Default placeholder, will sync in initState
 
   Color _cardColor(BuildContext context) =>
       context.isDark ? AppTheme.card : AppTheme.lightCard;
@@ -547,6 +548,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
     _listScrollController.addListener(_handleListScroll);
     final prov = context.read<SettlementProvider>();
     _statusFilter = prov.statusFilter;
+    _filterMode = prov.filterMode; // ✅ Sync mode
     _searchQuery = prov.searchQuery ?? '';
     _searchCtrl.text = _searchQuery;
     if (prov.startDate != null) _startDate = DateTime.tryParse(prov.startDate!);
@@ -602,26 +604,29 @@ class _SettlementListViewState extends State<_SettlementListView> {
     _searchDebounce?.cancel();
     _searchDebounce = null;
     final prov = context.read<SettlementProvider>();
+    // Kirim tanggal HANYA JIKA mode adalah 'range'
+    final effectiveStartDate = _filterMode == 'range' && _startDate != null
+        ? DateFormat('yyyy-MM-dd').format(_startDate!)
+        : null;
+    final effectiveEndDate = _filterMode == 'range' && _endDate != null
+        ? DateFormat('yyyy-MM-dd').format(_endDate!)
+        : null;
+
     prov.loadSettlements(
       status: _statusFilter,
-      startDate: _startDate != null
-          ? DateFormat('yyyy-MM-dd').format(_startDate!)
-          : null,
-      endDate: _endDate != null
-          ? DateFormat('yyyy-MM-dd').format(_endDate!)
-          : null,
-      reportYear: prov.reportYear == 0 ? null : prov.reportYear,
-      search: _searchQuery.isEmpty ? null : _searchQuery,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate,
+      reportYear: prov.reportYear,
+      mode: _filterMode,
+      search: _searchQuery,
     );
     _loadAnnualSettlementSummary();
   }
 
   Future<void> _pickDateRange(BuildContext context) async {
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2022),
-      lastDate: DateTime(2030),
-      initialDateRange: _startDate != null && _endDate != null
+    final DateTimeRange? picked = await AppDateRangePicker.show(
+      context,
+      initialRange: _startDate != null && _endDate != null
           ? DateTimeRange(start: _startDate!, end: _endDate!)
           : null,
     );
@@ -629,17 +634,10 @@ class _SettlementListViewState extends State<_SettlementListView> {
       setState(() {
         _startDate = picked.start;
         _endDate = picked.end;
+        _filterMode = 'range'; // Tambahkan ini agar label berubah
       });
       _reloadSettlements();
     }
-  }
-
-  void _clearDateRange() {
-    setState(() {
-      _startDate = null;
-      _endDate = null;
-    });
-    _reloadSettlements();
   }
 
   Future<void> _exportExcel() async {
@@ -1289,142 +1287,59 @@ class _SettlementListViewState extends State<_SettlementListView> {
             },
           ),
           SizedBox(height: useCompact ? 12 : 16),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                Container(
-                  height: useCompact ? 32 : 40,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: _cardColor(context),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: context.isDark
-                          ? AppTheme.divider
-                          : AppTheme.lightDivider,
-                    ),
+          Center(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // SATU TOMBOL UNTUK SEMUA: Periode Data
+                  CascadingYearFilter(
+                    label: 'Periode Data',
+                    selectedYear: prov.reportYear,
+                    currentMode: _filterMode,
+                    useCompact: useCompact,
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    onSelected: (year, mode) {
+                      prov.setReportYear(year, reload: false);
+                      setState(() {
+                        _filterMode = mode;
+                        // JANGAN hapus _startDate dan _endDate di sini agar tetap tersimpan
+                      });
+                      _reloadSettlements();
+                    },
+                    onRangeTap: () => _pickDateRange(context),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: prov.reportYear,
-                      dropdownColor: _cardColor(context),
-                      style: TextStyle(
-                        color: context.isDark
-                            ? AppTheme.textPrimary
-                            : AppTheme.lightTextPrimary,
-                        fontSize: useCompact ? 11 : 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      items: [
-                        const DropdownMenuItem(
-                          value: 0,
-                          child: Text('Semua Tahun'),
-                        ),
-                        ...List.generate(21, (index) => 2020 + index).map(
-                          (y) => DropdownMenuItem(
-                            value: y,
-                            child: Text('Laporan $y'),
-                          ),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        prov.setReportYear(value, reload: false);
-                        _reloadSettlements();
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _FilterChipWidget(
-                  label: 'Semua',
-                  selected: _statusFilter == null,
-                  isMobile: useCompact,
-                  onTap: () {
-                    setState(() => _statusFilter = null);
-                    _reloadSettlements();
-                  },
-                ),
-                const SizedBox(width: 8),
-                _FilterChipWidget(
-                  label: 'Draft',
-                  selected: _statusFilter == 'draft',
-                  isMobile: useCompact,
-                  onTap: () {
-                    setState(() => _statusFilter = 'draft');
-                    _reloadSettlements();
-                  },
-                ),
-                const SizedBox(width: 8),
-                _FilterChipWidget(
-                  label: 'Submitted',
-                  selected: _statusFilter == 'submitted',
-                  isMobile: useCompact,
-                  onTap: () {
-                    setState(() => _statusFilter = 'submitted');
-                    _reloadSettlements();
-                  },
-                ),
-                const SizedBox(width: 8),
-                _FilterChipWidget(
-                  label: 'Approved',
-                  selected: _statusFilter == 'approved',
-                  isMobile: useCompact,
-                  onTap: () {
-                    setState(() => _statusFilter = 'approved');
-                    _reloadSettlements();
-                  },
-                ),
-                const SizedBox(width: 8),
-                if (auth.isManager)
-                  _FilterChipWidget(
-                    label: 'Rejected',
-                    selected: _statusFilter == 'rejected',
-                    isMobile: useCompact,
-                    onTap: () {
-                      setState(() => _statusFilter = 'rejected');
+                  const SizedBox(width: 12),
+                  CascadingStatusFilter(
+                    selectedStatus: _statusFilter,
+                    useCompact: useCompact,
+                    isManager: auth.isManager,
+                    onSelected: (val) {
+                      setState(() => _statusFilter = val);
                       _reloadSettlements();
                     },
                   ),
-
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: () => _pickDateRange(context),
-                  icon: Icon(
-                    Icons.date_range_rounded,
-                    color: _startDate != null
-                        ? AppTheme.primary
-                        : _bodyColorLocal(context),
-                  ),
-                ),
-                if (_startDate != null)
-                  IconButton(
-                    onPressed: _clearDateRange,
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      size: 18,
-                      color: AppTheme.danger,
+                  if (auth.isManager && canShowExport) ...[
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _exportExcel,
+                      icon: const Icon(
+                        Icons.table_chart_rounded,
+                        color: AppTheme.success,
+                      ),
                     ),
-                  ),
-                if (auth.isManager && canShowExport) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _exportExcel,
-                    icon: const Icon(
-                      Icons.table_chart_rounded,
-                      color: AppTheme.success,
+                    IconButton(
+                      onPressed: _exportPdf,
+                      icon: const Icon(
+                        Icons.picture_as_pdf_rounded,
+                        color: AppTheme.danger,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: _exportPdf,
-                    icon: const Icon(
-                      Icons.picture_as_pdf_rounded,
-                      color: AppTheme.danger,
-                    ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           SizedBox(height: useCompact ? 12 : 16),
@@ -1523,6 +1438,7 @@ class _SettlementListViewState extends State<_SettlementListView> {
 }
 
 class _FilterChipWidget extends StatelessWidget {
+
   final String label;
   final bool selected;
   final bool isMobile;

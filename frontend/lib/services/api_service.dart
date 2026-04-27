@@ -72,7 +72,7 @@ class ApiService {
     }
     if (Platform.isAndroid) {
       // Untuk HP Android fisik, gunakan IP jaringan lokal
-      return 'http://192.168.68.59:5000/api';
+      return 'http://192.168.68.51:5000/api';
     }
     return 'http://localhost:5000/api';
   }
@@ -113,8 +113,8 @@ class ApiService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedToken = prefs.getString('token');
-      
-      // ✅ FIX: Hanya set _token dari storage jika belum ada token yang diset secara eksternal 
+
+      // ✅ FIX: Hanya set _token dari storage jika belum ada token yang diset secara eksternal
       // (misal via updateToken saat login) saat fungsi ini sedang "await".
       // Ini mencegah token valid ditimpa menjadi null jika login tanpa "Remember Me".
       _token ??= savedToken;
@@ -373,6 +373,7 @@ class ApiService {
     String? endDate,
     String? type,
     int? reportYear,
+    String? mode, // 'report' or 'actual'
     String? search,
   }) async {
     final params = <String>[];
@@ -381,6 +382,7 @@ class ApiService {
     if (endDate != null) params.add('end_date=$endDate');
     if (type != null) params.add('type=$type');
     if (reportYear != null) params.add('report_year=$reportYear');
+    if (mode != null) params.add('mode=$mode');
     if (search != null && search.isNotEmpty) {
       params.add('search=${Uri.encodeComponent(search)}');
     }
@@ -705,6 +707,7 @@ class ApiService {
     String? startDate,
     String? endDate,
     int? reportYear,
+    String? mode, // 'report' or 'actual'
     String? type,
     String? search,
   }) async {
@@ -713,6 +716,7 @@ class ApiService {
     if (startDate != null) params.add('start_date=$startDate');
     if (endDate != null) params.add('end_date=$endDate');
     if (reportYear != null) params.add('report_year=$reportYear');
+    if (mode != null) params.add('mode=$mode');
     if (type != null) params.add('type=$type');
     if (search != null && search.isNotEmpty) {
       params.add('search=${Uri.encodeComponent(search)}');
@@ -1050,6 +1054,7 @@ class ApiService {
   Future<List<int>> exportExcel({
     int? month,
     int? year,
+    String? mode,
     int? categoryId,
     int? settlementId,
     String? startDate,
@@ -1059,6 +1064,7 @@ class ApiService {
     final params = <String>[];
     if (month != null) params.add('month=$month');
     if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
     if (categoryId != null) params.add('category_id=$categoryId');
     if (settlementId != null) params.add('settlement_id=$settlementId');
     if (startDate != null) params.add('start_date=$startDate');
@@ -1075,11 +1081,13 @@ class ApiService {
 
   Future<Map<String, dynamic>> getSummary({
     int? year,
+    String? mode,
     String? startDate,
     String? endDate,
   }) async {
     final params = <String>[];
     if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
     if (startDate != null) params.add('start_date=$startDate');
     if (endDate != null) params.add('end_date=$endDate');
 
@@ -1090,11 +1098,13 @@ class ApiService {
 
   Future<List<int>> getSummaryPdf({
     int? year,
+    String? mode,
     String? startDate,
     String? endDate,
   }) async {
     final params = <String>[];
     if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
     if (startDate != null) params.add('start_date=$startDate');
     if (endDate != null) params.add('end_date=$endDate');
 
@@ -1147,10 +1157,14 @@ class ApiService {
   Future<List<dynamic>> getRevenues({
     String? startDate,
     String? endDate,
+    int? year,
+    String? mode,
   }) async {
     final params = <String>[];
     if (startDate != null) params.add('start_date=$startDate');
     if (endDate != null) params.add('end_date=$endDate');
+    if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
 
     final url = _buildUrl('$baseUrl/revenues', params);
     final res = await http.get(Uri.parse(url), headers: _headers);
@@ -1222,10 +1236,17 @@ class ApiService {
 
   // taxes
 
-  Future<List<dynamic>> getTaxes({String? startDate, String? endDate}) async {
+  Future<List<dynamic>> getTaxes({
+    String? startDate,
+    String? endDate,
+    int? year,
+    String? mode,
+  }) async {
     final params = <String>[];
     if (startDate != null) params.add('start_date=$startDate');
     if (endDate != null) params.add('end_date=$endDate');
+    if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
 
     final url = _buildUrl('$baseUrl/taxes', params);
     final res = await http.get(Uri.parse(url), headers: _headers);
@@ -1350,11 +1371,23 @@ class ApiService {
 
   // annual reports
 
-  Future<Map<String, dynamic>> getAnnualReport({int? year}) async {
+  Future<Map<String, dynamic>> getAnnualReport({
+    int? year,
+    String? mode,
+    String? startDate,
+    String? endDate,
+  }) async {
     String url = '$baseUrl/reports/annual';
-    if (year != null) {
-      url += '?year=$year';
+    final params = <String>[];
+    if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
+    if (startDate != null) params.add('start_date=$startDate');
+    if (endDate != null) params.add('end_date=$endDate');
+
+    if (params.isNotEmpty) {
+      url = _buildUrl(url, params);
     }
+
     final res = await http.get(Uri.parse(url), headers: _headers);
     return _handleResponse(res);
   }
@@ -1407,10 +1440,14 @@ class ApiService {
     return _handleResponse(res);
   }
 
-  Future<List<int>> getAnnualReportPdf({int? year}) async {
+  Future<List<int>> getAnnualReportPdf({int? year, String? mode}) async {
     String url = '$baseUrl/reports/annual/pdf';
-    if (year != null) {
-      url += '?year=$year';
+    final params = <String>[];
+    if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
+
+    if (params.isNotEmpty) {
+      url = _buildUrl(url, params);
     }
 
     final res = await http.get(Uri.parse(url), headers: _authHeaders);
@@ -1420,10 +1457,21 @@ class ApiService {
     throw Exception('Gagal export Laporan Tahunan PDF');
   }
 
-  Future<List<int>> getAnnualReportExcel({int? year}) async {
+  Future<List<int>> getAnnualReportExcel({
+    int? year,
+    String? mode,
+    String? startDate,
+    String? endDate,
+  }) async {
     String url = '$baseUrl/reports/annual/excel';
-    if (year != null) {
-      url += '?year=$year';
+    final params = <String>[];
+    if (year != null) params.add('year=$year');
+    if (mode != null) params.add('mode=$mode');
+    if (startDate != null) params.add('start_date=$startDate');
+    if (endDate != null) params.add('end_date=$endDate');
+
+    if (params.isNotEmpty) {
+      url = _buildUrl(url, params);
     }
 
     final res = await http.get(Uri.parse(url), headers: _authHeaders);
