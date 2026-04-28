@@ -68,21 +68,53 @@ def _merge_description_cell(
     """
     Merge columns D:E (or specified range) for description field.
     Handles unmerge first to avoid conflicts, then writes description.
-
-    Returns:
-        True if merge successful, False otherwise
+    Also implements wrap_text and dynamic row height calculation.
     """
     try:
-        ws.unmerge_cells(f'{_get_column_letter(col_start)}{row}:{_get_column_letter(col_end)}{row}')
-    except Exception:
-        pass
+        # 1. Handle unmerge
+        try:
+            ws.unmerge_cells(f'{_get_column_letter(col_start)}{row}:{_get_column_letter(col_end)}{row}')
+        except Exception:
+            pass
 
-    try:
+        # 2. Perform merge
         ws.merge_cells(start_row=row, start_column=col_start, end_row=row, end_column=col_end)
-        _safe_set_cell_with_merge(ws, row, col_start, description or '')
+        
+        # 3. Set value and enable wrap_text
+        text = description or ''
+        _safe_set_cell_with_merge(ws, row, col_start, text)
+        
+        # Enable wrap text for the top-left cell of merge
+        tl_cell = _get_top_left_cell(ws, row, col_start)
+        tl_cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='left')
+        
+        # 4. Dynamic Row Height Calculation
+        # Width D: 56.27, Width E: 4.63 -> Total ~60.9
+        # Arial Narrow 11: 60 chars per line
+        CHARS_PER_LINE = 60
+        
+        # Count lines based on manual newlines and long text wrapping
+        raw_lines = text.split('\n')
+        total_lines = 0
+        for line in raw_lines:
+            line_len = len(line)
+            wrapped_lines = max(1, (line_len + CHARS_PER_LINE - 1) // CHARS_PER_LINE)
+            total_lines += wrapped_lines
+        
+        # Minimum row height (don't make it smaller than template)
+        current_height = ws.row_dimensions[row].height or 15
+        
+        if total_lines > 1:
+            # Multi-line: (lines * 15) + 10 buffer
+            new_height = (total_lines * 15) + 14
+            ws.row_dimensions[row].height = new_height
+        else:
+            # Single line: standard 15
+            ws.row_dimensions[row].height = 15
+        
         return True
     except Exception as e:
-        logger.debug(f'Failed to merge description cell at row {row}: {e}')
+        logger.debug(f'Failed to merge/wrap description cell at row {row}: {e}')
         _safe_set_cell(ws, row, col_start, description or '')
         return False
 
@@ -173,7 +205,7 @@ def _clear_data_keep_formulas(ws, start_row, end_row, start_col=2, end_col=17):
 
 def _clear_range_force(ws, start_row, end_row, start_col=2, end_col=17, reset_style=True):
     """
-    ✅ FORCE CLEAR: Clear range including handling merged cells.
+    FORCE CLEAR: Clear range including handling merged cells.
     If reset_style=True, also resets all styles (borders, fonts, etc).
     """
     # Step 1: Unmerge all cells in this range first
@@ -287,7 +319,7 @@ def _is_template_detail_data_row(ws, row_num):
     col_d = ws.cell(row=row_num, column=4).value
     has_desc = isinstance(col_d, str) and col_d.strip()
 
-    # ✅ CRITICAL FIX: A detail row MUST have both date AND sequence number
+    # ? CRITICAL FIX: A detail row MUST have both date AND sequence number
     # Subcategory headers only have description text, no date or sequence
     if has_date and has_seq:
         return True
