@@ -898,7 +898,7 @@ def _build_annual_pdf_bytes(payload):
     cat_columns = [c.name for c in root_cats]
     cat_names = cat_columns
 
-    t3_headers = ['Date','#','Activity (Desc)','Source','Jumlah (IDR)','Curr','Rate'] + [c[:10]+'.' for c in cat_columns]
+    t3_headers = ['Date','#','Activity (Desc)','Source','Amount','Curr','Rate'] + [c[:10]+'.' for c in cat_columns]
     t3_data = [t3_headers]
     cat_totals = [0]*len(cat_columns); grand_total = 0
 
@@ -915,11 +915,12 @@ def _build_annual_pdf_bytes(payload):
             t3_data.append(['', '', subcat, '', '', '', ''] + [''] * len(cat_columns))
             for e in items:
                 nominal_idr = _expense_amount_for_display(e)
+                raw_amount = _to_float(e.get('amount'))
                 col_idx = _map_expense_column(e.get('category_name'), cat_names)
                 row_cats = ['-']*len(cat_columns); row_cats[col_idx] = f"{nominal_idr:,.0f}" if nominal_idr else '-'
                 cat_totals[col_idx] += nominal_idr; grand_total += nominal_idr
                 t3_data.append([_as_iso_date(e.get('date')), str(row_idx), _shorten(e.get('description'),30), _shorten(e.get('source'),10),
-                    f"{nominal_idr:,.0f}" if nominal_idr else '-', _safe_text(e.get('currency')) or 'IDR',
+                    f"{raw_amount:,.0f}" if raw_amount else '-', _safe_text(e.get('currency')) or 'IDR',
                     f"{_to_float(e.get('currency_exchange'),1):,.0f}" if e.get('currency_exchange') else '-'] + row_cats)
                 row_idx += 1
 
@@ -946,15 +947,16 @@ def _build_annual_pdf_bytes(payload):
             t3_data.append(['', '', subcat, '', '', '', ''] + [''] * len(cat_columns))
             for e in sub_items:
                 nominal_idr = _expense_amount_for_display(e)
+                raw_amount = _to_float(e.get('amount'))
                 col_idx = _map_expense_column(e.get('category_name'), cat_names)
                 row_cats = ['-']*len(cat_columns); row_cats[col_idx] = f"{nominal_idr:,.0f}" if nominal_idr else '-'
                 cat_totals[col_idx] += nominal_idr; grand_total += nominal_idr
                 t3_data.append([_as_iso_date(e.get('date')), str(row_idx), _shorten(e.get('description'),30), _shorten(e.get('source'),10),
-                    f"{nominal_idr:,.0f}" if nominal_idr else '-', _safe_text(e.get('currency')) or 'IDR',
+                    f"{raw_amount:,.0f}" if raw_amount else '-', _safe_text(e.get('currency')) or 'IDR',
                     f"{_to_float(e.get('currency_exchange'),1):,.0f}" if e.get('currency_exchange') else '-'] + row_cats)
                 row_idx += 1
 
-        t3_data.append(["TOTAL PENGELUARAN","","","",f"{grand_total:,.0f}","",""] + [f"{t:,.0f}" if t > 0 else "-" for t in cat_totals])
+        t3_data.append(["TOTAL PENGELUARAN","","","","-","",""] + [f"{t:,.0f}" if t > 0 else "-" for t in cat_totals])
         cw = [55,20,110,50,60,25,25] + [45]*len(cat_columns)
         t3 = Table(t3_data, colWidths=cw)
 
@@ -1262,6 +1264,22 @@ def _render_expense_section_from_data(
     green_fill = GREEN_FILL
     blue_fill = BLUE_FILL
 
+    # ✅ OPTIMIZATION: Cache style objects for the data rows
+    # This avoids repeated lookups and copy() calls inside the loop
+    data_font = Font(size=11, name='Arial Narrow')
+    bold_font = Font(size=11, name='Arial Narrow', bold=True)
+    center_align = Alignment(horizontal='center', vertical='center')
+    right_align = Alignment(horizontal='right', vertical='center')
+    left_align = Alignment(horizontal='left', vertical='center')
+    
+    # ✅ STEP 0: Pre-calculate total rows to clear ghost data in BULK
+    # This is much faster than clearing row-by-row inside the loop
+    # We clear a large block below start_row to ensure a clean slate
+    logger.debug('Bulk clearing ghost data area')
+    max_cleanup_row = min(start_row + len(expenses) + 200, ws.max_row)
+    if max_cleanup_row > start_row:
+        _clear_range_force(ws, start_row, max_cleanup_row, 2, actual_last_col, reset_style=True)
+
     # ✅ STEP 1: Separate batch vs single expenses
 
     batch_expenses = [
@@ -1287,98 +1305,81 @@ def _render_expense_section_from_data(
     has_single_data = bool(single_grouped['groups']) or bool(single_grouped['uncategorized'])
     if has_single_data:
         for subcat, items in single_grouped['groups'].items():
-            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
-            _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
+            # _clone_row_format replaced by direct assignment for speed
+            ws.row_dimensions[row_cursor].height = ws.row_dimensions[start_row].height
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
-                cell.fill = copy(white_fill)
+                cell.fill = white_fill
                 cell.border = THIN_BORDER
+            
             _safe_set_cell(ws, row_cursor, 4, subcat)
-            ws.cell(row=row_cursor, column=4).font = ws.cell(row=row_cursor, column=4).font.copy(bold=True)
-            ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
-
-            # Clear ghost borders for subcategory header in Single
-            for col in range(last_category_col + 1, actual_last_col + 1):
-                ws.cell(row=row_cursor, column=col).border = no_border
-                ws.cell(row=row_cursor, column=col).fill = no_fill
+            ws.cell(row=row_cursor, column=4).font = bold_font
+            ws.cell(row=row_cursor, column=4).alignment = left_align
 
             row_cursor += 1
 
             for expense in items:
-                _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
-                _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
+                # Optimized: No cloning or clearing per row
+                ws.row_dimensions[row_cursor].height = ws.row_dimensions[start_row].height
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
-                    if not isinstance(cell, MergedCell):
-                        cell.fill = copy(white_fill)
-                        cell.border = THIN_BORDER
-                        cell.font = cell.font.copy(bold=False)
+                    cell.fill = white_fill
+                    cell.border = THIN_BORDER
+                    cell.font = data_font
 
                 clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                 _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
-                ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
-                ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
+                ws.cell(row=row_cursor, column=2).alignment = right_align
+                
                 _safe_set_cell(ws, row_cursor, 3, seq_counter)
-                ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
-                ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
+                ws.cell(row=row_cursor, column=3).alignment = center_align
+                
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-                ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
-                ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
+                ws.cell(row=row_cursor, column=4).alignment = left_align
+                
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-                _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
+                _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))
                 _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
                 _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
-                ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
-                ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
+                ws.cell(row=row_cursor, column=7).alignment = center_align
+                ws.cell(row=row_cursor, column=8).alignment = center_align
 
                 root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
                 cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
                 if cat_idx is not None:
-                    _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
-
-                # ✅ CRITICAL: Reset borders for ALL ghost columns in this row
-                for col in range(last_category_col + 1, actual_last_col + 1):
-                    ws.cell(row=row_cursor, column=col).border = no_border
-                    ws.cell(row=row_cursor, column=col).fill = no_fill
+                    _set_formula_with_format(ws, row_cursor, 9 + cat_idx, f'=$F{row_cursor}*$H{row_cursor}')
 
                 row_cursor += 1
                 seq_counter += 1
 
         for expense in single_grouped['uncategorized']:
-            _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
-            _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
+            ws.row_dimensions[row_cursor].height = ws.row_dimensions[start_row].height
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=row_cursor, column=col)
-                cell.fill = copy(white_fill)
+                cell.fill = white_fill
                 cell.border = THIN_BORDER
-                if not isinstance(cell, MergedCell):
-                    cell.font = cell.font.copy(bold=False)
+                cell.font = data_font
 
             clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
             _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
-            ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
-            ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
+            ws.cell(row=row_cursor, column=2).alignment = right_align
+            
             _safe_set_cell(ws, row_cursor, 3, seq_counter)
-            ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
-            ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
+            ws.cell(row=row_cursor, column=3).alignment = center_align
+            
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-            ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
-            ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
-            _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
+            ws.cell(row=row_cursor, column=4).alignment = left_align
+            
+            _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
             _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
-            ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
-            ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
+            ws.cell(row=row_cursor, column=7).alignment = center_align
+            ws.cell(row=row_cursor, column=8).alignment = center_align
 
             root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
             cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
             if cat_idx is not None:
-                _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
-
-            # Clear ghost borders for uncategorized in Single
-            for col in range(last_category_col + 1, actual_last_col + 1):
-                ws.cell(row=row_cursor, column=col).border = no_border
-                ws.cell(row=row_cursor, column=col).fill = no_fill
+                _set_formula_with_format(ws, row_cursor, 9 + cat_idx, f'=$F{row_cursor}*$H{row_cursor}')
 
             row_cursor += 1
             seq_counter += 1
@@ -1440,96 +1441,73 @@ def _render_expense_section_from_data(
 
             # Batch header (blue fill)
             batch_header_row = row_cursor
-            _clear_range(ws, batch_header_row, batch_header_row, 2, actual_last_col)
-            header_font = Font(bold=True, size=12, name='Arial Narrow', color='000000')
+            # No row-by-row clearing here because we did bulk clear at STEP 0
+            
+            header_font_large = Font(bold=True, size=12, name='Arial Narrow', color='000000')
 
             for col in range(2, last_category_col + 1):
                 cell = ws.cell(row=batch_header_row, column=col)
                 cell.fill = blue_fill
                 cell.border = THIN_BORDER
-                cell.font = header_font
-                cell.alignment = Alignment(vertical='center')
-
-            # Clear ghost borders for batch header
-            for col in range(last_category_col + 1, actual_last_col + 1):
-                ws.cell(row=batch_header_row, column=col).border = no_border
-                ws.cell(row=batch_header_row, column=col).fill = no_fill
+                cell.font = header_font_large
+                cell.alignment = center_align
 
             _safe_set_cell(ws, batch_header_row, 2, f'Expense#{batch_counter}')
-            ws.cell(row=batch_header_row, column=2).alignment = Alignment(horizontal='left', vertical='center')
+            ws.cell(row=batch_header_row, column=2).alignment = left_align
 
             # ✅ FIX COLON: Bold, Center, Arial Narrow 12
             _safe_set_cell(ws, batch_header_row, 3, ':')
-            ws.cell(row=batch_header_row, column=3).alignment = Alignment(horizontal='center', vertical='center')
-            ws.cell(row=batch_header_row, column=3).font = header_font
+            ws.cell(row=batch_header_row, column=3).alignment = center_align
+            ws.cell(row=batch_header_row, column=3).font = header_font_large
 
             _safe_set_cell(ws, batch_header_row, 4, settlement_title)
-            ws.cell(row=batch_header_row, column=4).alignment = Alignment(horizontal='left', vertical='center')
+            ws.cell(row=batch_header_row, column=4).alignment = left_align
             row_cursor += 1
 
             # Group batch items by subcategory
             batch_grouped = _group_expenses_by_subcategory(batch_items)
             for subcat, items in batch_grouped['groups'].items():
-                _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
                 for col in range(2, last_category_col + 1):
                     cell = ws.cell(row=row_cursor, column=col)
-                    cell.fill = copy(white_fill)
+                    cell.fill = white_fill
                     cell.border = THIN_BORDER
-                    cell.alignment = Alignment(vertical='center')
+                    cell.alignment = center_align
 
                 _safe_set_cell(ws, row_cursor, 4, subcat)
-                ws.cell(row=row_cursor, column=4).font = Font(bold=True)
-                ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
-                # Clear ghost borders
-                for col in range(last_category_col + 1, actual_last_col + 1):
-                    ws.cell(row=row_cursor, column=col).border = no_border
-                    ws.cell(row=row_cursor, column=col).fill = no_fill
+                ws.cell(row=row_cursor, column=4).font = bold_font
+                ws.cell(row=row_cursor, column=4).alignment = left_align
 
                 row_cursor += 1
 
                 for expense in items:
-                    _clone_row_format(ws, start_row, row_cursor, start_col=2, end_col=actual_last_col)
-                    _clear_range(ws, row_cursor, row_cursor, 2, actual_last_col)
+                    ws.row_dimensions[row_cursor].height = ws.row_dimensions[start_row].height
                     for col in range(2, last_category_col + 1):
                         cell = ws.cell(row=row_cursor, column=col)
-                        cell.fill = copy(white_fill)
+                        cell.fill = white_fill
                         cell.border = THIN_BORDER
-                        if not isinstance(cell, MergedCell):
-                            cell.font = cell.font.copy(bold=False)
+                        cell.font = data_font
 
                     clean_desc = re.sub(r'^\[.*?\]\s*', '', (expense.get('description') or '').strip()).strip()
                     _set_date_with_format(ws, row_cursor, 2, expense.get('date'))
-                    ws.cell(row=row_cursor, column=2).alignment = Alignment(horizontal='right', vertical='center')
-                    ws.cell(row=row_cursor, column=2).font = Font(size=11, name='Arial Narrow')
+                    ws.cell(row=row_cursor, column=2).alignment = right_align
+                    
                     _safe_set_cell(ws, row_cursor, 3, seq_counter)
-                    ws.cell(row=row_cursor, column=3).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=row_cursor, column=3).font = Font(size=11, name='Arial Narrow')
+                    ws.cell(row=row_cursor, column=3).alignment = center_align
+                    
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
-                    ws.cell(row=row_cursor, column=4).alignment = Alignment(horizontal='left', vertical='center')
-                    ws.cell(row=row_cursor, column=4).font = Font(size=11, name='Arial Narrow')
+                    ws.cell(row=row_cursor, column=4).alignment = left_align
+                    
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
-                    _safe_set_number(ws, row_cursor, 6, _expense_amount_for_display(expense))
+                    _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))
                     _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
                     _safe_set_number(ws, row_cursor, 8, _to_float(expense.get('currency_exchange'), 1) or 1)
-                    ws.cell(row=row_cursor, column=7).alignment = Alignment(horizontal='center', vertical='center')
-                    ws.cell(row=row_cursor, column=8).alignment = Alignment(horizontal='center', vertical='center')
+                    ws.cell(row=row_cursor, column=7).alignment = center_align
+                    ws.cell(row=row_cursor, column=8).alignment = center_align
 
                     root_name, _ = _root_category_info(expense.get('category_id'), category_by_id_map)
                     cat_idx = _map_expense_category_index_from_name(root_name, cat_names)
                     if cat_idx is not None:
-                        _safe_set_number(ws, row_cursor, 9 + cat_idx, _expense_amount_for_display(expense))
-
-                    # Clear ghost columns values AND borders
-                    for col in range(last_category_col + 1, actual_last_col + 1):
-                        cell = ws.cell(row=row_cursor, column=col)
-                        cell.value = None
-                        cell.border = no_border
-                        cell.fill = no_fill
-
-                    # Clear ghost borders for this row
-                    for col in range(last_category_col + 1, actual_last_col + 1):
-                        ws.cell(row=row_cursor, column=col).border = no_border
-                        ws.cell(row=row_cursor, column=col).fill = no_fill
+                        _set_formula_with_format(ws, row_cursor, 9 + cat_idx, f'=$F{row_cursor}*$H{row_cursor}')
 
                     row_cursor += 1
                     seq_counter += 1
@@ -1564,10 +1542,12 @@ def _render_expense_section_from_data(
     ws.cell(row=total_row, column=2).alignment = Alignment(horizontal='right', vertical='center')
 
     cost_totals = _operation_cost_totals_by_column(expenses, cat_names, category_by_id_map)
-    for i, total_val in enumerate(cost_totals):
+    for i in range(len(cat_names)):
         col = 9 + i
-        # ✅ ROUND to avoid decimals in formula bar
-        _safe_set_number(ws, total_row, col, round(total_val))
+        col_letter = get_column_letter(col)
+        # ✅ Use SUM formula instead of static total
+        formula = f'=SUM({col_letter}{start_row}:{col_letter}{total_row-1})'
+        _set_formula_with_format(ws, total_row, col, formula)
         ws.cell(row=total_row, column=col).font = Font(bold=True)
         ws.cell(row=total_row, column=col).alignment = Alignment(horizontal='right', vertical='center')
 
@@ -3025,10 +3005,13 @@ def get_annual_report_excel():
 
     # ✅ Clear data area - UNMERGE D:E FIRST (from template), then clear values
     # This is CRITICAL to remove existing merge from template before rendering
-    # ✅ FIX: Clear ALL tax rows (not just 10) to handle large datasets
-    tax_clear_count = max(10, len(taxes))
+    # ✅ FIX: Clear a larger buffer (e.g., 100 rows) to ensure no ghost data remains from previous exports
+    tax_clear_count = max(100, len(taxes) + 20)
     for idx in range(tax_clear_count):
         row = tax_start_row + idx
+        # Only clear if we are still within reasonable sheet bounds
+        if row > ws.max_row + 100: break
+        
         _copy_template_row_from_backup(ws_backup, ws, TAX_DATA_TEMPLATE_ROW, row, start_col=2, end_col=17, include_values=False)
         # Unmerge D:E first (from template)
         try:
@@ -3158,6 +3141,9 @@ def get_annual_report_excel():
     _copy_template_row_from_backup(ws_backup, ws, EXPENSE_TITLE_TEMPLATE_ROW, expense_title_row, start_col=2, end_col=17, include_values=True)
     _safe_set_cell(ws, expense_title_row, 2, 'PENGELUARAN')
     _copy_template_row_from_backup(ws_backup, ws, EXPENSE_HEADER_TEMPLATE_ROW, expense_header_row, start_col=2, end_col=17, include_values=True)
+    _safe_set_cell(ws, expense_header_row, 6, 'Amount')
+    _safe_set_cell(ws, expense_header_row, 7, 'Currency')
+    _safe_set_cell(ws, expense_header_row, 8, 'Currency Exchange')
     _copy_template_row_from_backup(ws_backup, ws, EXPENSE_DATA_TEMPLATE_ROW, expense_start_row, start_col=2, end_col=17, include_values=False)
     _set_rows_hidden(ws, expense_gap_row, expense_start_row, False)
 

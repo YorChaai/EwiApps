@@ -8,7 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
 
-from models import Advance, AdvanceItem, Category, Expense, Settlement, User, db
+from models import Advance, AdvanceItem, Category, Expense, Settlement, User, Notification, db
 from routes.notifications import notify_managers, notify_staff
 from utils.storage import delete_evidence_file
 
@@ -697,6 +697,12 @@ def approve_advance(advance_id):
         _sync_revision_items_to_settlement(advance, revision_no)
         advance.active_revision_no = None
         advance.status = _status_after_approval(advance)
+        # Immediate cleanup for Advance deadline notification
+        Notification.query.filter_by(
+            target_type='advance',
+            target_id=advance.id,
+            action_type='deadline_warning'
+        ).delete()
 
     if notes:
         advance.notes = _merge_rejection_notes_advance(advance.notes or '', notes)
@@ -744,6 +750,12 @@ def reject_advance(advance_id):
             item.notes = _merge_rejection_notes_advance(item.notes or '', notes)
 
     advance.notes = _merge_rejection_notes_advance(advance.notes or '', notes)
+    # Immediate cleanup for Advance deadline notification (back to draft)
+    Notification.query.filter_by(
+        target_type='advance',
+        target_id=advance.id,
+        action_type='deadline_warning'
+    ).delete()
     db.session.commit()
 
     # Notify staff
@@ -787,6 +799,12 @@ def create_settlement_from_advance(advance_id):
         report_year=report_year
     )
     db.session.add(settlement)
+    # Immediate cleanup for Advance deadline notification
+    Notification.query.filter_by(
+        target_type='advance',
+        target_id=advance.id,
+        action_type='deadline_warning'
+    ).delete()
     db.session.flush()
 
     today = datetime.now(timezone.utc).date()

@@ -351,6 +351,7 @@ class Settlement(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
                            onupdate=lambda: datetime.now(timezone.utc))
+    submitted_at = db.Column(db.DateTime, nullable=True)
     completed_at = db.Column(db.DateTime, nullable=True)
 
     advance_id = db.Column(db.Integer, db.ForeignKey('advances.id'), nullable=True, index=True)
@@ -405,6 +406,7 @@ class Settlement(db.Model):
             'expense_count': len(self.expenses),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
             'advance_id': self.advance_id,
             'available_fund': available_fund,
@@ -726,6 +728,7 @@ class Notification(db.Model):
     read_status = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     link_path = db.Column(db.String(200), nullable=True)
+    extra_metadata = db.Column(db.JSON, nullable=True)  # Additional data (e.g., threshold_day)
 
     user = db.relationship('User', foreign_keys=[user_id], backref='notifications_received')
     actor = db.relationship('User', foreign_keys=[actor_id], backref='notifications_created')
@@ -745,7 +748,8 @@ class Notification(db.Model):
             'message': self.message,
             'read_status': self.read_status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'link_path': self.link_path
+            'link_path': self.link_path,
+            'extra_metadata': self.extra_metadata
         }
 
 

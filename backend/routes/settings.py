@@ -1,6 +1,5 @@
 import os
 import shutil
-import sqlite3
 import subprocess
 from urllib.parse import urlparse
 from datetime import datetime
@@ -248,24 +247,7 @@ def import_database_preview():
             })
         else:
             # PREVIEW SQLITE (Lama)
-            conn = sqlite3.connect(temp_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-            tables = [t[0] for t in cursor.fetchall() if t[0] not in ('sqlite_sequence',)]
-            summary = []
-            for table in tables:
-                try:
-                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                    count = cursor.fetchone()[0]
-                    summary.append({'table': table, 'rows': count})
-                except: continue
-            conn.close()
-            return jsonify({
-                'message': 'Preview database SQLite berhasil dimuat.',
-                'summary': summary,
-                'filename': file.filename,
-                'is_postgres': False
-            })
+            return jsonify({'error': 'Aplikasi saat ini dikonfigurasi menggunakan PostgreSQL. File SQLite tidak dapat dipreview.'}), 400
     except Exception as e:
         if os.path.exists(temp_path): os.remove(temp_path)
         return jsonify({'error': f'File tidak valid: {str(e)}'}), 400
@@ -381,13 +363,7 @@ def import_database_confirm():
                 debug_info = f"Import selesai tapi verifikasi gagal: {str(ve)}"
 
         else:
-            # RESTORE SQLITE (LAMA)
-            target_db = os.path.join(BASE_DIR, 'database.db')
-            if os.path.exists(target_db):
-                backup_path = os.path.join(history_dir, f"backup_data_lama_sebelum_import_{timestamp}.db")
-                shutil.copy2(target_db, backup_path)
-            shutil.copy2(temp_path, target_db)
-            debug_info = "SQLite Import OK"
+            return jsonify({'error': 'Aplikasi saat ini dikonfigurasi menggunakan PostgreSQL. File SQLite tidak dapat diimpor.'}), 400
 
         # Hapus file sampah
         if temp_path and os.path.exists(temp_path):

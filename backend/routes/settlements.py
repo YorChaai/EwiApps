@@ -5,7 +5,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.orm import joinedload
-from models import Advance, Expense, Settlement, User, db
+from models import Advance, Expense, Settlement, User, Notification, db
 from routes.notifications import notify_managers, notify_staff
 
 settlements_bp = Blueprint('settlements', __name__, url_prefix='/api/settlements')
@@ -251,6 +251,12 @@ def create_settlement():
                 )
             )
         linked_advance.status = 'in_settlement'
+        # Immediate cleanup for Advance deadline notification
+        Notification.query.filter_by(
+            target_type='advance',
+            target_id=linked_advance.id,
+            action_type='deadline_warning'
+        ).delete()
 
     db.session.commit()
     # Refresh to ensure all properties are loaded correctly
@@ -374,6 +380,7 @@ def submit_settlement(settlement_id):
         }), 400
 
     settlement.status = 'submitted'
+    settlement.submitted_at = datetime.now(timezone.utc)
     _sync_advance_after_settlement(settlement)
     db.session.commit()
 
@@ -408,6 +415,12 @@ def approve_settlement(settlement_id):
             }), 400
 
     settlement.status = 'approved'
+    # Immediate cleanup for Settlement deadline notification
+    Notification.query.filter_by(
+        target_type='settlement',
+        target_id=settlement.id,
+        action_type='deadline_warning'
+    ).delete()
     _sync_advance_after_settlement(settlement)
     db.session.commit()
 
@@ -514,6 +527,12 @@ def reject_all_expenses(settlement_id):
             expense.notes = _merge_rejection_notes_settlement(expense.notes or '', rejection_notes)
 
     settlement.status = 'draft'
+    # Immediate cleanup for Settlement deadline notification (as it's no longer submitted)
+    Notification.query.filter_by(
+        target_type='settlement',
+        target_id=settlement.id,
+        action_type='deadline_warning'
+    ).delete()
     _sync_advance_after_settlement(settlement)
     db.session.commit()
 

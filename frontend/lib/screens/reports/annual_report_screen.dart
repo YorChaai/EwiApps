@@ -981,19 +981,20 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       ]);
       for (final e in singleMap[sub]!) {
         singleCounter++;
-        final amount = _toDouble(e['idr_amount'] ?? e['amount']);
+        final idrAmount = _toDouble(e['idr_amount'] ?? e['amount']);
+        final rawAmount = _toDouble(e['amount']);
         final idx = getFilteredCatIndex(e['category_name'] ?? '');
         final rowCats = List<String>.filled(catHeaders.length, '-');
         if (idx < catHeaders.length) {
-          rowCats[idx] = _fmtMoney(amount);
-          catTotals[idx] += amount;
+          rowCats[idx] = _fmtMoney(idrAmount);
+          catTotals[idx] += idrAmount;
         }
         expenseRows.add([
           _fmtDate(e['date']),
           '$singleCounter',
           e['description']?.toString() ?? '',
           e['source']?.toString() ?? '',
-          _fmtMoney(amount),
+          _currencyFormat.format(rawAmount),
           e['currency']?.toString() ?? 'IDR',
           _toDouble(e['currency_exchange'] ?? 1).toStringAsFixed(0),
           ...rowCats,
@@ -1062,19 +1063,20 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
         int subCounter = 0;
         for (final e in subMap[sub]!) {
           subCounter++;
-          final amount = _toDouble(e['idr_amount'] ?? e['amount']);
+          final idrAmount = _toDouble(e['idr_amount'] ?? e['amount']);
+          final rawAmount = _toDouble(e['amount']);
           final idx = getFilteredCatIndex(e['category_name'] ?? '');
           final rowCats = List<String>.filled(catHeaders.length, '-');
           if (idx < catHeaders.length) {
-            rowCats[idx] = _fmtMoney(amount);
-            catTotals[idx] += amount;
+            rowCats[idx] = _fmtMoney(idrAmount);
+            catTotals[idx] += idrAmount;
           }
           expenseRows.add([
             _fmtDate(e['date']),
             '$subCounter',
             e['description']?.toString() ?? '',
             e['source']?.toString() ?? '',
-            _fmtMoney(amount),
+            _currencyFormat.format(rawAmount),
             e['currency']?.toString() ?? 'IDR',
             _toDouble(e['currency_exchange'] ?? 1).toStringAsFixed(0),
             ...rowCats,
@@ -1088,7 +1090,7 @@ class _AnnualReportScreenState extends State<AnnualReportScreen> {
       '',
       '',
       '',
-      _fmtMoney(_reportData?['operation_cost']?['total_expenses'] ?? 0),
+      '',
       '',
       '',
       ...catTotals.map(_fmtMoney),
