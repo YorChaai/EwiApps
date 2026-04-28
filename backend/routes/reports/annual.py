@@ -2850,6 +2850,13 @@ def get_annual_report_excel():
         except Exception as e:
             logger.warning(f'Failed to set Q7 example: {e}')
 
+        # ✅ FIX: Merge F6:F7 for 'INVOICE VALUE' header in Table 1
+        try:
+            ws.merge_cells('F6:F7')
+            ws['F6'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        except Exception:
+            pass
+
         # Clear data area - PRESERVE STYLE (Borders) for Sheet 1
         # ✅ FIX: Now safe to clear ENTIRE data zone because template rows are backed up
         template_max_data_row = max(ws.max_row, EXPENSE_TEMPLATE_END)
