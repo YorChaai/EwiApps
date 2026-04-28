@@ -58,6 +58,35 @@ def _safe_set_cell_with_merge(ws, row: int, col: int, value: Optional[Any]) -> N
     cell.value = value if value is not None else ''
 
 
+def _get_dynamic_row_height(text: Optional[str]) -> float:
+    """
+    Centralized logic to calculate row height based on text length.
+    If text wraps, it adds a buffer to prevent cutoff.
+    """
+    if not text:
+        return 15.0
+        
+    # CONFIGURATION: Change these to adjust spacing globally
+    CHARS_PER_LINE = 60
+    BASE_HEIGHT = 15.0
+    BUFFER = 15.0 # Extra points for multi-line
+    
+    # Count lines based on manual newlines and long text wrapping
+    raw_lines = str(text).split('\n')
+    total_lines = 0
+    for line in raw_lines:
+        line_len = len(line)
+        wrapped_lines = max(1, (line_len + CHARS_PER_LINE - 1) // CHARS_PER_LINE)
+        total_lines += wrapped_lines
+    
+    if total_lines > 1:
+        # Multi-line calculation
+        return (total_lines * BASE_HEIGHT) + BUFFER
+    else:
+        # Standard single line height
+        return BASE_HEIGHT
+
+
 def _merge_description_cell(
     ws,
     row: int,
@@ -88,29 +117,8 @@ def _merge_description_cell(
         tl_cell = _get_top_left_cell(ws, row, col_start)
         tl_cell.alignment = Alignment(wrap_text=True, vertical='center', horizontal='left')
         
-        # 4. Dynamic Row Height Calculation
-        # Width D: 56.27, Width E: 4.63 -> Total ~60.9
-        # Arial Narrow 11: 60 chars per line
-        CHARS_PER_LINE = 60
-        
-        # Count lines based on manual newlines and long text wrapping
-        raw_lines = text.split('\n')
-        total_lines = 0
-        for line in raw_lines:
-            line_len = len(line)
-            wrapped_lines = max(1, (line_len + CHARS_PER_LINE - 1) // CHARS_PER_LINE)
-            total_lines += wrapped_lines
-        
-        # Minimum row height (don't make it smaller than template)
-        current_height = ws.row_dimensions[row].height or 15
-        
-        if total_lines > 1:
-            # Multi-line: (lines * 15) + 10 buffer
-            new_height = (total_lines * 15) + 14
-            ws.row_dimensions[row].height = new_height
-        else:
-            # Single line: standard 15
-            ws.row_dimensions[row].height = 15
+        # 4. Dynamic Row Height Calculation (Centralized)
+        ws.row_dimensions[row].height = _get_dynamic_row_height(text)
         
         return True
     except Exception as e:

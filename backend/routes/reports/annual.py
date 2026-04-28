@@ -27,7 +27,7 @@ from models import User, Expense, Category, Settlement, ManualCombineGroup, db
 from . import reports_bp
 from .helpers import (
     _default_report_year, _safe_set_cell, _safe_set_number, _get_top_left_cell,
-    _safe_set_cell_with_merge, _merge_description_cell,
+    _safe_set_cell_with_merge, _merge_description_cell, _get_dynamic_row_height,
     _normalize_external_formula_refs, _clear_range, _clear_range_force, _clear_data_keep_formulas,
     _set_rows_hidden, _safe_text, _extract_imported_row, _extract_imported_sheet_row,
     _is_template_detail_data_row, _map_expense_category_index_from_name,
@@ -1337,14 +1337,8 @@ def _render_expense_section_from_data(
                 _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                 ws.cell(row=row_cursor, column=4).alignment = left_align
                 
-                # ? DYNAMIC ROW HEIGHT for Activity (Table 3)
-                # Width D is ~56. Arial Narrow 11: 60 chars
-                chars_per_line = 60
-                line_count = (len(clean_desc or '-') + chars_per_line - 1) // chars_per_line
-                if line_count > 1:
-                    ws.row_dimensions[row_cursor].height = (line_count * 15) + 15
-                else:
-                    ws.row_dimensions[row_cursor].height = 15
+                # ✅ DYNAMIC ROW HEIGHT for Activity (Table 3)
+                ws.row_dimensions[row_cursor].height = _get_dynamic_row_height(clean_desc)
                 
                 _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                 _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))
@@ -1379,13 +1373,8 @@ def _render_expense_section_from_data(
             _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
             ws.cell(row=row_cursor, column=4).alignment = left_align
             
-            # ? DYNAMIC ROW HEIGHT for Uncategorized (Table 3)
-            chars_per_line = 60
-            line_count = (len(clean_desc or '-') + chars_per_line - 1) // chars_per_line
-            if line_count > 1:
-                ws.row_dimensions[row_cursor].height = (line_count * 15) + 15
-            else:
-                ws.row_dimensions[row_cursor].height = 15
+            # ✅ DYNAMIC ROW HEIGHT for Uncategorized (Table 3)
+            ws.row_dimensions[row_cursor].height = _get_dynamic_row_height(clean_desc)
             
             _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))
             _safe_set_cell(ws, row_cursor, 7, expense.get('currency') or 'IDR')
@@ -1514,13 +1503,8 @@ def _render_expense_section_from_data(
                     _safe_set_cell(ws, row_cursor, 4, clean_desc or '-')
                     ws.cell(row=row_cursor, column=4).alignment = left_align
                     
-                    # ? DYNAMIC ROW HEIGHT for Batch items (Table 3)
-                    chars_per_line = 60
-                    line_count = (len(clean_desc or '-') + chars_per_line - 1) // chars_per_line
-                    if line_count > 1:
-                        ws.row_dimensions[row_cursor].height = (line_count * 15) + 15
-                    else:
-                        ws.row_dimensions[row_cursor].height = 15
+                    # ✅ DYNAMIC ROW HEIGHT for Batch items (Table 3)
+                    ws.row_dimensions[row_cursor].height = _get_dynamic_row_height(clean_desc)
                     
                     _safe_set_cell(ws, row_cursor, 5, expense.get('source') or '-')
                     _safe_set_number(ws, row_cursor, 6, _to_float(expense.get('amount')))

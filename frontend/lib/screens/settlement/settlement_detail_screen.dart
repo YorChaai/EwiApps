@@ -2197,8 +2197,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
                           TextField(
                             controller: amountCtrl,
                             decoration: InputDecoration(
-                              labelText:
-                                  'Amount ($selectedCurrency)',
+                              labelText: 'Amount ($selectedCurrency)',
                               hintText: '10.000',
                               hintStyle: TextStyle(
                                 color: _secondaryText(
@@ -2543,7 +2542,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     final url = prov.getEvidenceUrl(path);
     final pathLower = path.toLowerCase();
     final isPdf = pathLower.endsWith('.pdf');
-    final isImage = pathLower.endsWith('.jpg') ||
+    final isImage =
+        pathLower.endsWith('.jpg') ||
         pathLower.endsWith('.jpeg') ||
         pathLower.endsWith('.png') ||
         pathLower.endsWith('.webp') ||
@@ -2564,33 +2564,33 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
           child: isImage
               ? InteractiveViewer(
                   child: Image.network(
-                  url,
-                  headers: {
-                    'Authorization':
-                        'Bearer ${context.read<AuthProvider>().token}',
-                  },
-                  fit: BoxFit.contain,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppTheme.primary,
+                    url,
+                    headers: {
+                      'Authorization':
+                          'Bearer ${context.read<AuthProvider>().token}',
+                    },
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppTheme.primary,
+                          ),
                         ),
+                      );
+                    },
+                    errorBuilder: (_, _, _) => const Center(
+                      child: Text(
+                        'Gagal memuat gambar',
+                        style: TextStyle(color: AppTheme.textSecondary),
                       ),
-                    );
-                  },
-                  errorBuilder: (_, _, _) => const Center(
-                    child: Text(
-                      'Gagal memuat gambar',
-                      style: TextStyle(color: AppTheme.textSecondary),
                     ),
                   ),
-                ),
                 )
               : Center(
                   child: Column(
@@ -3247,11 +3247,11 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     }
   }
 
-  void _showEditSettlementDialog(BuildContext context, Map<String, dynamic> s) {
+  Future<void> _showEditSettlementDialog(BuildContext context, Map<String, dynamic> s) async {
     final titleCtrl = TextEditingController(text: s['title'] ?? '');
     final prov = context.read<SettlementProvider>();
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
@@ -3314,7 +3314,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
     titleCtrl.dispose();
   }
 
-  void _showEditExpenseDialog(BuildContext context, Map<String, dynamic> exp) {
+  Future<void> _showEditExpenseDialog(BuildContext context, Map<String, dynamic> exp) async {
     final descCtrl = TextEditingController(text: exp['description'] ?? '');
     final amountCtrl = TextEditingController(
       text: (exp['amount'] ?? 0).toStringAsFixed(0),
@@ -3365,7 +3365,7 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
       }
     }
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
@@ -3979,18 +3979,23 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         },
       ),
     );
+
+    descCtrl.dispose();
+    amountCtrl.dispose();
+    dateCtrl.dispose();
+    exchangeRateCtrl.dispose();
   }
 
-  void _showAddCategoryDialog(
+  Future<void> _showAddCategoryDialog(
     BuildContext ctx,
     StateSetter setDialogState,
     Function(Map<String, dynamic>) onCreated, {
     int? parentId,
-  }) {
+  }) async {
     final nameCtrl = TextEditingController();
     final prov = context.read<SettlementProvider>();
 
-    showDialog(
+    await showDialog(
       context: ctx,
       builder: (innerCtx) => AlertDialog(
         backgroundColor: _cardColor(innerCtx),
@@ -4064,6 +4069,8 @@ class _SettlementDetailScreenState extends State<SettlementDetailScreen> {
         ],
       ),
     );
+
+    nameCtrl.dispose();
   }
 
   void _showChecklistDialog(

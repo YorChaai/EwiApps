@@ -673,13 +673,13 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     }
   }
 
-  void _showEditAdvanceDialog(
+  Future<void> _showEditAdvanceDialog(
     BuildContext context,
     Map<String, dynamic> advance,
-  ) {
+  ) async {
     final titleCtrl = TextEditingController(text: advance['title']);
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardColor(ctx),
@@ -723,7 +723,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     titleCtrl.dispose();
   }
 
-  void _showAddItemDialog(BuildContext context, [Map<String, dynamic>? item]) {
+  Future<void> _showAddItemDialog(BuildContext context, [Map<String, dynamic>? item]) async {
     final screenWidth = MediaQuery.of(context).size.width;
     final isEditing = item != null;
     final reportYear = context.read<AdvanceProvider>().reportYear;
@@ -783,7 +783,7 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
       }
     }
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
@@ -1460,6 +1460,11 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
         },
       ),
     );
+
+    descCtrl.dispose();
+    amountCtrl.dispose();
+    dateCtrl.dispose();
+    exchangeRateCtrl.dispose();
   }
 
   @override
@@ -3371,16 +3376,16 @@ class _AdvanceDetailScreenState extends State<AdvanceDetailScreen> {
     return list.where((item) => seen.add(item['id'])).toList();
   }
 
-  void _showAddCategoryDialog(
+  Future<void> _showAddCategoryDialog(
     BuildContext ctx,
     StateSetter setDialogState,
     Function(Map<String, dynamic>) onCreated, {
     int? parentId,
-  }) {
+  }) async {
     final nameCtrl = TextEditingController();
     final prov = context.read<SettlementProvider>();
 
-    showDialog(
+    await showDialog(
       context: ctx,
       builder: (innerCtx) => AlertDialog(
         backgroundColor: _cardColor(innerCtx),
